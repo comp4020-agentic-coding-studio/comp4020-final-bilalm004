@@ -16,6 +16,7 @@ import {
   HIT_WINDOW_S,
   missReason,
   seatZ,
+  timingAim,
 } from "../shared/games/tennis/sim.ts";
 import type { Ball, Level, Seat, SwingKind, TennisInput, TennisState } from "../shared/games/tennis/sim.ts";
 
@@ -413,5 +414,64 @@ describe("hit window", () => {
   it("the camera's early cut-off matches the server window, so a swing marked sent can connect", () => {
     expect(SWING_LEAD_TICKS * DT).toBeGreaterThanOrEqual(HIT_WINDOW_S);
     expect(SWING_LEAD_TICKS * DT).toBeLessThan(HIT_WINDOW_S + 0.1);
+  });
+});
+
+describe("last bounce", () => {
+  it("records where the ball touched down, in the snapshot too", () => {
+    const s = createState(5);
+    untilRally(s);
+    while (s.lastBounce === null) step(s, []);
+    expect(s.lastBounce.in).toBe(true);
+    expect(Math.sign(s.lastBounce.z)).toBe(-1);
+    expect(snapshot(s).lastBounce).toEqual(s.lastBounce);
+  });
+
+  it("records a wide ball as out, though that bounce ends the point", () => {
+    const s = receiving({ ...atBaseline(1), x: 3.5 }, 3.5);
+    // seat 1's +dirX is world +x: away out over the sideline
+    step(s, [swing(1, 1, naturalKind(1, 3.5, 3.5), 1)]);
+    while (s.score[0] === 0) step(s, []);
+    expect(s.lastBounce!.in).toBe(false);
+    expect(Math.abs(s.lastBounce!.x)).toBeGreaterThan(COURT.halfW);
+  });
+});
+
+describe("timing aim", () => {
+  const ballAt = (secondsBefore: number) => ({ x: 0, y: 1, z: -COURT.halfL + 14 * secondsBefore, vx: 0, vy: 0, vz: -14 });
+
+  it("on time goes straight; early pulls across the body, late pushes the other way", () => {
+    // seat 1 faces +z, so its right is -x
+    expect(timingAim(ballAt(0), 1, "forehand", "right")).toBeCloseTo(0, 6);
+    // right-hander's early forehand goes to their left (+x for seat 1)
+    expect(timingAim(ballAt(0.15), 1, "forehand", "right")).toBeGreaterThan(0.5);
+    expect(timingAim(ballAt(-0.15), 1, "forehand", "right")).toBeLessThan(-0.5);
+  });
+
+  it("backhand and left hand reverse it, and seat 0 is the mirror of seat 1", () => {
+    const early = ballAt(0.15);
+    const fh = timingAim(early, 1, "forehand", "right");
+    expect(timingAim(early, 1, "backhand", "right")).toBeCloseTo(-fh, 6);
+    expect(timingAim(early, 1, "forehand", "left")).toBeCloseTo(-fh, 6);
+    const mirrored = { ...early, z: -early.z, vz: -early.vz };
+    expect(timingAim(mirrored, 0, "forehand", "right")).toBeCloseTo(-fh, 6);
+  });
+
+  it("a timing-aimed swing ignores dirX and uses the server's own ball position", () => {
+    const early = receiving(ballAt(0.15), 0);
+    step(early, [{ ...swing(1, 1, "forehand", -1), timingAim: true } as TennisInput]);
+    expect(early.ball.vx).toBeGreaterThan(0);
+    expect(asInput(1, { t: "swing", dirX: 0, kind: "forehand", level: 1, timingAim: "yes" })).toBeNull();
+  });
+});
+
+describe("landing path", () => {
+  it("runs from the contact point over the net to the landing spot", () => {
+    const l = predictLanding(receiving(atBaseline(1), 0), 1, 0, 1);
+    expect(l.path[0].z).toBeCloseTo(-COURT.halfL, 6);
+    expect(l.path.at(-1)!.z).toBeCloseTo(l.z, 6);
+    for (let i = 1; i < l.path.length; i++) expect(l.path[i].z).toBeGreaterThan(l.path[i - 1].z);
+    const atNet = l.path.find((pt) => pt.z > 0)!;
+    expect(atNet.y).toBeGreaterThan(COURT.netH);
   });
 });

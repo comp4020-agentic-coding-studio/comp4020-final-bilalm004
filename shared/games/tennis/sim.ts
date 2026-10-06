@@ -90,6 +90,8 @@ export interface TennisState {
   players: [Player, Player];
   lastHitter: Seat | null;
   bounces: number;
+  // where the ball last touched down, including a bounce that ends the point
+  lastBounce: { x: number; z: number; in: boolean; tick: number } | null;
   score: [number, number];
   // first to this many points wins; null plays forever (practice)
   winScore: number | null;
@@ -108,6 +110,9 @@ export interface Swing {
   hand?: Hand;
   // camera "follow" mode: hand height at contact, -1 low (flatter) .. 1 high (more loft)
   lift?: number;
+  // aim from timing instead of dirX: early pulls cross-court, late pushes
+  // down the line, judged from the server's own ball position
+  timingAim?: boolean;
 }
 
 export interface Move {
@@ -159,6 +164,7 @@ export function createState(seed: number, winScore: number | null = COURT.winSco
     ],
     lastHitter: null,
     bounces: 0,
+    lastBounce: null,
     score: [0, 0],
     winScore,
     winner: null,
@@ -178,6 +184,7 @@ export function snapshot(s: TennisState): TennisSnapshot {
     players: [{ ...s.players[0] }, { ...s.players[1] }],
     lastHitter: s.lastHitter,
     bounces: s.bounces,
+    lastBounce: s.lastBounce ? { ...s.lastBounce } : null,
     score: [s.score[0], s.score[1]],
     winScore: s.winScore,
     winner: s.winner,
@@ -254,9 +261,25 @@ function canHit(s: TennisState, seat: Seat): boolean {
   return missReason(s, seat) === null;
 }
 
+/**
+ * Aim from timing: how early or late the ball is met, -1 (earliest in the
+ * window) to 1 (latest), turned into a direction. Early pulls the ball across
+ * the body (a right-hander's forehand goes to their left), late pushes it the
+ * other way, on time goes straight. Returns world dirX.
+ */
+export function timingAim(b: Ball, seat: Seat, kind: SwingKind, hand: Hand): number {
+  const past = (b.z - seatZ(seat)) * Math.sign(seatZ(seat));
+  const u = clamp(past / hitWindowDistance(b), -1, 1);
+  // in the player's own frame, positive is to their right
+  const toRight = u * (kind === "forehand" ? 1 : -1) * (hand === "right" ? 1 : -1);
+  return toRight * (seat === 0 ? 1 : -1);
+}
+
 function tryHit(s: TennisState, swing: Swing): void {
   if (!canHit(s, swing.seat)) return;
-  launch(s.ball, swing.seat, s.players[swing.seat].x, swing.dirX, swing.kind, swing.level, swing.hand ?? "right", swing.lift);
+  const hand = swing.hand ?? "right";
+  const dirX = swing.timingAim ? timingAim(s.ball, swing.seat, swing.kind, hand) : swing.dirX;
+  launch(s.ball, swing.seat, s.players[swing.seat].x, dirX, swing.kind, swing.level, hand, swing.lift);
   s.lastHitter = swing.seat;
   s.bounces = 0;
 }
@@ -289,8 +312,10 @@ function onBounce(s: TennisState): void {
   const b = s.ball;
   const hitter = s.lastHitter as Seat;
   const inBounds = Math.abs(b.x) <= COURT.halfW && Math.abs(b.z) <= COURT.halfL;
-  if (!inBounds) return awardPoint(s, other(hitter));
   const hitterSide = hitter === 0 ? 1 : -1;
+  const good = inBounds && (s.bounces > 0 || Math.sign(b.z) !== hitterSide);
+  s.lastBounce = { x: b.x, z: b.z, in: good, tick: s.tick };
+  if (!inBounds) return awardPoint(s, other(hitter));
   if (Math.sign(b.z) === hitterSide) return awardPoint(s, other(hitter));
   s.bounces++;
   if (s.bounces >= 2) awardPoint(s, hitter);
@@ -379,7 +404,11 @@ export interface Landing {
   farSide: boolean;
   // true: from the ball actually coming at you; false: from aim alone
   predicted: boolean;
+  // the flight from contact to touchdown, sampled every few ticks, for the arc
+  path: { x: number; y: number; z: number }[];
 }
+
+const PATH_EVERY_TICKS = 3;
 
 /**
  * Where `seat`'s next shot would first touch down with this aim and level,
@@ -404,15 +433,17 @@ export function predictLanding(
   const b = contact ? contact.ball : { x: playerX, y: IDEAL_CONTACT_Y, z: seatZ(seat), vx: 0, vy: 0, vz: 0 };
   launch(b, seat, playerX, aim, kind ?? naturalKind(seat, playerX, b.x, hand), level, hand);
   const predicted = contact !== null;
-  for (let i = 0; i < 600; i++) {
+  const path = [{ x: b.x, y: b.y, z: b.z }];
+  for (let i = 1; i < 600; i++) {
     const event = moveBall(b);
-    if (event === "net") return { x: b.x, z: 0, in: false, net: true, farSide: false, predicted };
+    if (event !== null || i % PATH_EVERY_TICKS === 0) path.push({ x: b.x, y: b.y, z: b.z });
+    if (event === "net") return { x: b.x, z: 0, in: false, net: true, farSide: false, predicted, path };
     if (event === "bounce") {
       const inBounds = Math.abs(b.x) <= COURT.halfW && Math.abs(b.z) <= COURT.halfL;
       const farSide = Math.sign(b.z) === (seat === 0 ? -1 : 1);
-      return { x: b.x, z: b.z, in: inBounds && farSide, net: false, farSide, predicted };
+      return { x: b.x, z: b.z, in: inBounds && farSide, net: false, farSide, predicted, path };
     }
   }
   // unreachable: a launched ball always comes down within 10 s
-  return { x: b.x, z: b.z, in: false, net: false, farSide: false, predicted };
+  return { x: b.x, z: b.z, in: false, net: false, farSide: false, predicted, path };
 }

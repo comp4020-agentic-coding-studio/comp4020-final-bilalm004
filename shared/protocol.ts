@@ -5,7 +5,8 @@ export type ClientMsg =
   | { t: "create"; game: string; practice: boolean }
   | { t: "join"; room: string }
   // lift: hand height at contact in camera follow mode, -1..1 (server clamps)
-  | { t: "swing"; dirX: number; kind: SwingKind; level: Level; hand?: Hand; lift?: number }
+  // timingAim: aim from how early or late the ball is met instead of dirX
+  | { t: "swing"; dirX: number; kind: SwingKind; level: Level; hand?: Hand; lift?: number; timingAim?: boolean }
   | { t: "move"; x: number }
   // practice only: hold the game while the player sets up the camera
   | { t: "pause"; paused: boolean }
@@ -42,13 +43,14 @@ export function parseClientMsg(raw: string): ClientMsg | null {
     case "join":
       return typeof m.room === "string" ? { t: "join", room: m.room } : null;
     case "swing": {
-      const { dirX, kind, level, hand, lift } = m;
+      const { dirX, kind, level, hand, lift, timingAim } = m;
       if (typeof dirX !== "number" || !Number.isFinite(dirX)) return null;
       if (level !== 0 && level !== 1 && level !== 2) return null;
       if (kind !== "forehand" && kind !== "backhand") return null;
       if (hand !== undefined && hand !== "right" && hand !== "left") return null;
       if (lift !== undefined && (typeof lift !== "number" || !Number.isFinite(lift))) return null;
-      return { t: "swing", dirX, kind, level, hand, lift };
+      if (timingAim !== undefined && typeof timingAim !== "boolean") return null;
+      return { t: "swing", dirX, kind, level, hand, lift, timingAim };
     }
     case "move":
       return typeof m.x === "number" && Number.isFinite(m.x) ? { t: "move", x: m.x } : null;
