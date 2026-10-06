@@ -1,0 +1,146 @@
+:root {
+  --bg: #0f1720;
+  --panel: #1b2733;
+  --text: #e6edf3;
+  --muted: #9fb0c0;
+  --accent: #ffd23f;
+  --accent-text: #1a1400;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 1rem/1.5 system-ui, sans-serif;
+}
+
+#app {
+  min-height: 100dvh;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  min-height: 48px;
+  padding: 0 1.25rem;
+  border: 0;
+  border-radius: 10px;
+  background: var(--panel);
+  cursor: pointer;
+}
+
+button.primary {
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 700;
+}
+
+button:focus-visible,
+input:focus-visible,
+a:focus-visible {
+  outline: 3px solid #7cc4ff;
+  outline-offset: 2px;
+}
+
+.menu {
+  max-width: 28rem;
+  margin: 0 auto;
+  padding: 2rem 1rem 3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.menu h1 {
+  margin: 0;
+  font-size: 2rem;
+}
+
+.menu .muted,
+.hud .muted {
+  color: var(--muted);
+}
+
+.menu form {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.menu input {
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 0.75rem;
+  border: 2px solid var(--panel);
+  border-radius: 10px;
+  background: transparent;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+}
+
+.menu .error {
+  margin: 0;
+  color: #ff8f8f;
+}
+
+.game {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  touch-action: none;
+}
+
+.game canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.hud {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: max(0.5rem, env(safe-area-inset-top)) 0.75rem 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  background: linear-gradient(#0f1720cc, #0f172000);
+  pointer-events: none;
+}
+
+.hud button {
+  pointer-events: auto;
+  min-height: 44px;
+}
+
+.hud .score {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.hud .status {
+  width: 100%;
+  text-align: center;
+}
+
+.swing {
+  position: absolute;
+  left: 50%;
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  min-width: 10rem;
+  min-height: 56px;
+}
