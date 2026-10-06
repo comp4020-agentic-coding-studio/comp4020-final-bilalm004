@@ -161,4 +161,6 @@ test("shots leave a trail and a bounce mark, and the incoming ball shows your sh
   await expect.poll(() => n("data-bounces"), { timeout: 15_000 }).toBeGreaterThan(0);
   // the bot serves to you on alternate points: the arc shows then
   await expect.poll(() => n("data-arc"), { timeout: 30_000 }).toBeGreaterThan(5);
+  // with the arc comes whether you can reach where you'll meet the ball
+  await expect.poll(() => canvas.getAttribute("data-reach"), { timeout: 30_000 }).toMatch(/^(yes|no)$/);
 });

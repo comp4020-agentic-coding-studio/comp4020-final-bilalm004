@@ -293,12 +293,16 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
         material.opacity = landing.predicted ? 0.95 : 0.6;
         reticle.position.set(landing.x, 0.03, z);
         reticle.material = material;
-        // the arc of your next shot, only while the ball is actually coming at you
-        canvas.dataset.arc = String(fx.arc(landing.predicted ? landing.path : null, landing.in));
+        // the arc of your next shot, only while the ball is actually coming at
+        // you; it lights up once you're close enough to where you'll meet it
+        const reachable = Math.abs(landing.path[0].x - players[info.seat].group.position.x) <= PLAYER.reach;
+        canvas.dataset.arc = String(fx.arc(landing.predicted ? landing.path : null, landing.in, reachable));
+        canvas.dataset.reach = landing.predicted ? (reachable ? "yes" : "no") : "";
         canvas.dataset.reticle = `${landing.x.toFixed(2)},${z.toFixed(2)},${landing.in ? "in" : "out"},${landing.predicted ? "ball" : "aim"}`;
       } else {
         canvas.dataset.reticle = "";
-        canvas.dataset.arc = String(fx.arc(null, true));
+        canvas.dataset.arc = String(fx.arc(null, true, true));
+        canvas.dataset.reach = "";
       }
     }
     renderer.render(scene, camera);
