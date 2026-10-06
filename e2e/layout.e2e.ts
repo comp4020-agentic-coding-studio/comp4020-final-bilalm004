@@ -61,6 +61,7 @@ test("keyboard moves, aims and swings at each level", async ({ page }) => {
   await page.keyboard.up("KeyD");
   await page.keyboard.down("ArrowLeft");
   await page.keyboard.press("Digit3");
+  await expect(page.locator(".stroke")).toHaveText(/^(Forehand|Backhand) · hard$/);
   await page.keyboard.up("ArrowLeft");
   await page.keyboard.press("Digit1");
   await page.keyboard.press("Space");

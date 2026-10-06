@@ -323,6 +323,21 @@ export function predictContact(s: TennisState, seat: Seat, maxTicks = 600): Cont
   return null;
 }
 
+// How long before the ball reaches you a camera swing still counts as a shot
+// at it. A wind-up (taking the racket back) happens earlier than this.
+export const SWING_LEAD_TICKS = 18;
+
+/**
+ * Whether a swing now would be a shot at the ball: "ready" when it reaches
+ * `seat`'s baseline within SWING_LEAD_TICKS (or is already in the hit window),
+ * "early" when it is still on its way, "none" when no ball is coming.
+ */
+export function swingTiming(s: TennisState, seat: Seat): "ready" | "early" | "none" {
+  const contact = predictContact(s, seat);
+  if (!contact) return "none";
+  return contact.ticks <= SWING_LEAD_TICKS ? "ready" : "early";
+}
+
 export interface Landing {
   x: number;
   z: number;

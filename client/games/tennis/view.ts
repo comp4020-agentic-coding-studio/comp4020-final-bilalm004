@@ -17,7 +17,7 @@ import {
   Scene,
   WebGLRenderer,
 } from "three";
-import { COURT, PLAYER, naturalKind, predictLanding, seatZ } from "../../../shared/games/tennis/sim.ts";
+import { COURT, LEVEL_NAMES, PLAYER, naturalKind, predictLanding, seatZ, swingTiming } from "../../../shared/games/tennis/sim.ts";
 import type { Hand, Level, SwingKind, TennisSnapshot } from "../../../shared/games/tennis/sim.ts";
 import type { RoomInfo, ServerMsg } from "../../../shared/protocol.ts";
 import { createCameraInput } from "../../input/camera/index.ts";
@@ -29,6 +29,8 @@ const NET_MARK_Z = 0.8;
 
 const flat = (color: number) => new MeshLambertMaterial({ color, flatShading: true });
 
+const RACKET_X = 0.55;
+
 function makePlayer(color: number): { group: Group; racket: Mesh } {
   const group = new Group();
   const body = new Mesh(new CylinderGeometry(0.35, 0.45, 1.3, 6), flat(color));
@@ -36,7 +38,7 @@ function makePlayer(color: number): { group: Group; racket: Mesh } {
   const head = new Mesh(new IcosahedronGeometry(0.28, 0), flat(0xf1c9a5));
   head.position.y = 1.55;
   const racket = new Mesh(new BoxGeometry(0.08, 0.7, 0.45), flat(0xeeeeee));
-  racket.position.set(0.55, 1.1, 0);
+  racket.position.set(RACKET_X, 1.1, 0);
   group.add(body, head, racket);
   return { group, racket };
 }
@@ -84,6 +86,7 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
       </div>
       <div class="status" role="status"></div>
     </div>
+    <div class="stroke" aria-live="polite"></div>
     <div class="controls" hidden>
       <button class="move" data-move="-1" aria-label="Move left (A)">◀</button>
       <button class="primary" data-level="0" aria-label="Light swing (1)">Light</button>
@@ -152,6 +155,24 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
   let snapAt = performance.now();
   let names: [string | null, string | null] = [null, null];
   const swingAnim: [number, number] = [0, 0];
+  // racket on the right-hand side (1) or left (-1), and whether the swing is a backhand
+  const strokeAnim: [{ side: 1 | -1; backhand: boolean }, { side: 1 | -1; backhand: boolean }] = [
+    { side: 1, backhand: false },
+    { side: 1, backhand: false },
+  ];
+  const strokeEl = view.querySelector(".stroke") as HTMLElement;
+  let strokeTimer = 0;
+  const showStroke = (kind: SwingKind, level: Level, note: string) => {
+    strokeEl.textContent = `${kind === "forehand" ? "Forehand" : "Backhand"} · ${LEVEL_NAMES[level]}${note}`;
+    strokeEl.dataset.sent = String(note === "");
+    clearTimeout(strokeTimer);
+    strokeTimer = window.setTimeout(() => (strokeEl.textContent = ""), 1200);
+  };
+  const animate = (kind: SwingKind, hand: Hand = "right") => {
+    if (info.seat === null) return;
+    strokeAnim[info.seat] = { side: hand === "right" ? 1 : -1, backhand: kind === "backhand" };
+    swingAnim[info.seat] = performance.now();
+  };
   const worldSign = behindSeat1 ? -1 : 1;
   let reticleLevel: Level = 1;
   let paused = false;
@@ -160,7 +181,8 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
     if (info.seat === null) return;
     conn.send({ t: "swing", dirX, kind, level, hand });
     reticleLevel = level;
-    swingAnim[info.seat] = performance.now();
+    animate(kind, hand);
+    showStroke(kind, level, "");
   };
   // Keys and buttons have no forehand/backhand, so they use the one that suits the ball.
   const swing = (level: Level, dirX: number) => {
@@ -182,7 +204,15 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
     move: (target) => {
       if (info.seat !== null) conn.send({ t: "move", x: target * worldSign * (COURT.halfW + PLAYER.sideRoom) });
     },
-    swing: (level, kind, aim, hand) => send(level, aim * worldSign, kind, hand),
+    // Only a swing as the ball arrives is sent: an earlier one is a wind-up
+    // (taking the racket back before a backhand looks like a forehand).
+    swing: (level, kind, aim, hand) => {
+      if (info.seat === null) return;
+      const timing = snap ? swingTiming({ ...snap, rng: 0 }, info.seat) : "none";
+      if (timing === "ready") return send(level, aim * worldSign, kind, hand);
+      animate(kind, hand);
+      showStroke(kind, level, timing === "early" ? " · too early, not sent" : " · no ball to hit");
+    },
     pause: (p) => {
       if (!info.practice) return;
       paused = p;
@@ -259,7 +289,11 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
         const p = players[seat];
         p.group.position.x += (snap.players[seat].x - p.group.position.x) * 0.3;
         const t = (now - swingAnim[seat]) / 220;
-        p.racket.rotation.z = t < 1 ? -Math.sin(t * Math.PI) * 1.6 : 0;
+        const { side, backhand } = strokeAnim[seat];
+        const swinging = t < 1;
+        // a backhand starts from the other side of the body and swings back out
+        p.racket.position.x = swinging && backhand ? -side * RACKET_X : side * RACKET_X;
+        p.racket.rotation.z = swinging ? -Math.sin(t * Math.PI) * 1.6 * side * (backhand ? -1 : 1) : 0;
       }
       const landing =
         info.seat === null || snap.phase === "over" ? null : predictLanding({ ...snap, rng: 0 }, info.seat, currentAim(), reticleLevel);
@@ -282,6 +316,7 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
 
   return () => {
     cancelAnimationFrame(raf);
+    clearTimeout(strokeTimer);
     unsubscribe();
     input.dispose();
     cameraInput.dispose();

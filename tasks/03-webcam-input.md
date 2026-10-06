@@ -105,6 +105,11 @@ the same events the keyboard sends. Camera is for gameplay only.
   thresholds with midpoints between your own swings' medians.
 - The freeze uses values from 100 ms before the detected swing start, because
   the wind-up moves the hand before it counts as a swing (unit test).
+- Playtest: only forehands showed. Taking the racket back before a backhand
+  moves the wrist the forehand way and was detected as a forehand first. A
+  camera swing is now only sent when the ball reaches you within 0.3 s
+  (`swingTiming`); earlier ones show "too early, not sent". The racket and a
+  stroke label now show forehand vs backhand.
 - Not yet tried with a real person on camera: thresholds, tilt gain and aim
   range are guesses until then.
 

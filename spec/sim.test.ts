@@ -11,6 +11,8 @@ import {
   predictLanding,
   snapshot,
   step,
+  swingTiming,
+  SWING_LEAD_TICKS,
 } from "../shared/games/tennis/sim.ts";
 import type { Ball, Level, Seat, SwingKind, TennisInput, TennisState } from "../shared/games/tennis/sim.ts";
 
@@ -331,5 +333,22 @@ describe("endless practice", () => {
     }
     expect(endless.finished()).toBeNull();
     expect(match.finished()).not.toBeNull();
+  });
+});
+
+describe("swing timing", () => {
+  it("is early while the ball is on its way, ready as it arrives, and none when nothing is coming", () => {
+    const s = createState(7);
+    expect(swingTiming(s, 1)).toBe("none");
+    untilRally(s);
+    expect(swingTiming(s, 0)).toBe("none");
+    expect(swingTiming(s, 1)).toBe("early");
+    const ticks = predictContact(s, 1)!.ticks;
+    run(s, ticks - SWING_LEAD_TICKS);
+    expect(swingTiming(s, 1)).toBe("ready");
+  });
+
+  it("is ready while the ball is in the hit window past the baseline", () => {
+    expect(swingTiming(receiving({ ...atBaseline(1), z: -COURT.halfL - 0.5 }, 0), 1)).toBe("ready");
   });
 });
