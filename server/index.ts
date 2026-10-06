@@ -17,6 +17,12 @@ const CLIENT_DIR = resolve("dist/client");
 const DOCS_DIR = resolve("docs");
 const HEARTBEAT_MS = 25_000;
 
+// The game page may only talk to this server and fetch the pose model and its
+// runtime. That keeps the promise that video never leaves the browser, and
+// blocks the usage pings MediaPipe sends to Google on its own.
+const CONNECT_SRC = ["'self'", "https://cdn.jsdelivr.net", "https://storage.googleapis.com"];
+const CSP = `connect-src ${CONNECT_SRC.join(" ")}`;
+
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -63,6 +69,7 @@ async function serveFile(res: ServerResponse, root: string, relPath: string, imm
     res.writeHead(200, {
       "content-type": MIME[extname(full)] ?? "application/octet-stream",
       "cache-control": immutable ? "public, max-age=31536000, immutable" : "no-cache",
+      ...(extname(full) === ".html" ? { "content-security-policy": CSP } : {}),
     });
     res.end(body);
     return true;
