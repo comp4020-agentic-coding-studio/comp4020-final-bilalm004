@@ -38,6 +38,9 @@ lazily and only when a player enters a game. Video never leaves the browser.
   Dockerfile's runtime stage free of dev dependencies.
 
 ## Docs
+
+- `tasks/` is the work breakdown (start at `00-overview.md`); update a task's
+  status line when it changes.
 - `README.md` 400-600 words on what "good" means here (served at `/readme/`).
   `PROCESS.md` 900-1100 words, rewritten each crit.
 
