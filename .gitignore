@@ -25,3 +25,6 @@ mise.local.toml
 data/
 playwright-report/
 test-results/
+
+# third-party inspiration images stay local (the repo goes public)
+design/reference/
