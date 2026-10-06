@@ -25,7 +25,9 @@ lazily and only when a player enters a game. Video never leaves the browser.
   seats, spectators), `db.ts` (SQLite on `/data`), `log.ts` (JSON log lines).
   Rooms get their sim from the registry, so networking is game-agnostic.
 - `client/` Vite app: `games/<name>/view.ts` (Three.js scene), `input/`
-  (keyboard/pointer now, camera later), `net/socket.ts`, `ui/menu.ts`.
+  (`keyboard.ts` for keys, pointer and buttons; `camera/` with `pose.ts` pure
+  landmark maths, `camera.ts` webcam + lazy MediaPipe, `index.ts` setup
+  panel), `net/socket.ts`, `ui/menu.ts`.
 - `spec/*.test.ts` vitest against the running app, plus the sim unit tests.
 - `e2e/*.e2e.ts` Playwright at both viewports, fake webcam.
 
@@ -51,6 +53,9 @@ lazily and only when a player enters a game. Video never leaves the browser.
 - Game logic stays deterministic (seed + input stream) so it can be tested.
 - Tennis is the only game until the core is solid (rooms, reconnect, logging).
   Don't add a second game unless I ask; keep the registry so one can slot in.
+- Video never leaves the browser. The game page's CSP `connect-src` allows
+  only this server and the pose model's download hosts (`spec/privacy.test.ts`);
+  it also blocks MediaPipe's own usage pings. Don't widen it casually.
 - Camera is used for gameplay only. Every camera action has a keyboard/mouse
   equivalent, and the lobby and room work with no camera at all.
 - Every bug fix adds a test that fails without it. When I correct you, put the

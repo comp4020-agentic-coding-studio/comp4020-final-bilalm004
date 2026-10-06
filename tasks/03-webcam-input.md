@@ -1,6 +1,6 @@
 # 03 Webcam swing input
 
-Status: step 1 done (sim, protocol, bot, keyboard/touch fallback); step 2 (camera layer: MediaPipe, calibration, reticle) not started
+Status: steps 1 and 2 done (sim, protocol, fallback input, camera layer, calibration, reticle); needs a real-webcam playtest, and the README privacy line waits on task 01
 Model: Opus for the design and swing heuristic, Sonnet for wiring and tests
 
 ## Goal
@@ -64,18 +64,23 @@ the same events the keyboard sends. Camera is for gameplay only.
 ## Done when
 - [ ] A swing from a real webcam returns a ball in a practice game, and tilting
       moves the player.
-- [ ] The reticle matches the real landing point closely (within about half a
-      court width) and is hidden for the opponent.
-- [ ] Aim and movement target don't change between swing start and contact
+- [x] The reticle matches the real landing point closely (within about half a
+      court width) and is hidden for the opponent. (Exact for a hit at the
+      baseline, spec test; only drawn for your own seat.)
+- [x] Aim and movement target don't change between swing start and contact
       (unit tests).
-- [ ] Level thresholds, hysteresis, forehand/backhand classification and the
+- [x] Level thresholds, hysteresis, forehand/backhand classification and the
       backhand cap are unit-tested; the sim stays deterministic and the old
       power-based sim tests are updated to levels.
 - [x] Reach and speed cap: a wide shot is unreachable for humans and the bot
       alike (spec test).
-- [ ] Denying permission leaves a playable game and a visible explanation.
+- [x] Denying permission leaves a playable game and a visible explanation.
 - [ ] Network tab shows no video upload (verify, then say so in the README).
-- [ ] Playwright with the fake webcam flag covers the camera path starting and
+      Verified: e2e checks every completed request is a GET to this server or
+      the model hosts, and every game message is small and of a known type.
+      MediaPipe POSTs usage stats to odml.pa.googleapis.com; the CSP blocks
+      it. README line still to write (README is still the template, task 01).
+- [x] Playwright with the fake webcam flag covers the camera path starting and
       the denied/fallback path at both viewports; touch buttons are reachable
       at 390x844.
 
@@ -88,6 +93,19 @@ the same events the keyboard sends. Camera is for gameplay only.
   movement. Revisit in task 04 if it feels sticky.
 - `predictLanding` assumes contact at your baseline with the swing that suits
   the ball's side; it matches a real hit there exactly (spec test).
+
+## Step 2 notes
+- MediaPipe 1.0.1 pose lite, runtime from jsdelivr, model from Google
+  storage, loaded by dynamic import (separate chunk) on "Start camera".
+  Detection 30 Hz on desktop, 15 Hz on coarse-pointer devices; the tracking
+  chip shows the live fps.
+- Default thresholds (shoulder-widths/s): start 2.5, light/medium 5,
+  medium/hard 9, hysteresis 10%. Calibration replaces the two level
+  thresholds with midpoints between your own swings' medians.
+- The freeze uses values from 100 ms before the detected swing start, because
+  the wind-up moves the hand before it counts as a swing (unit test).
+- Not yet tried with a real person on camera: thresholds, tilt gain and aim
+  range are guesses until then.
 
 ## Risks
 - Lighting and framing vary; a mobile CPU runs detection and the 3D renderer
