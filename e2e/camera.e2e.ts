@@ -36,14 +36,13 @@ test("camera path: starts the fake webcam, loads the model, calibrates by skippi
   await expect(panel.getByRole("heading", { name: /play with your camera/i })).toBeVisible();
   await insideViewport(page, panel);
   await expect(page.locator(".hud .status")).toHaveText(/paused/i);
-  // follow-my-arm is the default swing style; classic is kept to switch back to
-  await expect(panel.getByRole("button", { name: /follow my arm/i })).toHaveAttribute("aria-pressed", "true");
-  await panel.getByRole("button", { name: /classic swing/i }).click();
+  // defaults: classic swing and aim by timing; follow-my-arm and pointing can be picked
   await expect(panel.getByRole("button", { name: /classic swing/i })).toHaveAttribute("aria-pressed", "true");
-  await panel.getByRole("button", { name: /follow my arm/i }).click();
-  await expect(panel.getByRole("button", { name: /aim by pointing/i })).toHaveAttribute("aria-pressed", "true");
-  await panel.getByRole("button", { name: /aim by timing/i }).click();
   await expect(panel.getByRole("button", { name: /aim by timing/i })).toHaveAttribute("aria-pressed", "true");
+  await panel.getByRole("button", { name: /follow my arm/i }).click();
+  await expect(panel.getByRole("button", { name: /follow my arm/i })).toHaveAttribute("aria-pressed", "true");
+  await panel.getByRole("button", { name: /aim by pointing/i }).click();
+  await expect(panel.getByRole("button", { name: /aim by pointing/i })).toHaveAttribute("aria-pressed", "true");
   await panel.getByRole("button", { name: /left-handed/i }).click();
   await expect(panel.getByRole("button", { name: /left-handed/i })).toHaveAttribute("aria-pressed", "true");
   await panel.getByRole("button", { name: /start camera/i }).click();

@@ -322,8 +322,9 @@ export interface Calibration {
 
 export const DEFAULT_CALIBRATION: Calibration = {
   hand: "right",
-  mode: "follow",
-  aim: "point",
+  // user's choice after playtesting: classic swing, aim by timing
+  mode: "classic",
+  aim: "timing",
   neutralTilt: 0,
   // a relaxed racket hand hangs about half a shoulder-width out to its side
   neutralAcross: -0.5,
@@ -594,4 +595,14 @@ export class MoveThrottle {
   reset(): void {
     this.last = null;
   }
+}
+
+/**
+ * The aim the reticle and arc should show, on screen (-1..1). Aiming by
+ * timing, pointing doesn't steer the shot, so they show the on-time
+ * (straight) shot. Without the camera tracking, keys/mouse/touch aim.
+ */
+export function shownAim(cameraAim: number | null, aimMode: AimMode, otherAim: number): number {
+  if (cameraAim === null) return otherAim;
+  return aimMode === "timing" ? 0 : cameraAim;
 }

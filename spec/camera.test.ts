@@ -17,6 +17,7 @@ import {
   levelFromSpeed,
   neutralFrom,
   palmFacing,
+  shownAim,
   thresholdsFrom,
   tiltToTarget,
   wrist,
@@ -479,5 +480,18 @@ describe("follow mode: copying the arm", () => {
     const lm = pose();
     lm[LM.rightElbow] = { ...lm[LM.rightElbow], visibility: 0.1 };
     expect(armPose(lm, bodyFrame(lm, ASPECT)!, "right", ASPECT)).toBeNull();
+  });
+});
+
+describe("aim shown by the reticle and arc", () => {
+  // Regression: aiming by timing, the arc still followed the pointing hand,
+  // though pointing doesn't steer the shot in that mode.
+  it("aiming by timing shows the straight, on-time shot whatever the hand points at", () => {
+    expect(shownAim(0.8, "timing", 0.3)).toBe(0);
+  });
+
+  it("aiming by pointing follows the hand, and without the camera follows keys, mouse or touch", () => {
+    expect(shownAim(0.8, "point", 0.3)).toBe(0.8);
+    expect(shownAim(null, "timing", 0.3)).toBe(0.3);
   });
 });

@@ -46,18 +46,19 @@ the same events the keyboard sends. Camera is for gameplay only.
 
 - **Swing style: two modes, switchable in the camera panel** (remembered per
   browser; code: `Calibration.mode` in `client/input/camera/pose.ts`).
-  - **Follow my arm (default):** the character copies the real arm every
+  - Defaults (after playtesting): **Classic swing** and **Aim by timing**.
+  - **Follow my arm:** the character copies the real arm every
     frame (shoulder, elbow, wrist; reach toward the screen from how short the
     arm looks, `armPose`). The shot is the moment the racket hand sweeps
     through a hitting line in front of the body in the swing direction for
     the grip (`ZoneDetector`): speed through it sets the level, hand height
     sets `lift` (sent with the swing, clamped by the server, more or less
     loft). Wind-ups cross the line the other way, so they never count.
-  - **Classic swing (kept so we can switch back):** a fast wrist movement is
+  - **Classic swing (default):** a fast wrist movement is
     a swing (`SwingDetector`, peak speed sets the level), shown with the
     canned stroke animation. Nothing about it was removed; pick "Classic
     swing" in the camera panel to use it.
-  - **Aim (camera panel): by pointing (default) or by timing.** Timing:
+  - **Aim (camera panel): by timing (default) or by pointing.** Timing:
     the server judges how early or late the ball is met from its own ball
     position (`timingAim` in the sim): early pulls it across the body, late
     pushes it down the line. Over a real network the swing arrives late by

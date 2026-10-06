@@ -13,6 +13,7 @@ import { COURT, LEVEL_NAMES, PLAYER, missReason, naturalKind, predictLanding, se
 import type { Hand, Level, Miss, SwingKind, TennisSnapshot } from "../../../shared/games/tennis/sim.ts";
 import type { RoomInfo, ServerMsg } from "../../../shared/protocol.ts";
 import { createCameraInput } from "../../input/camera/index.ts";
+import { shownAim } from "../../input/camera/pose.ts";
 import { createPlayInput } from "../../input/keyboard.ts";
 import type { Connection } from "../../net/socket.ts";
 import { makePlayer } from "./character.ts";
@@ -184,10 +185,8 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
       updateHud();
     },
   });
-  const currentAim = () => {
-    const cam = cameraInput.aim();
-    return cam !== null ? cam * worldSign : input.aim();
-  };
+  // in world x; aiming by timing shows the on-time (straight) shot
+  const currentAim = () => shownAim(cameraInput.aim(), cameraInput.aimMode(), input.aim() * worldSign) * worldSign;
 
   const label = (seat: 0 | 1) => (seat === info.seat ? "You" : (names[seat] ?? `Player ${seat + 1}`));
 

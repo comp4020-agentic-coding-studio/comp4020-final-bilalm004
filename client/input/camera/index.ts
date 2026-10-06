@@ -37,6 +37,7 @@ export interface CameraInput {
   /** The racket arm to copy, in follow mode while tracking; else null. */
   arm(): ArmPose | null;
   mode(): SwingMode;
+  aimMode(): AimMode;
   dispose(): void;
 }
 
@@ -315,6 +316,7 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
     hand: () => calib.hand,
     arm: () => arm,
     mode: () => calib.mode,
+    aimMode: () => calib.aim,
     dispose() {
       button.removeEventListener("click", onButton);
       window.removeEventListener("keydown", onKey);
