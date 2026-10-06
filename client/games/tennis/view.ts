@@ -24,6 +24,9 @@ import { createCameraInput } from "../../input/camera/index.ts";
 import { createPlayInput } from "../../input/keyboard.ts";
 import type { Connection } from "../../net/socket.ts";
 
+// where the reticle sits for a shot that won't clear the net
+const NET_MARK_Z = 0.8;
+
 const flat = (color: number) => new MeshLambertMaterial({ color, flatShading: true });
 
 function makePlayer(color: number): { group: Group; racket: Mesh } {
@@ -116,10 +119,11 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
   players[1].group.rotation.y = Math.PI;
   scene.add(ball, shadow, players[0].group, players[1].group);
 
-  // Where your next shot would land: a guide only, the server decides the hit.
+  // Where your next shot would land, always on the opponent's half: a guide
+  // only, the server decides the hit. Faint when it's from aim alone.
   const reticleIn = new MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 });
   const reticleOut = new MeshBasicMaterial({ color: 0xff5a5a, transparent: true, opacity: 0.85 });
-  const reticle = new Mesh(new RingGeometry(0.35, 0.5, 20), reticleIn);
+  const reticle = new Mesh(new RingGeometry(0.5, 0.75, 24), reticleIn);
   reticle.rotation.x = -Math.PI / 2;
   reticle.visible = false;
   scene.add(reticle);
@@ -257,13 +261,19 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
         const t = (now - swingAnim[seat]) / 220;
         p.racket.rotation.z = t < 1 ? -Math.sin(t * Math.PI) * 1.6 : 0;
       }
-      const landing = info.seat === null ? null : predictLanding({ ...snap, rng: 0 }, currentAim(), reticleLevel);
+      const landing =
+        info.seat === null || snap.phase === "over" ? null : predictLanding({ ...snap, rng: 0 }, info.seat, currentAim(), reticleLevel);
       reticle.visible = landing !== null;
-      if (landing) {
-        reticle.position.set(landing.x, 0.03, landing.z);
-        reticle.material = landing.in ? reticleIn : reticleOut;
-      }
-      canvas.dataset.reticle = landing ? `${landing.x.toFixed(2)},${landing.z.toFixed(2)},${landing.in ? "in" : "out"}` : "";
+      if (landing && info.seat !== null) {
+        // into the net or onto your own side: show it red just over the net, on their side
+        const farSign = info.seat === 0 ? -1 : 1;
+        const z = landing.farSide ? landing.z : farSign * NET_MARK_Z;
+        const material = landing.in ? reticleIn : reticleOut;
+        material.opacity = landing.predicted ? 0.95 : 0.6;
+        reticle.position.set(landing.x, 0.03, z);
+        reticle.material = material;
+        canvas.dataset.reticle = `${landing.x.toFixed(2)},${z.toFixed(2)},${landing.in ? "in" : "out"},${landing.predicted ? "ball" : "aim"}`;
+      } else canvas.dataset.reticle = "";
     }
     renderer.render(scene, camera);
     canvas.dataset.frames = String(++frames);

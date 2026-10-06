@@ -240,7 +240,8 @@ describe("predictLanding", () => {
         const contact = predictContact(s, 1)!;
         s.players[1] = { x: contact.ball.x, targetX: contact.ball.x };
         const before = snapshot(s);
-        const predicted = predictLanding(s, aim, level)!;
+        const predicted = predictLanding(s, 1, aim, level);
+        expect(predicted.predicted).toBe(true);
         expect(snapshot(s)).toEqual(before);
 
         run(s, contact.ticks);
@@ -259,22 +260,40 @@ describe("predictLanding", () => {
   });
 
   it("reports a low ball hit hard as not in", () => {
-    const landing = predictLanding(receiving(atBaseline(0.5), 0), 0, 2)!;
+    const landing = predictLanding(receiving(atBaseline(0.5), 0), 1, 0, 2);
     expect(landing.in).toBe(false);
-    expect(predictLanding(receiving(atBaseline(0.5), 0), 0, 0)!.in).toBe(true);
+    expect(landing.farSide).toBe(false);
+    expect(predictLanding(receiving(atBaseline(0.5), 0), 1, 0, 0).in).toBe(true);
   });
 
-  it("has nothing to show during the serve or while your own shot is travelling", () => {
+  it("falls back to aim alone during the serve and while your own shot is travelling", () => {
     const s = createState(1);
-    expect(predictLanding(s, 0, 1)).toBeNull();
+    for (const seat of [0, 1] as const) {
+      const serve = predictLanding(s, seat, 0, 1);
+      expect(serve.predicted).toBe(false);
+      expect(serve.in).toBe(true);
+    }
     untilRally(s);
     expect(predictContact(s, 0)).toBeNull();
+    const away = predictLanding(s, 0, 0, 1);
+    expect(away.predicted).toBe(false);
+    expect(away.z).toBeLessThan(0);
+  });
+
+  it("aim alone follows where you stand and where you point", () => {
+    const s = createState(1);
+    s.players[0] = { x: -3, targetX: -3 };
+    const fromLeft = predictLanding(s, 0, 0, 1);
+    s.players[0] = { x: 3, targetX: 3 };
+    const fromRight = predictLanding(s, 0, 0, 1);
+    expect(fromLeft.x).toBeLessThan(fromRight.x);
+    expect(predictLanding(s, 0, -1, 1).x).toBeLessThan(predictLanding(s, 0, 1, 1).x);
   });
 
   it("moves the landing point with the aim", () => {
     const s = receiving(atBaseline(1), 0);
-    const left = predictLanding(s, -1, 1)!;
-    const right = predictLanding(s, 1, 1)!;
+    const left = predictLanding(s, 1, -1, 1);
+    const right = predictLanding(s, 1, 1, 1);
     expect(left.x).toBeLessThan(right.x - 4);
     expect(left.in && right.in).toBe(true);
   });

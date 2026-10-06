@@ -117,19 +117,28 @@ for (const [name, script, message] of [
   });
 }
 
-test("the reticle shows where your shot would land and follows the aim", async ({ page }) => {
+test("the reticle is always on the opponent's half and follows the aim", async ({ page }) => {
   test.setTimeout(45_000);
   await practice(page);
   const canvas = page.locator("canvas");
-  const reticleX = async () => {
-    const r = (await canvas.getAttribute("data-reticle")) ?? "";
-    return r ? Number(r.split(",")[0]) : Number.NaN;
+  const reticle = async () => {
+    const [x, z, , source] = ((await canvas.getAttribute("data-reticle")) ?? "").split(",");
+    return { x: Number(x), z: Number(z), source };
   };
-  // seat 0 views from +z, so aiming right on screen is +x in the world
+  // showing straight away, during the serve, from aim alone
+  await expect.poll(async () => (await reticle()).source).toBe("aim");
+  // seat 0 views from +z: the opponent's half is z < 0, and aiming right is +x
   await page.keyboard.down("ArrowRight");
-  await expect.poll(reticleX, { timeout: 20_000 }).toBeGreaterThan(1);
+  await expect.poll(async () => (await reticle()).x).toBeGreaterThan(1);
   await page.keyboard.up("ArrowRight");
   await page.keyboard.down("ArrowLeft");
-  await expect.poll(reticleX, { timeout: 20_000 }).toBeLessThan(-1);
+  await expect.poll(async () => (await reticle()).x).toBeLessThan(-1);
   await page.keyboard.up("ArrowLeft");
+
+  // through serves and returns, it never comes onto your side
+  for (let i = 0; i < 40; i++) {
+    const r = await reticle();
+    expect(r.z).toBeLessThan(0);
+    await page.waitForTimeout(150);
+  }
 });

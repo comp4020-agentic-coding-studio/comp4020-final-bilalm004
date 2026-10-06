@@ -325,31 +325,36 @@ export interface Landing {
   // false when it would hit the net, land out, or land on the hitter's side
   in: boolean;
   net: boolean;
+  // it clears the net and first touches down on the opponent's half (in or out)
+  farSide: boolean;
+  // true: from the ball actually coming at you; false: from aim alone
+  predicted: boolean;
 }
 
 /**
- * Where the next shot would first touch down if the player due to hit swung at
- * the predicted contact point with this aim and level, using the swing that
- * suits the ball's side. Steps the same ball physics as the sim, so it matches
- * a real hit at that point. A guide for the reticle; the server decides the
- * real hit. Pure: `s` is not modified.
+ * Where `seat`'s next shot would first touch down with this aim and level,
+ * using the swing that suits the ball's side. When the ball is coming at
+ * them, it is hit at the predicted contact point and matches a real hit there
+ * exactly. Otherwise (serve, their own shot still travelling, a ball that won't
+ * reach them) it is hit from where they stand at a comfortable height, so aim
+ * always has somewhere to show. A guide for the reticle; the server decides
+ * the real hit. Pure: `s` is not modified.
  */
-export function predictLanding(s: TennisState, aim: number, level: Level, hand: Hand = "right"): Landing | null {
-  if (s.lastHitter === null) return null;
-  const seat = other(s.lastHitter);
-  const contact = predictContact(s, seat);
-  if (!contact) return null;
-  const b = contact.ball;
+export function predictLanding(s: TennisState, seat: Seat, aim: number, level: Level, hand: Hand = "right"): Landing {
   const playerX = s.players[seat].x;
+  const contact = predictContact(s, seat);
+  const b = contact ? contact.ball : { x: playerX, y: IDEAL_CONTACT_Y, z: seatZ(seat), vx: 0, vy: 0, vz: 0 };
   launch(b, seat, playerX, aim, naturalKind(seat, playerX, b.x, hand), level, hand);
+  const predicted = contact !== null;
   for (let i = 0; i < 600; i++) {
     const event = moveBall(b);
-    if (event === "net") return { x: b.x, z: 0, in: false, net: true };
+    if (event === "net") return { x: b.x, z: 0, in: false, net: true, farSide: false, predicted };
     if (event === "bounce") {
       const inBounds = Math.abs(b.x) <= COURT.halfW && Math.abs(b.z) <= COURT.halfL;
       const farSide = Math.sign(b.z) === (seat === 0 ? -1 : 1);
-      return { x: b.x, z: b.z, in: inBounds && farSide, net: false };
+      return { x: b.x, z: b.z, in: inBounds && farSide, net: false, farSide, predicted };
     }
   }
-  return null;
+  // unreachable: a launched ball always comes down within 10 s
+  return { x: b.x, z: b.z, in: false, net: false, farSide: false, predicted };
 }
