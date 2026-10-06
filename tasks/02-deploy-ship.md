@@ -1,6 +1,8 @@
 # 02 First deploy and ship
 
-Status: not started (scaffold is committed locally, not pushed)
+Status: deployed and verified by hand on 2026-10-06 (image builds, live spec 13/13,
+data survives a machine restart). Still open: push, repo public, CI green, tag.
+The Fly token lives in `../mise.local.toml` (parent folder, outside the repo).
 Model: Sonnet
 
 ## Goal
