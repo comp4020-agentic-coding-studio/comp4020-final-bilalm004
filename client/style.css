@@ -166,6 +166,21 @@ a:focus-visible {
   box-shadow: 0 1px 0 #d99900;
 }
 
+.identity-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+  margin: -0.5rem 0 0;
+}
+
+.identity-row button {
+  flex: 1 1 auto;
+  min-height: 40px;
+  padding: 0 0.75rem;
+  font-size: 0.85rem;
+}
+
 .menu-card form {
   display: flex;
   gap: 0.5rem;

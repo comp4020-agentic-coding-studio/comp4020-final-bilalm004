@@ -7,7 +7,7 @@ import { marked } from "marked";
 import { WebSocketServer } from "ws";
 import type { WebSocket } from "ws";
 import { parseClientMsg } from "../shared/protocol.ts";
-import { getOrCreatePlayer } from "./db.ts";
+import { getDemoPlayer, getOrCreatePlayer, matchCountFor } from "./db.ts";
 import { log } from "./log.ts";
 import { createRoom, getRoom, leaveRoom, roomCount, send } from "./rooms.ts";
 import type { Client } from "./rooms.ts";
@@ -145,11 +145,13 @@ wss.on("connection", (ws: WebSocket) => {
       return;
     }
     if (msg.t === "hello") {
-      const player = getOrCreatePlayer(msg.token);
+      // the client only asks for a demo account; it never gets to say who it
+      // is beyond that, same as every other claim this server resolves itself
+      const player = msg.demo ? getDemoPlayer(msg.demo) : getOrCreatePlayer(msg.token);
       client.token = player.token;
       client.name = player.name;
       hello = true;
-      send(client, { t: "welcome", token: player.token, name: player.name });
+      send(client, { t: "welcome", token: player.token, name: player.name, matches: matchCountFor(player.token) });
       log("hello", { name: player.name });
       return;
     }

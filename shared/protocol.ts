@@ -1,7 +1,10 @@
 import type { Hand, Level, SwingKind } from "./games/tennis/sim.ts";
 
 export type ClientMsg =
-  | { t: "hello"; token?: string }
+  // demo: sign in as one of the two fixed demo accounts instead of the
+  // player identified by `token`; the server decides who that is, never
+  // the client
+  | { t: "hello"; token?: string; demo?: 1 | 2 }
   | { t: "create"; game: string; practice: boolean }
   | { t: "join"; room: string }
   // lift: hand height at contact in camera follow mode, -1..1 (server clamps)
@@ -20,7 +23,7 @@ export interface RoomInfo {
 }
 
 export type ServerMsg =
-  | { t: "welcome"; token: string; name: string }
+  | { t: "welcome"; token: string; name: string; matches: number }
   | ({ t: "room" } & RoomInfo)
   | { t: "presence"; names: [string | null, string | null]; spectators: number }
   | { t: "state"; state: unknown }
@@ -37,7 +40,11 @@ export function parseClientMsg(raw: string): ClientMsg | null {
   const m = v as Record<string, unknown>;
   switch (m.t) {
     case "hello":
-      return { t: "hello", token: typeof m.token === "string" ? m.token : undefined };
+      return {
+        t: "hello",
+        token: typeof m.token === "string" ? m.token : undefined,
+        demo: m.demo === 1 || m.demo === 2 ? m.demo : undefined,
+      };
     case "create":
       return typeof m.game === "string" ? { t: "create", game: m.game, practice: m.practice === true } : null;
     case "join":

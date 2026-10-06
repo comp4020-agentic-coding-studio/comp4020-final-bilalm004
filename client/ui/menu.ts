@@ -2,6 +2,8 @@ export interface MenuActions {
   onPractice(): void;
   onCreate(): void;
   onJoin(code: string): void;
+  onSignInDemo(n: 1 | 2): void;
+  onPlayAsGuest(): void;
 }
 
 // Two decorative Mii-style figures that take turns crossing the court behind
@@ -25,7 +27,14 @@ const sprite = (role: "runner" | "server"): string => `
   </div>
 `;
 
-export function renderMenu(root: HTMLElement, name: string, error: string | null, actions: MenuActions): void {
+export function renderMenu(
+  root: HTMLElement,
+  name: string,
+  matches: number,
+  demo: 1 | 2 | null,
+  error: string | null,
+  actions: MenuActions,
+): void {
   root.replaceChildren();
   const menu = document.createElement("main");
   menu.className = "menu";
@@ -37,7 +46,16 @@ export function renderMenu(root: HTMLElement, name: string, error: string | null
     </div>
     <div class="menu-card">
       <h1>Weblympics</h1>
-      <p class="muted">${name ? `Playing as <strong></strong>` : "Connecting…"}</p>
+      <p class="muted">${name ? `Playing as <strong></strong> · <span class="matches"></span>` : "Connecting…"}</p>
+      ${
+        name
+          ? `<div class="identity-row" role="group" aria-label="Sign in">
+               ${demo !== 1 ? `<button data-demo="1">Sign in as Demo One</button>` : ""}
+               ${demo !== 2 ? `<button data-demo="2">Sign in as Demo Two</button>` : ""}
+               ${demo ? `<button data-action="guest">Play as guest</button>` : ""}
+             </div>`
+          : ""
+      }
       <p class="error" role="alert" hidden></p>
       <button class="primary" data-action="practice">Practice vs bot</button>
       <button data-action="create">Create a room</button>
@@ -51,6 +69,8 @@ export function renderMenu(root: HTMLElement, name: string, error: string | null
   `;
   const strong = menu.querySelector("strong");
   if (strong) strong.textContent = name;
+  const matchesEl = menu.querySelector<HTMLElement>(".matches");
+  if (matchesEl) matchesEl.textContent = `${matches} match${matches === 1 ? "" : "es"} played`;
   const errorEl = menu.querySelector<HTMLElement>(".error");
   if (errorEl && error) {
     errorEl.textContent = error;
@@ -58,6 +78,10 @@ export function renderMenu(root: HTMLElement, name: string, error: string | null
   }
   menu.querySelector("[data-action=practice]")?.addEventListener("click", actions.onPractice);
   menu.querySelector("[data-action=create]")?.addEventListener("click", actions.onCreate);
+  menu.querySelector("[data-action=guest]")?.addEventListener("click", actions.onPlayAsGuest);
+  menu.querySelectorAll<HTMLButtonElement>("[data-demo]").forEach((b) => {
+    b.addEventListener("click", () => actions.onSignInDemo(Number(b.dataset.demo) as 1 | 2));
+  });
   menu.querySelector("form")?.addEventListener("submit", (event) => {
     event.preventDefault();
     const code = new FormData(event.currentTarget as HTMLFormElement).get("code");

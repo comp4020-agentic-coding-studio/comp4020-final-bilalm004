@@ -16,10 +16,12 @@ function showMenu(): void {
   disposeGame = null;
   currentRoom = null;
   conn.roomCode = null;
-  renderMenu(root, conn.name, error, {
+  renderMenu(root, conn.name, conn.matches, conn.demo, error, {
     onPractice: () => conn.send({ t: "create", game: "tennis", practice: true }),
     onCreate: () => conn.send({ t: "create", game: "tennis", practice: false }),
     onJoin: (code) => conn.send({ t: "join", room: code }),
+    onSignInDemo: (n) => conn.signInDemo(n),
+    onPlayAsGuest: () => conn.playAsGuest(),
   });
 }
 

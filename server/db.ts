@@ -36,6 +36,22 @@ export interface Player {
   name: string;
 }
 
+// Two fixed, public accounts: anyone can sign in as one, from any device, so
+// a stranger can prove their match actually persisted without relying on
+// this browser's storage. Seeded once; `INSERT OR IGNORE` makes this safe to
+// run on every boot.
+const DEMO_PLAYERS: Record<1 | 2, Player> = {
+  1: { token: "demo-1", name: "Demo One" },
+  2: { token: "demo-2", name: "Demo Two" },
+};
+for (const { token, name } of Object.values(DEMO_PLAYERS)) {
+  db.prepare("INSERT OR IGNORE INTO players (token, name, created_at) VALUES (?, ?, 0)").run(token, name);
+}
+
+export function getDemoPlayer(n: 1 | 2): Player {
+  return DEMO_PLAYERS[n];
+}
+
 export function getOrCreatePlayer(token: string | undefined): Player {
   if (token && token.length <= 64) {
     const row = db.prepare("SELECT name FROM players WHERE token = ?").get(token) as { name: string } | undefined;
@@ -61,6 +77,6 @@ export function recordMatch(m: MatchRecord): void {
   ).run(m.room, m.game, m.tokens[0], m.tokens[1], m.score[0], m.score[1], m.winner, Date.now());
 }
 
-export function matchCount(): number {
-  return (db.prepare("SELECT COUNT(*) AS n FROM matches").get() as { n: number }).n;
+export function matchCountFor(token: string): number {
+  return (db.prepare("SELECT COUNT(*) AS n FROM matches WHERE p0 = ? OR p1 = ?").get(token, token) as { n: number }).n;
 }
