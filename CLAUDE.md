@@ -80,5 +80,9 @@ scroll, controls reachable, canvas not clipped. Check both for any UI change.
   `pnpm check` without being asked.
 - UI or layout changes: run `pnpm e2e` (both viewports) without being asked.
 - Never commit or push on red. Commit when green, in small commits with clear
-  messages. Ask before every push (pushing to main deploys once the repo is public).
+  messages. Gate on the test command's own exit code, never on a
+  pipe into `grep` (the pipe's status is grep's, so red can look green).
+- When another session is editing the tree, stage files by name and check
+  the commit against a clean build of HEAD (a `git worktree` on another
+  port), since the shared working tree also builds in their unfinished work. Ask before every push (pushing to main deploys once the repo is public).
 - Never commit secrets or `mise.local.toml`.
