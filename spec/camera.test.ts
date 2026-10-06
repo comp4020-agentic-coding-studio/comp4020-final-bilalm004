@@ -4,6 +4,7 @@ import {
   DEFAULT_CALIBRATION,
   DEFAULT_SWING,
   LM,
+  MoveThrottle,
   OneEuro,
   SwingDetector,
   aimFromHand,
@@ -258,5 +259,36 @@ describe("calibration", () => {
     expect(thresholdsFrom({ light: [3, 4], medium: [7], hard: [12, 13, 14] })).toEqual([5.25, 10]);
     expect(thresholdsFrom({ light: [6], medium: [6.2], hard: [12] })).toEqual(DEFAULT_SWING.thresholds);
     expect(thresholdsFrom({ light: [], medium: [6], hard: [12] })).toEqual(DEFAULT_SWING.thresholds);
+  });
+});
+
+describe("move throttle", () => {
+  // Regression: the camera used to never send a move, because the first
+  // comparison was against NaN.
+  it("sends the first target straight away", () => {
+    expect(new MoveThrottle().next(0, 0.4)).toBe(0.4);
+  });
+
+  it("sends changes at most every interval, skips repeats and lost tracking", () => {
+    const m = new MoveThrottle(40);
+    expect(m.next(0, 0)).toBe(0);
+    expect(m.next(20, 0.5)).toBeNull();
+    expect(m.next(40, 0.5)).toBe(0.5);
+    expect(m.next(100, 0.505)).toBeNull();
+    expect(m.next(140, null)).toBeNull();
+    expect(m.next(180, -1)).toBe(-1);
+  });
+
+  it("leaning drives a stream of moves from the camera controller", () => {
+    const c = new CameraController(DEFAULT_CALIBRATION);
+    const m = new MoveThrottle();
+    const sent: number[] = [];
+    for (let i = 0; i < 60; i++) {
+      const out = c.update({ t: i * 33, landmarks: pose({ tilt: i < 20 ? 0 : 9 }), aspect: ASPECT });
+      const target = m.next(i * 33, out.target);
+      if (target !== null) sent.push(target);
+    }
+    expect(sent[0]).toBe(0);
+    expect(sent.at(-1)).toBeGreaterThan(0.9);
   });
 });

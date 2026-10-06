@@ -84,6 +84,7 @@ export const DEFAULT_TILT: TiltConfig = { deadZone: 1.5, fullTilt: 9 };
 export function tiltToTarget(tilt: number, neutral: number, cfg: TiltConfig = DEFAULT_TILT): number {
   const d = tilt - neutral;
   const past = Math.max(0, Math.abs(d) - cfg.deadZone);
+  if (past === 0) return 0;
   return Math.sign(d) * clamp(past / (cfg.fullTilt - cfg.deadZone), 0, 1);
 }
 
@@ -356,5 +357,31 @@ export class CameraController {
       return { tracking: true, swinging: false, ...shown, swing: { ...swing, aim: shown.aim } };
     }
     return { tracking: true, swinging: this.frozen !== null, ...shown, swing: null };
+  }
+}
+
+/**
+ * Decides when to send a movement target: when it has changed, at most every
+ * `intervalMs` (the server accepts about 40 a second). The first target is
+ * always sent.
+ */
+export class MoveThrottle {
+  private last: { t: number; target: number } | null = null;
+  private intervalMs: number;
+
+  constructor(intervalMs = 40) {
+    this.intervalMs = intervalMs;
+  }
+
+  /** The target to send now, or null to send nothing. */
+  next(t: number, target: number | null): number | null {
+    if (target === null) return null;
+    if (this.last && (Math.abs(target - this.last.target) <= 0.01 || t - this.last.t < this.intervalMs)) return null;
+    this.last = { t, target };
+    return target;
+  }
+
+  reset(): void {
+    this.last = null;
   }
 }

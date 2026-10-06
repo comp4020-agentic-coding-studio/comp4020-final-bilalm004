@@ -4,6 +4,7 @@ import type { CameraSession, CameraStats } from "./camera.ts";
 import {
   CameraController,
   DEFAULT_CALIBRATION,
+  MoveThrottle,
   DEFAULT_SWING,
   SwingDetector,
   bodyFrame,
@@ -34,7 +35,6 @@ export interface CameraInput {
 }
 
 const STORAGE_KEY = "camera-calibration";
-const MOVE_SEND_MS = 40;
 const SWINGS_PER_LEVEL = 2;
 const LEVEL_WORDS = ["light", "medium", "hard"] as const;
 
@@ -76,7 +76,7 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
   let stats: CameraStats | null = null;
   let aim: number | null = null;
   let lastLevel: Level | null = null;
-  let lastMove = { t: 0, target: Number.NaN };
+  const moves = new MoveThrottle();
   // set while a calibration step wants the raw frames
   let capture: ((f: CameraFrame) => void) | null = null;
 
@@ -101,10 +101,8 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
     aim = out.tracking ? out.aim : null;
     // no gameplay while calibrating
     if (capture || !panel.hidden) return;
-    if (out.target !== null && Math.abs(out.target - lastMove.target) > 0.01 && f.t - lastMove.t >= MOVE_SEND_MS) {
-      lastMove = { t: f.t, target: out.target };
-      cb.move(out.target);
-    }
+    const target = moves.next(f.t, out.target);
+    if (target !== null) cb.move(target);
     if (out.swing) {
       lastLevel = out.swing.level;
       cb.swing(out.swing.level, out.swing.kind, out.swing.aim, calib.hand);
@@ -122,6 +120,7 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
   const stop = () => {
     session?.stop();
     session = null;
+    moves.reset();
     tracking = false;
     aim = null;
     video.hidden = true;
