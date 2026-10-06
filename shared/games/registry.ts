@@ -15,7 +15,8 @@ export interface GameInstance {
 export interface GameDef {
   id: string;
   name: string;
-  create(seed: number): GameInstance;
+  /** `endless`: no winner, play until everyone leaves (practice). */
+  create(seed: number, options?: { endless?: boolean }): GameInstance;
 }
 
 export const games: Record<string, GameDef> = { tennis };

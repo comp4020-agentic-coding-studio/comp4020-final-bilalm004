@@ -95,6 +95,7 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
     const out = controller.update(f);
     if (out.tracking !== tracking) {
       tracking = out.tracking;
+      video.dataset.tracking = String(tracking);
       refreshChip();
     }
     capture?.(f);

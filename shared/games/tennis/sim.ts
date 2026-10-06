@@ -88,6 +88,8 @@ export interface TennisState {
   lastHitter: Seat | null;
   bounces: number;
   score: [number, number];
+  // first to this many points wins; null plays forever (practice)
+  winScore: number | null;
   winner: Seat | null;
   rng: number;
 }
@@ -139,7 +141,7 @@ function resetServe(s: TennisState): void {
   s.ball = { x: 0, y: 1, z: seatZ(s.server), vx: 0, vy: 0, vz: 0 };
 }
 
-export function createState(seed: number): TennisState {
+export function createState(seed: number, winScore: number | null = COURT.winScore): TennisState {
   const s: TennisState = {
     tick: 0,
     phase: "serve",
@@ -153,6 +155,7 @@ export function createState(seed: number): TennisState {
     lastHitter: null,
     bounces: 0,
     score: [0, 0],
+    winScore,
     winner: null,
     rng: seed >>> 0,
   };
@@ -171,13 +174,14 @@ export function snapshot(s: TennisState): TennisSnapshot {
     lastHitter: s.lastHitter,
     bounces: s.bounces,
     score: [s.score[0], s.score[1]],
+    winScore: s.winScore,
     winner: s.winner,
   };
 }
 
 function awardPoint(s: TennisState, winner: Seat): void {
   s.score[winner]++;
-  if (s.score[winner] >= COURT.winScore) {
+  if (s.winScore !== null && s.score[winner] >= s.winScore) {
     s.phase = "over";
     s.winner = winner;
     return;

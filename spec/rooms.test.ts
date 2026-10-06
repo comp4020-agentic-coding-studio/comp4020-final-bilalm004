@@ -64,6 +64,8 @@ describe("rooms over WebSocket", () => {
     expect(room.room).toMatch(/^[A-Z]{4}$/);
     const state = await peer.next("state");
     expect(state.state).toHaveProperty("ball");
+    // practice never ends, so the player can keep training
+    expect((state.state as TennisSnapshot).winScore).toBeNull();
   });
 
   it("seats a second player, then makes the third a spectator", async () => {
@@ -78,6 +80,7 @@ describe("rooms over WebSocket", () => {
     const c = await Peer.connect();
     c.peer.send({ t: "join", room: room.room.toLowerCase() });
     expect((await c.peer.next("room")).seat).toBeNull();
+    expect(((await c.peer.next("state")).state as TennisSnapshot).winScore).toBe(COURT.winScore);
   });
 
   it("rejects an unknown room and a message before hello", async () => {

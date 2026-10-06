@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { botInputs } from "../shared/games/tennis/bot.ts";
+import { tennis } from "../shared/games/tennis/index.ts";
 import {
   COURT,
   DT,
@@ -310,5 +311,25 @@ describe("serve", () => {
     step(wide, [{ t: "move", seat: 0, x: 1000 }]);
     untilRally(wide);
     expect(wide.ball.x).toBeCloseTo(COURT.halfW * 0.6, 9);
+  });
+});
+
+describe("endless practice", () => {
+  it("never ends when there is no win score, and keeps counting points", () => {
+    const s = createState(9, null);
+    run(s, 60 * 600);
+    expect(s.phase).not.toBe("over");
+    expect(s.score[0] + s.score[1]).toBeGreaterThan(COURT.winScore * 2);
+  });
+
+  it("the adapter makes an endless game only when asked", () => {
+    const endless = tennis.create(9, { endless: true });
+    const match = tennis.create(9);
+    for (let i = 0; i < 60 * 600; i++) {
+      endless.step([]);
+      match.step([]);
+    }
+    expect(endless.finished()).toBeNull();
+    expect(match.finished()).not.toBeNull();
   });
 });

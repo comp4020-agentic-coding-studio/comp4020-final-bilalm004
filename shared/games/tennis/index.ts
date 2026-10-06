@@ -1,6 +1,6 @@
 import type { GameDef } from "../registry.ts";
 import { botInputs } from "./bot.ts";
-import { createState, snapshot, step } from "./sim.ts";
+import { COURT, createState, snapshot, step } from "./sim.ts";
 import type { Hand, Seat, SwingKind, TennisInput } from "./sim.ts";
 
 const KINDS: readonly unknown[] = ["forehand", "backhand"] satisfies SwingKind[];
@@ -34,8 +34,8 @@ export function asInput(seat: Seat, input: unknown): TennisInput | null {
 export const tennis: GameDef = {
   id: "tennis",
   name: "Tennis",
-  create(seed) {
-    const s = createState(seed);
+  create(seed, options) {
+    const s = createState(seed, options?.endless ? null : COURT.winScore);
     return {
       step(inputs) {
         const parsed: TennisInput[] = [];

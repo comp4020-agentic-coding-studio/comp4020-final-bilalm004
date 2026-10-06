@@ -58,7 +58,8 @@ class Room {
     this.id = id;
     this.gameId = gameId;
     this.practice = practice;
-    this.instance = games[gameId].create((Math.random() * 2 ** 32) >>> 0);
+    // practice never ends, so a player can keep training against the bot
+    this.instance = games[gameId].create((Math.random() * 2 ** 32) >>> 0, { endless: practice });
     this.timer = setInterval(() => this.pump(), TICK_MS);
   }
 

@@ -81,7 +81,7 @@ a:focus-visible {
   min-width: 0;
   min-height: 48px;
   padding: 0 0.75rem;
-  border: 2px solid var(--panel);
+  border: 3px solid var(--accent);
   border-radius: 10px;
   background: transparent;
   text-transform: uppercase;
@@ -201,16 +201,21 @@ a:focus-visible {
 .selfview {
   position: absolute;
   right: 0.75rem;
-  /* below the HUD, which wraps to three rows on a phone */
-  top: 10.5rem;
-  width: 96px;
+  /* below the HUD, which wraps to four rows on a phone with the camera on */
+  top: 12.5rem;
+  width: min(240px, 40vw);
   aspect-ratio: 4 / 3;
   object-fit: cover;
   border-radius: 8px;
-  border: 2px solid var(--panel);
+  border: 3px solid var(--accent);
   /* mirrored, like looking in a mirror; pose maths doesn't care either way */
   transform: scaleX(-1);
   background: #000;
+}
+
+/* green while you're in frame and tracked, amber while not */
+.selfview[data-tracking="true"] {
+  border-color: #4ade80;
 }
 
 .selfview[hidden] {
@@ -218,7 +223,7 @@ a:focus-visible {
 }
 
 .game.calibrating .selfview {
-  width: min(240px, 50vw);
+  width: min(320px, 60vw);
 }
 
 .camera-panel {
