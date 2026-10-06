@@ -13,12 +13,14 @@ import {
   MeshLambertMaterial,
   PerspectiveCamera,
   PlaneGeometry,
+  RingGeometry,
   Scene,
   WebGLRenderer,
 } from "three";
-import { COURT, PLAYER, naturalKind, seatZ } from "../../../shared/games/tennis/sim.ts";
-import type { Level, TennisSnapshot } from "../../../shared/games/tennis/sim.ts";
+import { COURT, PLAYER, naturalKind, predictLanding, seatZ } from "../../../shared/games/tennis/sim.ts";
+import type { Hand, Level, SwingKind, TennisSnapshot } from "../../../shared/games/tennis/sim.ts";
 import type { RoomInfo, ServerMsg } from "../../../shared/protocol.ts";
+import { createCameraInput } from "../../input/camera/index.ts";
 import { createPlayInput } from "../../input/keyboard.ts";
 import type { Connection } from "../../net/socket.ts";
 
@@ -72,6 +74,8 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
       <div class="score" aria-live="polite"></div>
       <div>
         <span class="muted code"></span>
+        <span class="tracking" role="status" hidden></span>
+        <button data-action="camera" hidden>Camera</button>
         <button data-action="copy">Copy invite</button>
         <button data-action="leave">Leave</button>
       </div>
@@ -112,6 +116,14 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
   players[1].group.rotation.y = Math.PI;
   scene.add(ball, shadow, players[0].group, players[1].group);
 
+  // Where your next shot would land: a guide only, the server decides the hit.
+  const reticleIn = new MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 });
+  const reticleOut = new MeshBasicMaterial({ color: 0xff5a5a, transparent: true, opacity: 0.85 });
+  const reticle = new Mesh(new RingGeometry(0.35, 0.5, 20), reticleIn);
+  reticle.rotation.x = -Math.PI / 2;
+  reticle.visible = false;
+  scene.add(reticle);
+
   const camera = new PerspectiveCamera(55, 1, 0.1, 120);
   const behindSeat1 = info.seat === 1;
   const camZ = (COURT.halfL + 9) * (behindSeat1 ? -1 : 1);
@@ -136,13 +148,20 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
   let snapAt = performance.now();
   let names: [string | null, string | null] = [null, null];
   const swingAnim: [number, number] = [0, 0];
+  const worldSign = behindSeat1 ? -1 : 1;
+  let reticleLevel: Level = 1;
 
+  const send = (level: Level, dirX: number, kind: SwingKind, hand?: Hand) => {
+    if (info.seat === null) return;
+    conn.send({ t: "swing", dirX, kind, level, hand });
+    reticleLevel = level;
+    swingAnim[info.seat] = performance.now();
+  };
+  // Keys and buttons have no forehand/backhand, so they use the one that suits the ball.
   const swing = (level: Level, dirX: number) => {
     if (info.seat === null) return;
     const me = snap?.players[info.seat].x ?? 0;
-    const kind = naturalKind(info.seat, me, snap?.ball.x ?? me);
-    conn.send({ t: "swing", dirX, kind, level });
-    swingAnim[info.seat] = performance.now();
+    send(level, dirX, naturalKind(info.seat, me, snap?.ball.x ?? me));
   };
   // Hold: walk toward the sideline. Release: stop where the server last had us.
   const move = (dir: -1 | 0 | 1) => {
@@ -150,7 +169,20 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
     const x = dir === 0 ? (snap?.players[info.seat].x ?? 0) : dir * (COURT.halfW + PLAYER.sideRoom);
     conn.send({ t: "move", x });
   };
-  const input = createPlayInput(canvas, behindSeat1 ? -1 : 1, { move, swing });
+  const input = createPlayInput(canvas, worldSign, { move, swing });
+
+  const cameraButton = view.querySelector("[data-action=camera]") as HTMLButtonElement;
+  cameraButton.hidden = info.seat === null;
+  const cameraInput = createCameraInput(view, cameraButton, view.querySelector(".tracking") as HTMLElement, {
+    move: (target) => {
+      if (info.seat !== null) conn.send({ t: "move", x: target * worldSign * (COURT.halfW + PLAYER.sideRoom) });
+    },
+    swing: (level, kind, aim, hand) => send(level, aim * worldSign, kind, hand),
+  });
+  const currentAim = () => {
+    const cam = cameraInput.aim();
+    return cam !== null ? cam * worldSign : input.aim();
+  };
 
   const label = (seat: 0 | 1) => (seat === info.seat ? "You" : (names[seat] ?? `Player ${seat + 1}`));
 
@@ -176,7 +208,7 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
   const controls = view.querySelector(".controls") as HTMLElement;
   controls.hidden = info.seat === null;
   for (const button of controls.querySelectorAll<HTMLButtonElement>("[data-level]")) {
-    button.addEventListener("click", () => swing(Number(button.dataset.level) as Level, input.aim()));
+    button.addEventListener("click", () => swing(Number(button.dataset.level) as Level, currentAim()));
   }
   for (const button of controls.querySelectorAll<HTMLButtonElement>("[data-move]")) {
     const dir = Number(button.dataset.move) as -1 | 1;
@@ -217,6 +249,13 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
         const t = (now - swingAnim[seat]) / 220;
         p.racket.rotation.z = t < 1 ? -Math.sin(t * Math.PI) * 1.6 : 0;
       }
+      const landing = info.seat === null ? null : predictLanding({ ...snap, rng: 0 }, currentAim(), reticleLevel);
+      reticle.visible = landing !== null;
+      if (landing) {
+        reticle.position.set(landing.x, 0.03, landing.z);
+        reticle.material = landing.in ? reticleIn : reticleOut;
+      }
+      canvas.dataset.reticle = landing ? `${landing.x.toFixed(2)},${landing.z.toFixed(2)},${landing.in ? "in" : "out"}` : "";
     }
     renderer.render(scene, camera);
     canvas.dataset.frames = String(++frames);
@@ -227,6 +266,7 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
     cancelAnimationFrame(raf);
     unsubscribe();
     input.dispose();
+    cameraInput.dispose();
     observer.disconnect();
     renderer.dispose();
   };

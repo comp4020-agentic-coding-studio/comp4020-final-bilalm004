@@ -165,3 +165,100 @@ a:focus-visible {
   flex: 0 0 48px;
   padding: 0;
 }
+
+.hud .tracking {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-right: 0.25rem;
+  font-size: 0.9rem;
+}
+
+.hud .tracking[hidden] {
+  display: none;
+}
+
+.hud .tracking::before {
+  content: "";
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.hud .tracking[data-state="ok"]::before {
+  background: #4ade80;
+}
+
+.hud .tracking[data-state="warn"]::before {
+  background: var(--accent);
+}
+
+.hud .tracking[data-state="off"]::before {
+  background: #ff8f8f;
+}
+
+.selfview {
+  position: absolute;
+  right: 0.75rem;
+  /* below the HUD, which wraps to three rows on a phone */
+  top: 10.5rem;
+  width: 96px;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 2px solid var(--panel);
+  /* mirrored, like looking in a mirror; pose maths doesn't care either way */
+  transform: scaleX(-1);
+  background: #000;
+}
+
+.selfview[hidden] {
+  display: none;
+}
+
+.game.calibrating .selfview {
+  width: min(240px, 50vw);
+}
+
+.camera-panel {
+  position: absolute;
+  left: 50%;
+  bottom: calc(max(1rem, env(safe-area-inset-bottom)) + 72px);
+  transform: translateX(-50%);
+  width: min(30rem, calc(100% - 1.5rem));
+  max-height: calc(100% - 9rem);
+  overflow-y: auto;
+  padding: 1rem;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  box-shadow: 0 8px 30px #0008;
+}
+
+.camera-panel[hidden] {
+  display: none;
+}
+
+.camera-panel h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.25rem;
+}
+
+.camera-panel p {
+  margin: 0 0 0.75rem;
+}
+
+.camera-panel .muted {
+  color: var(--muted);
+}
+
+.camera-panel .row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.camera-panel [aria-pressed="true"] {
+  outline: 2px solid var(--accent);
+}
