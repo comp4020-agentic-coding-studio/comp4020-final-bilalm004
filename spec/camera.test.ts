@@ -9,6 +9,9 @@ import {
   SwingDetector,
   aimFromHand,
   aimForGrip,
+  DEFAULT_ZONE,
+  ZoneDetector,
+  armPose,
   bodyFrame,
   gripFrom,
   levelFromSpeed,
@@ -18,7 +21,7 @@ import {
   tiltToTarget,
   wrist,
 } from "../client/input/camera/pose.ts";
-import type { CameraOutput, Point } from "../client/input/camera/pose.ts";
+import type { CameraOutput, Point, Wrist } from "../client/input/camera/pose.ts";
 import type { Hand } from "../shared/games/tennis/sim.ts";
 
 const ASPECT = 4 / 3;
@@ -39,6 +42,8 @@ interface Pose {
   grip?: "forehand" | "backhand" | "hidden";
   /** forearm pointing up (hand raised) or down (arm hanging) */
   arm?: "up" | "down";
+  /** put the racket elbow here instead: [across, down] in shoulder-widths */
+  elbow?: [number, number];
 }
 
 /** 33 landmarks for a player with the given lean and racket-hand position. */
@@ -51,6 +56,7 @@ function pose({
   width = 0.25,
   grip = "forehand",
   arm = "up",
+  elbow,
 }: Pose = {}): Point[] {
   const th = (tilt * Math.PI) / 180;
   const m = mirrored ? -1 : 1;
@@ -78,6 +84,7 @@ function pose({
   const knuckles = { a: across + f.a * 0.15, d: down + f.d * 0.15 };
   lm[right ? LM.rightThumb : LM.leftThumb] = at(knuckles.a + tp.a / 2, knuckles.d + tp.d / 2);
   lm[right ? LM.rightPinky : LM.leftPinky] = at(knuckles.a - tp.a / 2, knuckles.d - tp.d / 2);
+  if (elbow) lm[right ? LM.rightElbow : LM.leftElbow] = at(elbow[0], elbow[1]);
   if (grip === "hidden") {
     lm[right ? LM.rightThumb : LM.leftThumb].visibility = 0.1;
   }
@@ -261,8 +268,8 @@ describe("grip: forehand or backhand", () => {
 });
 
 describe("camera controller", () => {
-  it("holds aim and movement target from swing start to contact, then sends the aim from before the swing", () => {
-    const c = new CameraController(DEFAULT_CALIBRATION);
+  it.each(["follow", "classic"] as const)("holds aim and movement target from swing start to contact, then sends the aim from before the swing (%s)", (mode) => {
+    const c = new CameraController({ ...DEFAULT_CALIBRATION, mode });
     let last: CameraOutput | null = null;
     for (let t = 0; t < 1000; t += 33) last = c.update({ t, landmarks: pose({ across: -0.9, tilt: 4 }), aspect: ASPECT });
     const settled = { aim: last!.aim, target: last!.target };
@@ -289,9 +296,9 @@ describe("camera controller", () => {
     expect(contact.swing!.kind).toBe("forehand");
   });
 
-  it("swings with the grip held when the swing started, even if the hand turns mid-swing", () => {
+  it.each(["follow", "classic"] as const)("swings with the grip held when the swing started, even if the hand turns mid-swing (%s)", (mode) => {
     for (const grip of ["forehand", "backhand"] as const) {
-      const c = new CameraController(DEFAULT_CALIBRATION);
+      const c = new CameraController({ ...DEFAULT_CALIBRATION, mode });
       const rest = grip === "forehand" ? -0.5 : 0.5;
       let out: CameraOutput | null = null;
       for (let t = 0; t < 600; t += 33) out = c.update({ t, landmarks: pose({ across: rest, grip }), aspect: ASPECT });
@@ -309,6 +316,24 @@ describe("camera controller", () => {
       expect(swing).not.toBeNull();
       expect(swing!.kind).toBe(grip);
     }
+  });
+
+  it("follow mode sends the hand height as lift and copies the arm; classic sends no lift", () => {
+    const sweep = (mode: "follow" | "classic", down: number) => {
+      const c = new CameraController({ ...DEFAULT_CALIBRATION, mode });
+      let out: CameraOutput | null = null;
+      for (let t = 0; t < 400; t += 33) out = c.update({ t, landmarks: pose({ across: -0.9, down }), aspect: ASPECT });
+      expect(out!.arm).not.toBeNull();
+      for (let i = 0; i <= 15; i++) {
+        const p = Math.min(1, i / 9);
+        out = c.update({ t: 400 + i * 33, landmarks: pose({ across: -0.9 + p * p * (3 - 2 * p) * 1.8, down }), aspect: ASPECT });
+        if (out.swing) return out.swing;
+      }
+      return null;
+    };
+    expect(sweep("follow", 0.1)!.lift).toBe(1);
+    expect(sweep("follow", 1.9)!.lift).toBe(-1);
+    expect(sweep("classic", 0.3)!.lift).toBeUndefined();
   });
 
   it("reports lost tracking and recovers", () => {
@@ -360,5 +385,99 @@ describe("move throttle", () => {
     }
     expect(sent[0]).toBe(0);
     expect(sent.at(-1)).toBeGreaterThan(0.9);
+  });
+});
+
+describe("follow mode: hitting line", () => {
+  const W = (across: number, down = 1): Wrist => ({ across, down, pos: { x: across, y: down } });
+  /** Feeds a hand moving from `from` to `to` in `ms`, 30 fps; returns the hits. */
+  const sweep = (d: ZoneDetector, from: number, to: number, ms: number, grip: "forehand" | "backhand", hand: Hand = "right", t0 = 0, down = 1) => {
+    const hits = [];
+    const n = Math.round(ms / 33);
+    for (let i = 0; i <= n; i++) {
+      const hit = d.update(t0 + i * 33, W(from + ((to - from) * i) / n, down), grip, hand);
+      if (hit) hits.push(hit);
+    }
+    return hits;
+  };
+  const make = () => new ZoneDetector(DEFAULT_ZONE, DEFAULT_SWING.thresholds);
+
+  it("a forehand hits once as the hand crosses the line on the racket side, at the crossing time", () => {
+    const hits = sweep(make(), -0.9, 0.9, 330, "forehand");
+    expect(hits).toHaveLength(1);
+    // -0.25 is 0.65/1.8 of the way, of 330 ms
+    expect(hits[0].at).toBeCloseTo((0.65 / 1.8) * 330, 0);
+  });
+
+  it("taking the racket back crosses the other way and never counts", () => {
+    expect(sweep(make(), 0.2, -1.2, 300, "forehand")).toHaveLength(0);
+    expect(sweep(make(), -0.2, 1.2, 300, "backhand")).toHaveLength(0);
+  });
+
+  it("a backhand hits moving back out toward the racket side, on the off-hand side", () => {
+    expect(sweep(make(), 0.9, -0.9, 330, "backhand")).toHaveLength(1);
+  });
+
+  it("works for a left-hander, mirrored", () => {
+    expect(sweep(make(), 0.9, -0.9, 330, "forehand", "left")).toHaveLength(1);
+    expect(sweep(make(), -0.9, 0.9, 330, "forehand", "left")).toHaveLength(0);
+  });
+
+  it("ignores a slow pass and a second crossing inside the cooldown", () => {
+    expect(sweep(make(), -0.9, 0.9, 2000, "forehand")).toHaveLength(0);
+    const d = make();
+    expect(sweep(d, -0.9, 0.9, 200, "forehand")).toHaveLength(1);
+    expect(sweep(d, -0.9, 0.9, 100, "forehand", "right", 230)).toHaveLength(0);
+  });
+
+  it("speed through the line sets the level, hand height the lift", () => {
+    expect(sweep(make(), -0.9, 0.9, 500, "forehand")[0].level).toBe(0);
+    expect(sweep(make(), -0.9, 0.9, 140, "forehand")[0].level).toBe(2);
+    expect(sweep(make(), -0.9, 0.9, 330, "forehand", "right", 0, DEFAULT_ZONE.liftAt)[0].lift).toBeCloseTo(0, 6);
+    expect(sweep(make(), -0.9, 0.9, 330, "forehand", "right", 0, 0)[0].lift).toBe(1);
+    expect(sweep(make(), -0.9, 0.9, 330, "forehand", "right", 0, 2)[0].lift).toBe(-1);
+  });
+});
+
+describe("follow mode: copying the arm", () => {
+  const read = (p: Pose) => {
+    const lm = pose(p);
+    return armPose(lm, bodyFrame(lm, ASPECT)!, p.hand ?? "right", ASPECT);
+  };
+
+  it("an arm hanging down points down", () => {
+    const a = read({ elbow: [-0.5, 0.8], across: -0.5, down: 1.5 })!;
+    expect(a.upper.up).toBeCloseTo(-1, 2);
+    expect(a.fore.up).toBeCloseTo(-1, 2);
+  });
+
+  it("an arm held out to the side points outward", () => {
+    const a = read({ elbow: [-1.3, 0], across: -2, down: 0 })!;
+    expect(a.upper.out).toBeCloseTo(1, 2);
+    expect(a.fore.out).toBeCloseTo(1, 2);
+  });
+
+  it("an arm reaching toward the camera, which looks short in the picture, points forward", () => {
+    const a = read({ elbow: [-0.5, 0.1], across: -0.5, down: 0.15 })!;
+    expect(a.upper.fwd).toBeGreaterThan(0.95);
+    expect(a.fore.fwd).toBeGreaterThan(0.95);
+  });
+
+  it("reads the same mirrored or leaning, and outward is the racket side for either hand", () => {
+    const base = read({ elbow: [-1.0, 0.4], across: -1.2, down: 1.0 })!;
+    for (const variant of [{ mirrored: true }, { tilt: 8 }]) {
+      const v = read({ elbow: [-1.0, 0.4], across: -1.2, down: 1.0, ...variant })!;
+      expect(v.upper.out).toBeCloseTo(base.upper.out, 6);
+      expect(v.upper.up).toBeCloseTo(base.upper.up, 6);
+      expect(v.fore.fwd).toBeCloseTo(base.fore.fwd, 6);
+    }
+    const lefty = read({ hand: "left", elbow: [1.0, 0.4], across: 1.2, down: 1.0 })!;
+    expect(lefty.upper.out).toBeCloseTo(base.upper.out, 6);
+  });
+
+  it("can't copy an arm whose elbow is hidden", () => {
+    const lm = pose();
+    lm[LM.rightElbow] = { ...lm[LM.rightElbow], visibility: 0.1 };
+    expect(armPose(lm, bodyFrame(lm, ASPECT)!, "right", ASPECT)).toBeNull();
   });
 });

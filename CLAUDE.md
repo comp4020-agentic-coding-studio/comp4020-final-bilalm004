@@ -29,7 +29,9 @@ lazily and only when a player enters a game. Video never leaves the browser.
   `games/tennis/character.ts` (Mii-style player and racket), `input/`
   (`keyboard.ts` for keys, pointer and buttons; `camera/` with `pose.ts` pure
   landmark maths, `camera.ts` webcam + lazy MediaPipe, `index.ts` setup
-  panel), `net/socket.ts`, `ui/menu.ts`.
+  panel), `net/socket.ts`, `ui/menu.ts`. Camera swings have two modes:
+  "follow" (default, character copies the arm, hit at the hitting line) and
+  "classic" (kept to switch back to); see task 03.
 - `spec/*.test.ts` vitest against the running app, plus the sim unit tests.
 - `e2e/*.e2e.ts` Playwright at both viewports, fake webcam.
 

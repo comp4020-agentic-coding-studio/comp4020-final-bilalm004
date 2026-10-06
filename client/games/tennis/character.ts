@@ -8,11 +8,14 @@ import {
   Mesh,
   MeshBasicMaterial,
   MeshLambertMaterial,
+  Quaternion,
   RepeatWrapping,
   SphereGeometry,
   SRGBColorSpace,
   TorusGeometry,
+  Vector3,
 } from "three";
+import type { ArmPose } from "../../input/camera/pose.ts";
 
 // A Mii-style player built from primitives: big round head with a drawn face,
 // tapered torso and limbs, bright top, dark trousers, oval racket. Local
@@ -117,7 +120,17 @@ export interface Player {
    * (-1 left .. 1 right, as the player sees it) turns the ready arm toward it.
    */
   pose(swing: number | null, backhand: boolean, side: 1 | -1, aim?: number): void;
+  /**
+   * Copy a real arm (camera "follow" mode): upper arm and forearm point where
+   * the player's do, smoothed between camera frames. The racket carries on
+   * from the forearm; `backhand` turns its face over.
+   */
+  follow(arm: ArmPose, backhand: boolean, side: 1 | -1): void;
 }
+
+const DOWN = new Vector3(0, -1, 0);
+// how far toward a new camera reading the arm moves each rendered frame
+const FOLLOW_SMOOTHING = 0.45;
 
 export function makePlayer(shirt: number, hair: number, racketColor: number): Player {
   const group = new Group();
@@ -180,25 +193,48 @@ export function makePlayer(shirt: number, hair: number, racketColor: number): Pl
   const arm = new Group();
   arm.rotation.order = "YXZ";
   arm.position.set(0.24, 1.36, 0);
-  const sleeve = new Mesh(new CapsuleGeometry(0.06, 0.46, 4, 8), top);
-  sleeve.position.y = -0.27;
+  const upperSleeve = new Mesh(new CapsuleGeometry(0.06, 0.2, 4, 8), top);
+  upperSleeve.position.y = -0.14;
+  // the elbow bends only when copying a real arm; canned strokes keep it straight
+  const elbow = new Group();
+  elbow.position.y = -0.27;
+  const foreSleeve = new Mesh(new CapsuleGeometry(0.055, 0.18, 4, 8), top);
+  foreSleeve.position.y = -0.13;
   const hand = new Mesh(new SphereGeometry(0.065, 8, 6), smooth(SKIN));
-  hand.position.y = -0.56;
+  hand.position.y = -0.29;
   // wrist: at rotation.x = PI the racket carries on along the arm; more than
   // PI tips the head up. `roll` spins it about its own shaft: 0 shows the
   // strings to the camera behind, PI/2 stands the face on edge for a swing.
   const wrist = new Group();
-  wrist.position.y = -0.56;
+  wrist.position.y = -0.29;
   const roll = new Group();
   roll.add(racket(racketColor));
   wrist.add(roll);
-  arm.add(sleeve, hand, wrist);
+  elbow.add(foreSleeve, hand, wrist);
+  arm.add(upperSleeve, elbow);
   body.add(arm);
+
+  const upperTarget = new Quaternion();
+  const foreTarget = new Quaternion();
+  const toLocal = (v: { out: number; up: number; fwd: number }) => new Vector3(v.out, v.up, -v.fwd).normalize();
 
   return {
     group,
+    follow(pose, backhand, side) {
+      body.scale.x = side;
+      body.rotation.y = 0;
+      upperTarget.setFromUnitVectors(DOWN, toLocal(pose.upper));
+      // the forearm's direction relative to the upper arm
+      foreTarget.setFromUnitVectors(DOWN, toLocal(pose.fore)).premultiply(upperTarget.clone().invert());
+      arm.quaternion.slerp(upperTarget, FOLLOW_SMOOTHING);
+      elbow.quaternion.slerp(foreTarget, FOLLOW_SMOOTHING);
+      // racket carries on from the forearm, head tipped up a little
+      wrist.rotation.x = Math.PI + 0.5;
+      roll.rotation.y = backhand ? -Math.PI / 2 : Math.PI / 2;
+    },
     pose(swing, backhand, side, aim = 0) {
       body.scale.x = side;
+      elbow.quaternion.identity();
       if (swing === null) {
         // ready: arm down and forward, racket head up in front; a backhand
         // holds it across the body. Aim turns the arm a little toward it.

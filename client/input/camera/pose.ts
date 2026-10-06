@@ -48,6 +48,8 @@ export interface BodyFrame {
 export interface Wrist {
   /** Along the shoulder line in shoulder-widths from the shoulder midpoint; positive toward the player's left. */
   across: number;
+  /** Below the shoulder line in shoulder-widths (negative above it). */
+  down: number;
   /** Position relative to the shoulder midpoint in shoulder-widths, for speed. */
   pos: Vec;
 }
@@ -80,7 +82,14 @@ export function wrist(lm: readonly Point[], frame: BodyFrame, hand: Hand, aspect
   if (!visible(w)) return null;
   const p = scaled(w, aspect);
   const pos = { x: (p.x - frame.mid.x) / frame.width, y: (p.y - frame.mid.y) / frame.width };
-  return { across: pos.x * frame.across.x + pos.y * frame.across.y, pos };
+  const d = downAxis(frame);
+  return { across: pos.x * frame.across.x + pos.y * frame.across.y, down: pos.x * d.x + pos.y * d.y, pos };
+}
+
+/** Unit vector perpendicular to the shoulder line, pointing down the image. */
+function downAxis(frame: BodyFrame): Vec {
+  const u = frame.across;
+  return u.x >= 0 ? { x: -u.y, y: u.x } : { x: u.y, y: -u.x };
 }
 
 export interface TiltConfig {
@@ -127,8 +136,7 @@ export function palmFacing(lm: readonly Point[], frame: BodyFrame, hand: Hand, a
   const pinky = lm[right ? LM.rightPinky : LM.leftPinky];
   if (!visible(elbow) || !visible(wristP) || !visible(thumb) || !visible(pinky)) return null;
   const u = frame.across;
-  // perpendicular to the shoulder line, pointing down the image (positive y)
-  const d = u.x >= 0 ? { x: -u.y, y: u.x } : { x: u.y, y: -u.x };
+  const d = downAxis(frame);
   const inBody = (a: Point, b: Point): Vec => {
     const A = scaled(a, aspect);
     const B = scaled(b, aspect);
@@ -287,8 +295,18 @@ export class SwingDetector {
   }
 }
 
+/**
+ * How a camera swing becomes a shot.
+ * - "follow": your character copies your arm, and the shot happens when your
+ *   hand sweeps through the hitting line in front of you (ZoneDetector).
+ * - "classic": a fast wrist movement is a swing, shown as a canned stroke
+ *   (SwingDetector). Kept so we can switch back.
+ */
+export type SwingMode = "follow" | "classic";
+
 export interface Calibration {
   hand: Hand;
+  mode: SwingMode;
   neutralTilt: number;
   neutralAcross: number;
   thresholds: [number, number];
@@ -296,6 +314,7 @@ export interface Calibration {
 
 export const DEFAULT_CALIBRATION: Calibration = {
   hand: "right",
+  mode: "follow",
   neutralTilt: 0,
   // a relaxed racket hand hangs about half a shoulder-width out to its side
   neutralAcross: -0.5,
@@ -325,6 +344,122 @@ export function thresholdsFrom(peaks: { light: number[]; medium: number[]; hard:
   return [(l + m) / 2, (m + h) / 2];
 }
 
+export interface ZoneConfig {
+  /** Distance of the hitting line from the body's centre, toward the side the ball is met on, in shoulder-widths. */
+  line: number;
+  /** Slowest hand speed through the line that counts as a shot (shoulder-widths per second). */
+  minSpeed: number;
+  cooldownMs: number;
+  /** Hand height (below the shoulders, shoulder-widths) that gives no extra lift, and the change that gives full lift. */
+  liftAt: number;
+  liftRange: number;
+}
+
+export const DEFAULT_ZONE: ZoneConfig = { line: 0.25, minSpeed: 2.5, cooldownMs: 300, liftAt: 1, liftRange: 0.8 };
+
+export interface ZoneHit {
+  level: Level;
+  /** -1 (hand low: flatter) .. 1 (hand high: more loft) */
+  lift: number;
+  speed: number;
+  /** when the hand crossed the line, interpolated between frames */
+  at: number;
+}
+
+/**
+ * The hit moment for "follow" mode: the racket hand sweeping through a line in
+ * front of the body. A forehand meets the ball on the racket side, moving
+ * toward the off-hand side; a backhand meets it on the off-hand side, moving
+ * back toward the racket side. Taking the racket back crosses the line the
+ * other way, so a wind-up never counts.
+ */
+export class ZoneDetector {
+  private prev: { t: number; a: number; down: number; pos: Vec } | null = null;
+  private lastHit = -Infinity;
+  private lastLevel: Level | null = null;
+  cfg: ZoneConfig;
+  thresholds: [number, number];
+  hysteresis: number;
+
+  constructor(cfg: ZoneConfig, thresholds: [number, number], hysteresis = DEFAULT_SWING.hysteresis) {
+    this.cfg = cfg;
+    this.thresholds = thresholds;
+    this.hysteresis = hysteresis;
+  }
+
+  update(t: number, w: Wrist, grip: SwingKind, hand: Hand): ZoneHit | null {
+    // a: along the shoulder line, positive toward the off-hand side
+    const a = hand === "right" ? w.across : -w.across;
+    const prev = this.prev;
+    this.prev = { t, a, down: w.down, pos: w.pos };
+    if (!prev || t <= prev.t || t - this.lastHit < this.cfg.cooldownMs) return null;
+    const line = grip === "forehand" ? -this.cfg.line : this.cfg.line;
+    const crossed = grip === "forehand" ? prev.a < line && a >= line : prev.a > line && a <= line;
+    if (!crossed) return null;
+    const speed = Math.hypot(w.pos.x - prev.pos.x, w.pos.y - prev.pos.y) / ((t - prev.t) / 1000);
+    if (speed < this.cfg.minSpeed) return null;
+    const k = (line - prev.a) / (a - prev.a);
+    const at = prev.t + k * (t - prev.t);
+    const down = prev.down + k * (w.down - prev.down);
+    this.lastHit = t;
+    const level = levelFromSpeed(speed, this.thresholds, this.lastLevel, this.hysteresis);
+    this.lastLevel = level;
+    const lift = Math.max(-1, Math.min(1, (this.cfg.liftAt - down) / this.cfg.liftRange));
+    return { level, lift, speed, at };
+  }
+
+  lose(): void {
+    this.prev = null;
+  }
+}
+
+export interface Vec3 {
+  /** outward, away from the body on the racket side */
+  out: number;
+  up: number;
+  /** toward the camera, which is toward the net for the player's character */
+  fwd: number;
+}
+
+export interface ArmPose {
+  /** unit direction shoulder to elbow */
+  upper: Vec3;
+  /** unit direction elbow to wrist */
+  fore: Vec3;
+}
+
+// arm segments in shoulder-widths, for working out reach toward the camera
+const UPPER_ARM = 0.8;
+const FOREARM = 0.7;
+
+/**
+ * The racket arm's direction, for the character to copy. The camera only sees
+ * the arm flattened onto the image, so each segment's reach toward the camera
+ * is whatever its expected length doesn't show sideways or up and down.
+ */
+export function armPose(lm: readonly Point[], frame: BodyFrame, hand: Hand, aspect: number): ArmPose | null {
+  const right = hand === "right";
+  const sh = lm[right ? LM.rightShoulder : LM.leftShoulder];
+  const el = lm[right ? LM.rightElbow : LM.leftElbow];
+  const wr = lm[right ? LM.rightWrist : LM.leftWrist];
+  if (!visible(sh) || !visible(el) || !visible(wr)) return null;
+  const u = frame.across;
+  const d = downAxis(frame);
+  const segment = (a: Point, b: Point, length: number): Vec3 => {
+    const A = scaled(a, aspect);
+    const B = scaled(b, aspect);
+    const v = { x: (B.x - A.x) / frame.width, y: (B.y - A.y) / frame.width };
+    const across = v.x * u.x + v.y * u.y;
+    const down = v.x * d.x + v.y * d.y;
+    const out = right ? -across : across;
+    const seen = Math.hypot(out, down);
+    const fwd = Math.sqrt(Math.max(0, length * length - seen * seen));
+    const n = Math.hypot(out, down, fwd) || 1;
+    return { out: out / n, up: -down / n, fwd: fwd / n };
+  };
+  return { upper: segment(sh, el, UPPER_ARM), fore: segment(el, wr, FOREARM) };
+}
+
 export interface CameraFrame {
   /** milliseconds */
   t: number;
@@ -343,7 +478,10 @@ export interface CameraOutput {
   aim: number;
   /** The grip being held: palm to the camera is forehand, back of the hand backhand. */
   grip: SwingKind;
-  swing: (SwingEvent & { aim: number; kind: SwingKind }) | null;
+  /** The racket arm's direction while tracking, for the character to copy. */
+  arm: ArmPose | null;
+  /** A shot: in classic mode from SwingDetector, in follow mode from ZoneDetector (with lift). */
+  swing: { level: Level; kind: SwingKind; aim: number; lift?: number; at: number } | null;
 }
 
 // A swing's wind-up moves the hand a little before it is fast enough to count
@@ -360,6 +498,7 @@ export class CameraController {
   private aimFilter = new OneEuro(1, 0.5);
   private tiltFilter = new OneEuro(0.6, 0.02);
   private detector: SwingDetector;
+  private zone: ZoneDetector;
   private target: number | null = null;
   private aim = 0;
   private grip: SwingKind = "forehand";
@@ -370,11 +509,13 @@ export class CameraController {
   constructor(calib: Calibration, swing: SwingConfig = DEFAULT_SWING) {
     this.calib = calib;
     this.detector = new SwingDetector({ ...swing, thresholds: calib.thresholds });
+    this.zone = new ZoneDetector({ ...DEFAULT_ZONE, minSpeed: swing.start }, calib.thresholds, swing.hysteresis);
   }
 
   setCalibration(calib: Calibration): void {
     this.calib = calib;
     this.detector.cfg = { ...this.detector.cfg, thresholds: calib.thresholds };
+    this.zone.thresholds = calib.thresholds;
   }
 
   update(f: CameraFrame): CameraOutput {
@@ -382,12 +523,18 @@ export class CameraController {
     const w = frame && f.landmarks ? wrist(f.landmarks, frame, this.calib.hand, f.aspect) : null;
     if (!frame || !w) {
       this.detector.lose();
+      this.zone.lose();
       this.frozen = null;
       this.history = [];
-      return { tracking: false, swinging: false, target: null, aim: this.aim, grip: this.grip, swing: null };
+      return { tracking: false, swinging: false, target: null, aim: this.aim, grip: this.grip, arm: null, swing: null };
     }
 
-    const { started, swing } = this.detector.update(f.t, w);
+    // In both modes a fast hand starts the freeze. Classic: the swing is the
+    // detector's. Follow: the swing is the hand crossing the hitting line with
+    // the grip held before the swing began; the freeze ends there, or when
+    // the motion dies out without crossing.
+    const classic = this.detector.update(f.t, w);
+    const started = classic.started;
     if (started) {
       const before = f.t - FREEZE_LOOKBACK_MS;
       this.frozen = this.history.findLast((h) => h.t <= before) ?? this.history[0] ?? null;
@@ -401,11 +548,16 @@ export class CameraController {
 
     const f0 = this.frozen;
     const shown = f0 ? { target: f0.target, aim: f0.aim, grip: f0.grip } : { target: this.target, aim: this.aim, grip: this.grip };
-    if (swing) {
-      this.frozen = null;
-      return { tracking: true, swinging: false, ...shown, swing: { ...swing, aim: shown.aim, kind: shown.grip } };
+    const arm = armPose(f.landmarks as readonly Point[], frame, this.calib.hand, f.aspect);
+    let swing: CameraOutput["swing"] = null;
+    if (this.calib.mode === "classic") {
+      if (classic.swing) swing = { level: classic.swing.level, kind: shown.grip, aim: shown.aim, at: classic.swing.at };
+    } else {
+      const hit = this.zone.update(f.t, w, shown.grip, this.calib.hand);
+      if (hit) swing = { level: hit.level, kind: shown.grip, aim: shown.aim, lift: hit.lift, at: hit.at };
     }
-    return { tracking: true, swinging: this.frozen !== null, ...shown, swing: null };
+    if (swing || classic.swing) this.frozen = null;
+    return { tracking: true, swinging: !swing && f0 !== null, ...shown, arm, swing };
   }
 }
 

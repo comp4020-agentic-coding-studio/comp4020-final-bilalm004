@@ -12,7 +12,7 @@ import {
   thresholdsFrom,
   wrist,
 } from "./pose.ts";
-import type { CameraFrame, Calibration } from "./pose.ts";
+import type { ArmPose, CameraFrame, Calibration, SwingMode } from "./pose.ts";
 
 // Camera setup panel and play. Every step can be skipped, and any failure
 // leaves the keyboard and buttons working with a message saying why.
@@ -20,8 +20,8 @@ import type { CameraFrame, Calibration } from "./pose.ts";
 export interface CameraCallbacks {
   /** Movement target on screen, -1..1. */
   move(target: number): void;
-  /** Aim on screen, -1..1, as it was when the swing started. */
-  swing(level: Level, kind: SwingKind, aim: number, hand: Hand): void;
+  /** Aim on screen, -1..1, as it was when the swing started. `lift` only in follow mode. */
+  swing(level: Level, kind: SwingKind, aim: number, hand: Hand, lift?: number): void;
   /** The setup panel opened (true) or closed (false). */
   pause(paused: boolean): void;
 }
@@ -34,6 +34,9 @@ export interface CameraInput {
   /** Grip being held while tracking (palm to camera forehand, back of hand backhand), else null. */
   grip(): SwingKind | null;
   hand(): Hand;
+  /** The racket arm to copy, in follow mode while tracking; else null. */
+  arm(): ArmPose | null;
+  mode(): SwingMode;
   dispose(): void;
 }
 
@@ -78,6 +81,7 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
   let tracking = false;
   let stats: CameraStats | null = null;
   let aim: number | null = null;
+  let arm: ArmPose | null = null;
   let grip: SwingKind | null = null;
   let lastLevel: Level | null = null;
   const moves = new MoveThrottle();
@@ -106,13 +110,14 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
     }
     capture?.(f);
     aim = out.tracking ? out.aim : null;
+    arm = out.tracking && calib.mode === "follow" ? out.arm : null;
     // no gameplay while calibrating
     if (capture || !panel.hidden) return;
     const target = moves.next(f.t, out.target);
     if (target !== null) cb.move(target);
     if (out.swing) {
       lastLevel = out.swing.level;
-      cb.swing(out.swing.level, out.swing.kind, out.swing.aim, calib.hand);
+      cb.swing(out.swing.level, out.swing.kind, out.swing.aim, calib.hand, out.swing.lift);
     }
   };
 
@@ -130,6 +135,7 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
     moves.reset();
     tracking = false;
     aim = null;
+    arm = null;
     grip = null;
     video.hidden = true;
     chip.hidden = true;
@@ -161,6 +167,7 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
 
   const intro = () => {
     let hand: Hand = calib.hand;
+    let mode: SwingMode = calib.mode;
     show(
       `<h2>Play with your camera</h2>
        <p>Keep your head, shoulders and racket arm in view. Lean to move, point your racket hand to aim, swing to hit. Palm to the screen is a forehand, the back of your hand a backhand. The video stays on this device.</p>
@@ -168,22 +175,30 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
          <button data-hand="right">Right-handed</button>
          <button data-hand="left">Left-handed</button>
        </div>
+       <div class="row" role="group" aria-label="Swing style">
+         <button data-mode="follow" title="Your player copies your arm; the shot is when your hand sweeps through the ball">Follow my arm</button>
+         <button data-mode="classic" title="A quick swing plays a stroke">Classic swing</button>
+       </div>
        <div class="row">
          <button class="primary" data-step="start">Start camera</button>
          <button data-step="close">Cancel</button>
        </div>`,
-      { start: () => start(hand), close },
+      { start: () => start(hand, mode), close },
     );
+    const modeButtons = panel.querySelectorAll<HTMLButtonElement>("[data-mode]");
+    const markMode = () => modeButtons.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === mode)));
+    modeButtons.forEach((b) => b.addEventListener("click", () => ((mode = b.dataset.mode as SwingMode), markMode())));
+    markMode();
     const handButtons = panel.querySelectorAll<HTMLButtonElement>("[data-hand]");
     const mark = () => handButtons.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.hand === hand)));
     handButtons.forEach((b) => b.addEventListener("click", () => ((hand = b.dataset.hand as Hand), mark())));
     mark();
   };
 
-  const start = async (hand: Hand) => {
+  const start = async (hand: Hand, mode: SwingMode) => {
     if (starting) return;
     starting = true;
-    calib = { ...calib, hand };
+    calib = { ...calib, hand, mode };
     controller = new CameraController(calib);
     show(`<h2>Starting camera…</h2><p class="muted" role="status">Waiting for permission.</p>`, {});
     try {
@@ -289,6 +304,8 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
     level: () => lastLevel,
     grip: () => grip,
     hand: () => calib.hand,
+    arm: () => arm,
+    mode: () => calib.mode,
     dispose() {
       button.removeEventListener("click", onButton);
       window.removeEventListener("keydown", onKey);

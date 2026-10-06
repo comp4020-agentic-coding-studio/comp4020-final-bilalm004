@@ -127,11 +127,12 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
   let reticleLevel: Level = 1;
   let paused = false;
 
-  const send = (level: Level, dirX: number, kind: SwingKind, hand?: Hand) => {
+  const send = (level: Level, dirX: number, kind: SwingKind, hand?: Hand, lift?: number) => {
     if (info.seat === null) return;
-    conn.send({ t: "swing", dirX, kind, level, hand });
+    conn.send({ t: "swing", dirX, kind, level, hand, lift });
     reticleLevel = level;
-    animate(kind, hand);
+    // in follow mode the character is already copying the real swing
+    if (cameraInput.arm() === null) animate(kind, hand);
     showStroke(kind, level, "");
   };
   // Keys and buttons have no forehand/backhand, so they use the one that suits the ball.
@@ -156,11 +157,11 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
     },
     // Only a swing as the ball arrives is sent: an earlier one is a wind-up
     // (taking the racket back before a backhand looks like a forehand).
-    swing: (level, kind, aim, hand) => {
+    swing: (level, kind, aim, hand, lift) => {
       if (info.seat === null) return;
       const timing = snap ? swingTiming({ ...snap, rng: 0 }, info.seat) : "none";
-      if (timing === "ready") return send(level, aim * worldSign, kind, hand);
-      animate(kind, hand);
+      if (timing === "ready") return send(level, aim * worldSign, kind, hand, lift);
+      if (cameraInput.arm() === null) animate(kind, hand);
       showStroke(kind, level, timing === "early" ? " · too early, not sent" : " · no ball to hit");
     },
     pause: (p) => {
@@ -248,7 +249,9 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
         p.group.position.x += (snap.players[seat].x - p.group.position.x) * 0.3;
         const t = (now - swingAnim[seat]) / SWING_MS;
         const { side, backhand } = strokeAnim[seat];
-        if (t < 1) p.pose(t, backhand, side);
+        const copy = seat === info.seat ? cameraInput.arm() : null;
+        if (copy) p.follow(copy, cameraInput.grip() === "backhand", cameraInput.hand() === "right" ? 1 : -1);
+        else if (t < 1) p.pose(t, backhand, side);
         else {
           // between swings, your avatar holds the racket the way your camera grip is turned
           const grip = seat === info.seat ? cameraInput.grip() : null;
