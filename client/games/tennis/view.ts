@@ -291,12 +291,18 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
         const t = (now - swingAnim[seat]) / 220;
         const { side, backhand } = strokeAnim[seat];
         const swinging = t < 1;
+        // between swings, your avatar holds the racket the way your camera grip is turned
+        const camera = seat === info.seat ? cameraInput.grip() : null;
+        const restSide: 1 | -1 = camera ? (cameraInput.hand() === "right" ? 1 : -1) : side;
+        const held = swinging ? backhand : camera === "backhand";
         // a backhand starts from the other side of the body and swings back out
-        p.racket.position.x = swinging && backhand ? -side * RACKET_X : side * RACKET_X;
+        p.racket.position.x = (held ? -1 : 1) * (swinging ? side : restSide) * RACKET_X;
         p.racket.rotation.z = swinging ? -Math.sin(t * Math.PI) * 1.6 * side * (backhand ? -1 : 1) : 0;
       }
       const landing =
-        info.seat === null || snap.phase === "over" ? null : predictLanding({ ...snap, rng: 0 }, info.seat, currentAim(), reticleLevel);
+        info.seat === null || snap.phase === "over"
+          ? null
+          : predictLanding({ ...snap, rng: 0 }, info.seat, currentAim(), reticleLevel, cameraInput.hand(), cameraInput.grip() ?? undefined);
       reticle.visible = landing !== null;
       if (landing && info.seat !== null) {
         // into the net or onto your own side: show it red just over the net, on their side

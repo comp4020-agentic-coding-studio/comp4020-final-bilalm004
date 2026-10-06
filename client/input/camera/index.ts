@@ -31,6 +31,9 @@ export interface CameraInput {
   aim(): number | null;
   /** Level of the last camera swing. */
   level(): Level | null;
+  /** Grip being held while tracking (palm to camera forehand, back of hand backhand), else null. */
+  grip(): SwingKind | null;
+  hand(): Hand;
   dispose(): void;
 }
 
@@ -75,6 +78,7 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
   let tracking = false;
   let stats: CameraStats | null = null;
   let aim: number | null = null;
+  let grip: SwingKind | null = null;
   let lastLevel: Level | null = null;
   const moves = new MoveThrottle();
   // set while a calibration step wants the raw frames
@@ -87,14 +91,16 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
   };
   const refreshChip = () => {
     if (!session) return;
-    if (tracking) setChip(`Tracking${stats ? ` · ${Math.round(stats.fps)} fps` : ""}`, "ok");
+    if (tracking) setChip(`Tracking · ${grip ?? "forehand"} grip${stats ? ` · ${Math.round(stats.fps)} fps` : ""}`, "ok");
     else setChip("Can't see you", "warn");
   };
 
   const onFrame = (f: CameraFrame) => {
     const out = controller.update(f);
-    if (out.tracking !== tracking) {
+    const nextGrip = out.tracking ? out.grip : null;
+    if (out.tracking !== tracking || nextGrip !== grip) {
       tracking = out.tracking;
+      grip = nextGrip;
       video.dataset.tracking = String(tracking);
       refreshChip();
     }
@@ -124,6 +130,7 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
     moves.reset();
     tracking = false;
     aim = null;
+    grip = null;
     video.hidden = true;
     chip.hidden = true;
     button.textContent = "Camera";
@@ -156,7 +163,7 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
     let hand: Hand = calib.hand;
     show(
       `<h2>Play with your camera</h2>
-       <p>Keep your head and shoulders in view. Lean to move, point your racket hand to aim, swing to hit. The video stays on this device.</p>
+       <p>Keep your head, shoulders and racket arm in view. Lean to move, point your racket hand to aim, swing to hit. Palm to the screen is a forehand, the back of your hand a backhand. The video stays on this device.</p>
        <div class="row" role="group" aria-label="Racket hand">
          <button data-hand="right">Right-handed</button>
          <button data-hand="left">Left-handed</button>
@@ -254,7 +261,7 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
       { skip: next },
     );
     const status = panel.querySelector("[role=status]") as HTMLElement;
-    const detector = new SwingDetector(DEFAULT_SWING, calib.hand);
+    const detector = new SwingDetector(DEFAULT_SWING);
     capture = (f) => {
       const frame = f.landmarks ? bodyFrame(f.landmarks, f.aspect) : null;
       const w = frame && f.landmarks ? wrist(f.landmarks, frame, calib.hand, f.aspect) : null;
@@ -280,6 +287,8 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
   return {
     aim: () => aim,
     level: () => lastLevel,
+    grip: () => grip,
+    hand: () => calib.hand,
     dispose() {
       button.removeEventListener("click", onButton);
       window.removeEventListener("keydown", onKey);

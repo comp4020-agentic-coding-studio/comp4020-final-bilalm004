@@ -293,6 +293,15 @@ describe("predictLanding", () => {
     expect(predictLanding(s, 0, -1, 1).x).toBeLessThan(predictLanding(s, 0, 1, 1).x);
   });
 
+  it("uses the grip you hold: a backhand at a forehand-side ball lands shorter", () => {
+    // seat 1's forehand side is -x; this ball is on it
+    const s = receiving(atBaseline(1, 1), 0);
+    const natural = predictLanding(s, 1, 0, 1);
+    const held = predictLanding(s, 1, 0, 1, "right", "backhand");
+    expect(predictLanding(s, 1, 0, 1, "right", "forehand")).toEqual(natural);
+    expect(Math.abs(held.z)).toBeLessThan(Math.abs(natural.z));
+  });
+
   it("moves the landing point with the aim", () => {
     const s = receiving(atBaseline(1), 0);
     const left = predictLanding(s, 1, -1, 1);

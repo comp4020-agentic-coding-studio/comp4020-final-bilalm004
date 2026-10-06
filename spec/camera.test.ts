@@ -8,10 +8,12 @@ import {
   OneEuro,
   SwingDetector,
   aimFromHand,
+  aimForGrip,
   bodyFrame,
-  classifyKind,
+  gripFrom,
   levelFromSpeed,
   neutralFrom,
+  palmFacing,
   thresholdsFrom,
   tiltToTarget,
   wrist,
@@ -33,10 +35,23 @@ interface Pose {
   mirrored?: boolean;
   /** shoulder width in image heights: how close to the camera */
   width?: number;
+  /** palm to the camera (forehand), back of the hand (backhand), or a hidden hand */
+  grip?: "forehand" | "backhand" | "hidden";
+  /** forearm pointing up (hand raised) or down (arm hanging) */
+  arm?: "up" | "down";
 }
 
 /** 33 landmarks for a player with the given lean and racket-hand position. */
-function pose({ tilt = 0, across = -0.5, down = 0.3, hand = "right", mirrored = false, width = 0.25 }: Pose = {}): Point[] {
+function pose({
+  tilt = 0,
+  across = -0.5,
+  down = 0.3,
+  hand = "right",
+  mirrored = false,
+  width = 0.25,
+  grip = "forehand",
+  arm = "up",
+}: Pose = {}): Point[] {
   const th = (tilt * Math.PI) / 180;
   const m = mirrored ? -1 : 1;
   // unmirrored, the player's left shoulder is on the image's right
@@ -53,6 +68,19 @@ function pose({ tilt = 0, across = -0.5, down = 0.3, hand = "right", mirrored = 
   lm[LM.rightShoulder] = at(-0.5, 0);
   lm[hand === "right" ? LM.rightWrist : LM.leftWrist] = at(across, down);
   lm[hand === "right" ? LM.leftWrist : LM.rightWrist] = at(hand === "right" ? 0.5 : -0.5, 1.2);
+  // forearm in the body frame (across, down), then the pinky-to-thumb line
+  // turned 90 degrees from it: one way for palm-to-camera, the other for back
+  const f = arm === "up" ? { a: 0, d: -1 } : { a: 0, d: 1 };
+  const palm = (grip === "backhand" ? -1 : 1) * (hand === "right" ? 1 : -1);
+  const tp = { a: -f.d * palm * 0.15, d: f.a * palm * 0.15 };
+  const right = hand === "right";
+  lm[right ? LM.rightElbow : LM.leftElbow] = at(across - f.a * 0.6, down - f.d * 0.6);
+  const knuckles = { a: across + f.a * 0.15, d: down + f.d * 0.15 };
+  lm[right ? LM.rightThumb : LM.leftThumb] = at(knuckles.a + tp.a / 2, knuckles.d + tp.d / 2);
+  lm[right ? LM.rightPinky : LM.leftPinky] = at(knuckles.a - tp.a / 2, knuckles.d - tp.d / 2);
+  if (grip === "hidden") {
+    lm[right ? LM.rightThumb : LM.leftThumb].visibility = 0.1;
+  }
   return lm;
 }
 
@@ -168,7 +196,7 @@ describe("swing levels", () => {
       { distance: 1.2, ms: 300 },
       { distance: 2.2, ms: 300 },
     ].map(({ distance, ms }) => {
-      const d = new SwingDetector(DEFAULT_SWING, "right");
+      const d = new SwingDetector(DEFAULT_SWING);
       const events = swingFrames(0, { from: -0.8, distance, ms }).map((f) => {
         const lm = f.lm;
         return d.update(f.t, wrist(lm, bodyFrame(lm, ASPECT)!, "right", ASPECT)!).swing;
@@ -181,7 +209,7 @@ describe("swing levels", () => {
   });
 
   it("ignores a slow hand movement and waits out the cooldown between swings", () => {
-    const d = new SwingDetector(DEFAULT_SWING, "right");
+    const d = new SwingDetector(DEFAULT_SWING);
     const feed = (frames: { t: number; lm: Point[] }[]) =>
       frames.map((f) => d.update(f.t, wrist(f.lm, bodyFrame(f.lm, ASPECT)!, "right", ASPECT)!).swing).filter((e) => e !== null);
     expect(feed(swingFrames(0, { from: -0.8, distance: 0.3, ms: 600 }))).toHaveLength(0);
@@ -191,27 +219,44 @@ describe("swing levels", () => {
   });
 });
 
-describe("forehand and backhand", () => {
-  it("crossing toward the off-hand side is a forehand, moving back out is a backhand", () => {
-    expect(classifyKind(1, "right")).toBe("forehand");
-    expect(classifyKind(-1, "right")).toBe("backhand");
-    expect(classifyKind(-1, "left")).toBe("forehand");
-    expect(classifyKind(1, "left")).toBe("backhand");
+describe("grip: forehand or backhand", () => {
+  const read = (p: Pose) => {
+    const lm = pose(p);
+    return palmFacing(lm, bodyFrame(lm, ASPECT)!, p.hand ?? "right", ASPECT);
+  };
+
+  it("palm to the camera is a forehand grip, back of the hand a backhand", () => {
+    expect(read({ grip: "forehand" })!).toBeGreaterThan(0.9);
+    expect(read({ grip: "backhand" })!).toBeLessThan(-0.9);
   });
 
-  it("classifies whole swings for both hands", () => {
-    const kindOf = (hand: Hand, from: number, distance: number) => {
-      const d = new SwingDetector(DEFAULT_SWING, hand);
-      for (const f of swingFrames(0, { from, distance, ms: 300, hand })) {
-        const s = d.update(f.t, wrist(f.lm, bodyFrame(f.lm, ASPECT)!, hand, ASPECT)!).swing;
-        if (s) return s.kind;
+  it("reads the same with the arm up or down, mirrored or not, leaning or not, for either hand", () => {
+    for (const hand of ["right", "left"] as const) {
+      for (const arm of ["up", "down"] as const) {
+        for (const mirrored of [false, true]) {
+          for (const tilt of [0, 10]) {
+            expect(read({ hand, arm, mirrored, tilt, grip: "forehand", across: hand === "right" ? -0.5 : 0.5 })!).toBeGreaterThan(0.9);
+            expect(read({ hand, arm, mirrored, tilt, grip: "backhand", across: hand === "right" ? 0.5 : -0.5 })!).toBeLessThan(-0.9);
+          }
+        }
       }
-      return null;
-    };
-    expect(kindOf("right", -0.8, 1.5)).toBe("forehand");
-    expect(kindOf("right", 0.7, -1.5)).toBe("backhand");
-    expect(kindOf("left", 0.8, -1.5)).toBe("forehand");
-    expect(kindOf("left", -0.7, 1.5)).toBe("backhand");
+    }
+  });
+
+  it("can't read a hidden hand, and an unclear reading keeps the last grip", () => {
+    expect(read({ grip: "hidden" })).toBeNull();
+    expect(gripFrom(null, "backhand")).toBe("backhand");
+    expect(gripFrom(0.1, "backhand")).toBe("backhand");
+    expect(gripFrom(0.8, "backhand")).toBe("forehand");
+    expect(gripFrom(-0.8, "forehand")).toBe("backhand");
+  });
+
+  it("measures backhand aim from the neutral reflected across the body", () => {
+    // neutral forehand hand at -0.5: the mirror image, +0.5, aims straight in a backhand stance
+    expect(aimForGrip(-0.5, -0.5, "forehand")).toBe(0);
+    expect(aimForGrip(0.5, -0.5, "backhand")).toBe(0);
+    expect(aimForGrip(0.9, -0.5, "backhand")).toBeLessThan(0);
+    expect(aimForGrip(0.1, -0.5, "backhand")).toBeGreaterThan(0);
   });
 });
 
@@ -242,6 +287,28 @@ describe("camera controller", () => {
     }
     expect(contact.swing!.aim).toBeCloseTo(settled.aim, 2);
     expect(contact.swing!.kind).toBe("forehand");
+  });
+
+  it("swings with the grip held when the swing started, even if the hand turns mid-swing", () => {
+    for (const grip of ["forehand", "backhand"] as const) {
+      const c = new CameraController(DEFAULT_CALIBRATION);
+      const rest = grip === "forehand" ? -0.5 : 0.5;
+      let out: CameraOutput | null = null;
+      for (let t = 0; t < 600; t += 33) out = c.update({ t, landmarks: pose({ across: rest, grip }), aspect: ASPECT });
+      expect(out!.grip).toBe(grip);
+      expect(out!.aim).toBeCloseTo(0, 1);
+
+      let swing: CameraOutput["swing"] = null;
+      for (let i = 0; i <= 15 && !swing; i++) {
+        const p = Math.min(1, i / 9);
+        const across = rest - Math.sign(rest) * p * p * (3 - 2 * p) * 1.6;
+        // the wrist rolls over during the swing
+        const turned = i > 3 ? (grip === "forehand" ? "backhand" : "forehand") : grip;
+        swing = c.update({ t: 600 + i * 33, landmarks: pose({ across, grip: turned }), aspect: ASPECT }).swing;
+      }
+      expect(swing).not.toBeNull();
+      expect(swing!.kind).toBe(grip);
+    }
   });
 
   it("reports lost tracking and recovers", () => {

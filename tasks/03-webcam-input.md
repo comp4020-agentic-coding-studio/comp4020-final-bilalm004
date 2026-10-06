@@ -33,11 +33,16 @@ the same events the keyboard sends. Camera is for gameplay only.
   hysteresis. Each level sets launch speed and loft. Contact height matters: a
   low ball hit hard risks the net, a high ball hit hard risks going long, so
   hard is riskier. The swing event sends `level` (0, 1, 2) instead of `power`.
-- **Forehand vs backhand:** handedness (setting, default right) plus swing
-  direction. Crossing the body toward the off-hand side is a forehand; moving
-  back out toward the racket side is a backhand. Forehand gets all three
-  levels at full strength; backhand hard is capped slightly below forehand
-  hard but steadier. A swing type that doesn't match the ball's side is weaker.
+- **Forehand vs backhand: the grip, not the swing direction** (changed after
+  the first playtest). Palm toward the camera is a forehand grip, the back of
+  the hand a backhand, read from the forearm (elbow to wrist) against the
+  pinky-to-thumb line in the body frame, so it holds arm up or down, mirrored
+  or not. An unclear reading keeps the last grip. The swing uses the grip
+  held when it started. In a backhand stance, aim is measured from the
+  calibrated neutral reflected across the body, and the reticle shows the
+  backhand (mismatch penalty included). Forehand gets all three levels at full
+  strength; backhand hard is capped slightly below forehand hard but steadier.
+  A swing type that doesn't match the ball's side is weaker.
 
 ## Fallback input (must stay fully playable with no camera)
 - Keyboard: A/D move, arrows aim, Space medium, keys 1/2/3 light/medium/hard.
@@ -110,6 +115,8 @@ the same events the keyboard sends. Camera is for gameplay only.
   camera swing is now only sent when the ball reaches you within 0.3 s
   (`swingTiming`); earlier ones show "too early, not sent". The racket and a
   stroke label now show forehand vs backhand.
+- Then grip replaced direction for forehand/backhand (see Decisions); the
+  0.3 s gate stays so an early swing doesn't use up the server's cooldown.
 - Not yet tried with a real person on camera: thresholds, tilt gain and aim
   range are guesses until then.
 

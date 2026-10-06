@@ -15,7 +15,18 @@ export interface Point {
 }
 
 // MediaPipe pose landmark indices
-export const LM = { leftShoulder: 11, rightShoulder: 12, leftWrist: 15, rightWrist: 16 } as const;
+export const LM = {
+  leftShoulder: 11,
+  rightShoulder: 12,
+  leftElbow: 13,
+  rightElbow: 14,
+  leftWrist: 15,
+  rightWrist: 16,
+  leftPinky: 17,
+  rightPinky: 18,
+  leftThumb: 21,
+  rightThumb: 22,
+} as const;
 
 const MIN_VISIBILITY = 0.5;
 
@@ -99,6 +110,54 @@ export function aimFromHand(across: number, neutral: number): number {
   return clamp((neutral - across) / AIM_RANGE, -1, 1);
 }
 
+/**
+ * Which way the racket hand is turned: positive when the palm faces the camera
+ * (forehand grip), negative when the back of the hand does (backhand grip),
+ * null when it can't be read (hand hidden, or pointing straight at the camera).
+ *
+ * It is the sine of the angle from the forearm (elbow to wrist) to the line
+ * from pinky to thumb, measured in the body's frame (across the shoulders and
+ * down), so it holds with the arm up or down and in a mirrored image.
+ */
+export function palmFacing(lm: readonly Point[], frame: BodyFrame, hand: Hand, aspect: number): number | null {
+  const right = hand === "right";
+  const elbow = lm[right ? LM.rightElbow : LM.leftElbow];
+  const wristP = lm[right ? LM.rightWrist : LM.leftWrist];
+  const thumb = lm[right ? LM.rightThumb : LM.leftThumb];
+  const pinky = lm[right ? LM.rightPinky : LM.leftPinky];
+  if (!visible(elbow) || !visible(wristP) || !visible(thumb) || !visible(pinky)) return null;
+  const u = frame.across;
+  // perpendicular to the shoulder line, pointing down the image (positive y)
+  const d = u.x >= 0 ? { x: -u.y, y: u.x } : { x: u.y, y: -u.x };
+  const inBody = (a: Point, b: Point): Vec => {
+    const A = scaled(a, aspect);
+    const B = scaled(b, aspect);
+    const v = { x: (B.x - A.x) / frame.width, y: (B.y - A.y) / frame.width };
+    return { x: v.x * u.x + v.y * u.y, y: v.x * d.x + v.y * d.y };
+  };
+  const fore = inBody(elbow, wristP);
+  const tp = inBody(pinky, thumb);
+  const lf = Math.hypot(fore.x, fore.y);
+  const lt = Math.hypot(tp.x, tp.y);
+  if (lf < 0.15 || lt < 0.03) return null;
+  const sin = (fore.x * tp.y - fore.y * tp.x) / (lf * lt);
+  return right ? sin : -sin;
+}
+
+/** Forehand or backhand grip; an unclear reading keeps the previous grip. */
+export function gripFrom(facing: number | null, prev: SwingKind, threshold = 0.3): SwingKind {
+  if (facing === null || Math.abs(facing) < threshold) return prev;
+  return facing > 0 ? "forehand" : "backhand";
+}
+
+/**
+ * Aim for a grip. In a backhand stance the hand rests on the other side of the
+ * body, so aim is measured from the calibrated neutral reflected across it.
+ */
+export function aimForGrip(across: number, neutral: number, grip: SwingKind): number {
+  return aimFromHand(across, grip === "forehand" ? neutral : -neutral);
+}
+
 /** One Euro filter (Casiez et al. 2012): smooth when still, responsive when moving. */
 export class OneEuro {
   private x: number | null = null;
@@ -172,19 +231,9 @@ export function levelFromSpeed(peak: number, thresholds: readonly [number, numbe
   return level as Level;
 }
 
-/**
- * Crossing the body toward the off-hand side is a forehand; moving back out
- * toward the racket side is a backhand. `dAcross` is the wrist's movement along
- * the shoulder line, positive toward the player's left.
- */
-export function classifyKind(dAcross: number, hand: Hand): SwingKind {
-  const towardOffHand = hand === "right" ? dAcross >= 0 : dAcross <= 0;
-  return towardOffHand ? "forehand" : "backhand";
-}
-
+/** A swing as the wrist saw it. Forehand or backhand comes from the grip, not the motion. */
 export interface SwingEvent {
   level: Level;
-  kind: SwingKind;
   peak: number;
   startedAt: number;
   at: number;
@@ -192,15 +241,13 @@ export interface SwingEvent {
 
 export class SwingDetector {
   private prev: { t: number; pos: Vec; across: number } | null = null;
-  private active: { startedAt: number; startAcross: number; peak: number; peakAcross: number } | null = null;
+  private active: { startedAt: number; peak: number } | null = null;
   private lastEnd = -Infinity;
   private lastLevel: Level | null = null;
   cfg: SwingConfig;
-  hand: Hand;
 
-  constructor(cfg: SwingConfig, hand: Hand) {
+  constructor(cfg: SwingConfig) {
     this.cfg = cfg;
-    this.hand = hand;
   }
 
   get swinging(): boolean {
@@ -216,23 +263,19 @@ export class SwingDetector {
 
     if (!this.active) {
       if (speed < this.cfg.start || t - this.lastEnd < this.cfg.cooldownMs) return { started: false, swing: null };
-      this.active = { startedAt: prev.t, startAcross: prev.across, peak: speed, peakAcross: w.across };
+      this.active = { startedAt: prev.t, peak: speed };
       return { started: true, swing: null };
     }
 
     const a = this.active;
-    if (speed > a.peak) {
-      a.peak = speed;
-      a.peakAcross = w.across;
-    }
+    if (speed > a.peak) a.peak = speed;
     // contact: the wrist has clearly slowed after its peak, or the swing ran too long
     if (speed < Math.max(this.cfg.start, a.peak * 0.6) || t - a.startedAt > this.cfg.maxMs) {
       this.active = null;
       this.lastEnd = t;
       const level = levelFromSpeed(a.peak, this.cfg.thresholds, this.lastLevel, this.cfg.hysteresis);
       this.lastLevel = level;
-      const kind = classifyKind(a.peakAcross - a.startAcross, this.hand);
-      return { started: false, swing: { level, kind, peak: a.peak, startedAt: a.startedAt, at: t } };
+      return { started: false, swing: { level, peak: a.peak, startedAt: a.startedAt, at: t } };
     }
     return { started: false, swing: null };
   }
@@ -298,7 +341,9 @@ export interface CameraOutput {
   target: number | null;
   /** Aim on screen, -1..1. */
   aim: number;
-  swing: (SwingEvent & { aim: number }) | null;
+  /** The grip being held: palm to the camera is forehand, back of the hand backhand. */
+  grip: SwingKind;
+  swing: (SwingEvent & { aim: number; kind: SwingKind }) | null;
 }
 
 // A swing's wind-up moves the hand a little before it is fast enough to count
@@ -306,10 +351,10 @@ export interface CameraOutput {
 const FREEZE_LOOKBACK_MS = 100;
 
 /**
- * Tilt, aim and swings from a stream of pose frames. From the start of a swing
- * to contact, the movement target and aim stay as they were just before the
- * swing began, so the swinging arm and the lean it causes can't move the
- * player or the shot.
+ * Tilt, grip, aim and swings from a stream of pose frames. From the start of
+ * a swing to contact, the movement target, grip and aim stay as they were just
+ * before the swing began, so the swinging arm and the lean it causes can't
+ * move the player or change the shot; the swing is the grip held then.
  */
 export class CameraController {
   private aimFilter = new OneEuro(1, 0.5);
@@ -317,19 +362,19 @@ export class CameraController {
   private detector: SwingDetector;
   private target: number | null = null;
   private aim = 0;
-  private frozen: { target: number | null; aim: number } | null = null;
-  private history: { t: number; target: number | null; aim: number }[] = [];
+  private grip: SwingKind = "forehand";
+  private frozen: { target: number | null; aim: number; grip: SwingKind } | null = null;
+  private history: { t: number; target: number | null; aim: number; grip: SwingKind }[] = [];
   private calib: Calibration;
 
   constructor(calib: Calibration, swing: SwingConfig = DEFAULT_SWING) {
     this.calib = calib;
-    this.detector = new SwingDetector({ ...swing, thresholds: calib.thresholds }, calib.hand);
+    this.detector = new SwingDetector({ ...swing, thresholds: calib.thresholds });
   }
 
   setCalibration(calib: Calibration): void {
     this.calib = calib;
     this.detector.cfg = { ...this.detector.cfg, thresholds: calib.thresholds };
-    this.detector.hand = calib.hand;
   }
 
   update(f: CameraFrame): CameraOutput {
@@ -339,7 +384,7 @@ export class CameraController {
       this.detector.lose();
       this.frozen = null;
       this.history = [];
-      return { tracking: false, swinging: false, target: null, aim: this.aim, swing: null };
+      return { tracking: false, swinging: false, target: null, aim: this.aim, grip: this.grip, swing: null };
     }
 
     const { started, swing } = this.detector.update(f.t, w);
@@ -349,14 +394,16 @@ export class CameraController {
     }
 
     this.target = tiltToTarget(this.tiltFilter.filter(frame.tilt, f.t), this.calib.neutralTilt);
-    this.aim = aimFromHand(this.aimFilter.filter(w.across, f.t), this.calib.neutralAcross);
-    this.history.push({ t: f.t, target: this.target, aim: this.aim });
+    this.grip = gripFrom(palmFacing(f.landmarks as readonly Point[], frame, this.calib.hand, f.aspect), this.grip);
+    this.aim = aimForGrip(this.aimFilter.filter(w.across, f.t), this.calib.neutralAcross, this.grip);
+    this.history.push({ t: f.t, target: this.target, aim: this.aim, grip: this.grip });
     if (this.history.length > 12) this.history.shift();
 
-    const shown = this.frozen ? { target: this.frozen.target, aim: this.frozen.aim } : { target: this.target, aim: this.aim };
+    const f0 = this.frozen;
+    const shown = f0 ? { target: f0.target, aim: f0.aim, grip: f0.grip } : { target: this.target, aim: this.aim, grip: this.grip };
     if (swing) {
       this.frozen = null;
-      return { tracking: true, swinging: false, ...shown, swing: { ...swing, aim: shown.aim } };
+      return { tracking: true, swinging: false, ...shown, swing: { ...swing, aim: shown.aim, kind: shown.grip } };
     }
     return { tracking: true, swinging: this.frozen !== null, ...shown, swing: null };
   }
