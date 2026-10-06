@@ -252,7 +252,8 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
         else {
           // between swings, your avatar holds the racket the way your camera grip is turned
           const grip = seat === info.seat ? cameraInput.grip() : null;
-          p.pose(null, grip === "backhand", grip ? (cameraInput.hand() === "right" ? 1 : -1) : side);
+          const aim = seat === info.seat ? (cameraInput.aim() ?? input.aim() * worldSign) : 0;
+          p.pose(null, grip === "backhand", grip ? (cameraInput.hand() === "right" ? 1 : -1) : side, aim);
         }
       }
       const landing =

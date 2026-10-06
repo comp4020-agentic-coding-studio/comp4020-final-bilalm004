@@ -113,9 +113,10 @@ export interface Player {
   group: Group;
   /**
    * `swing` 0..1 through a stroke, or null at rest. `backhand` swings (or, at
-   * rest, holds the racket) across the body. `side` 1 is right-handed.
+   * rest, holds the racket) across the body. `side` 1 is right-handed. `aim`
+   * (-1 left .. 1 right, as the player sees it) turns the ready arm toward it.
    */
-  pose(swing: number | null, backhand: boolean, side: 1 | -1): void;
+  pose(swing: number | null, backhand: boolean, side: 1 | -1, aim?: number): void;
 }
 
 export function makePlayer(shirt: number, hair: number, racketColor: number): Player {
@@ -173,38 +174,54 @@ export function makePlayer(shirt: number, hair: number, racketColor: number): Pl
   offArm.rotation.z = -0.12;
   body.add(offArm);
 
-  // racket arm: a shoulder pivot, the arm pointing out along -y, racket in the hand
+  // Racket arm: a shoulder pivot with the arm hanging along -y. Euler order
+  // YXZ: x raises the arm forward (toward -z), then y turns it around the body
+  // (positive y swings it across to the left), so a raised arm can sweep.
   const arm = new Group();
+  arm.rotation.order = "YXZ";
   arm.position.set(0.24, 1.36, 0);
   const sleeve = new Mesh(new CapsuleGeometry(0.06, 0.46, 4, 8), top);
   sleeve.position.y = -0.27;
   const hand = new Mesh(new SphereGeometry(0.065, 8, 6), smooth(SKIN));
   hand.position.y = -0.56;
-  const held = racket(racketColor);
-  held.position.y = -0.58;
-  held.rotation.x = Math.PI;
-  arm.add(sleeve, hand, held);
+  // wrist: at rotation.x = PI the racket carries on along the arm; more than
+  // PI tips the head up. `roll` spins it about its own shaft: 0 shows the
+  // strings to the camera behind, PI/2 stands the face on edge for a swing.
+  const wrist = new Group();
+  wrist.position.y = -0.56;
+  const roll = new Group();
+  roll.add(racket(racketColor));
+  wrist.add(roll);
+  arm.add(sleeve, hand, wrist);
   body.add(arm);
 
   return {
     group,
-    pose(swing, backhand, side) {
+    pose(swing, backhand, side, aim = 0) {
       body.scale.x = side;
       if (swing === null) {
-        // ready: forearm forward and out, racket up; a backhand holds it across the body
-        arm.rotation.set(-1.15, backhand ? 0.9 : -0.35, backhand ? 0.25 : -0.35);
-        body.rotation.y = backhand ? 0.25 : -0.1;
+        // ready: arm down and forward, racket head up in front; a backhand
+        // holds it across the body. Aim turns the arm a little toward it.
+        const turn = -aim * side * 0.35;
+        arm.rotation.set(0.75, (backhand ? 0.95 : -0.55) + turn, 0);
+        // racket head up, tipped slightly forward
+        wrist.rotation.x = Math.PI + 2.1;
+        roll.rotation.y = 0;
+        body.rotation.y = backhand ? 0.3 : -0.1;
         return;
       }
       const e = Math.sin((swing * Math.PI) / 2);
+      // the arm sweeps level with the shoulder, racket carried out in front
+      wrist.rotation.x = Math.PI + 0.35;
+      roll.rotation.y = Math.PI / 2;
       if (!backhand) {
-        // from out to the side and back, across the front of the body
-        arm.rotation.set(-1.45, -1.3 + 2.4 * e, -0.6 + 0.3 * e);
-        body.rotation.y = -0.35 + 0.7 * e;
+        // from back on the racket side, across the front to the other side
+        arm.rotation.set(1.35, -2.1 + 3.0 * e, 0);
+        body.rotation.y = -0.45 + 0.8 * e;
       } else {
-        // from across the body, out to the racket side
-        arm.rotation.set(-1.45, 1.2 - 2.3 * e, 0.3 - 0.6 * e);
-        body.rotation.y = 0.45 - 0.8 * e;
+        // from back across the body, out in front to the racket side
+        arm.rotation.set(1.35, 2.0 - 2.9 * e, 0);
+        body.rotation.y = 0.55 - 0.9 * e;
       }
     },
   };
