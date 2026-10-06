@@ -1,6 +1,6 @@
 # 09 UI, accessibility and polish
 
-Status: not started (menu and court view exist and fit both viewports)
+Status: arena visuals done (stadium, striped court, net, Mii-style players and racket, raised camera, per design/inspiration.md); menu and accessibility polish not started
 Model: Sonnet
 
 ## Goal

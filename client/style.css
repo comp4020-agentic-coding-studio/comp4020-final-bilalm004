@@ -273,7 +273,8 @@ a:focus-visible {
   left: 50%;
   bottom: calc(max(1rem, env(safe-area-inset-bottom)) + 72px);
   transform: translateX(-50%);
-  max-width: calc(100% - 1.5rem);
+  width: max-content;
+  max-width: calc(100vw - 1.5rem);
   padding: 0.25rem 0.75rem;
   border-radius: 999px;
   background: #0f1720b3;

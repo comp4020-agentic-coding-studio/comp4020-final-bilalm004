@@ -24,7 +24,9 @@ lazily and only when a player enters a game. Video never leaves the browser.
 - `server/` `index.ts` (http + ws + `/readme/`), `rooms.ts` (60 Hz tick loop,
   seats, spectators), `db.ts` (SQLite on `/data`), `log.ts` (JSON log lines).
   Rooms get their sim from the registry, so networking is game-agnostic.
-- `client/` Vite app: `games/<name>/view.ts` (Three.js scene), `input/`
+- `client/` Vite app: `games/<name>/view.ts` (scene, HUD, input wiring),
+  `games/tennis/stadium.ts` (arena from primitives, instanced crowd/trees),
+  `games/tennis/character.ts` (Mii-style player and racket), `input/`
   (`keyboard.ts` for keys, pointer and buttons; `camera/` with `pose.ts` pure
   landmark maths, `camera.ts` webcam + lazy MediaPipe, `index.ts` setup
   panel), `net/socket.ts`, `ui/menu.ts`.

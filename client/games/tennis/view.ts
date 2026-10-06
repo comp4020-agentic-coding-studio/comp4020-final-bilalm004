@@ -1,20 +1,12 @@
 import {
-  AmbientLight,
-  BoxGeometry,
   CircleGeometry,
-  Color,
-  CylinderGeometry,
-  DirectionalLight,
-  Fog,
-  Group,
-  IcosahedronGeometry,
   Mesh,
   MeshBasicMaterial,
   MeshLambertMaterial,
   PerspectiveCamera,
-  PlaneGeometry,
   RingGeometry,
   Scene,
+  SphereGeometry,
   WebGLRenderer,
 } from "three";
 import { COURT, LEVEL_NAMES, PLAYER, naturalKind, predictLanding, seatZ, swingTiming } from "../../../shared/games/tennis/sim.ts";
@@ -23,52 +15,14 @@ import type { RoomInfo, ServerMsg } from "../../../shared/protocol.ts";
 import { createCameraInput } from "../../input/camera/index.ts";
 import { createPlayInput } from "../../input/keyboard.ts";
 import type { Connection } from "../../net/socket.ts";
+import { makePlayer } from "./character.ts";
+import { buildStadium } from "./stadium.ts";
 
 // where the reticle sits for a shot that won't clear the net
 const NET_MARK_Z = 0.8;
 
-const flat = (color: number) => new MeshLambertMaterial({ color, flatShading: true });
-
-const RACKET_X = 0.55;
-
-function makePlayer(color: number): { group: Group; racket: Mesh } {
-  const group = new Group();
-  const body = new Mesh(new CylinderGeometry(0.35, 0.45, 1.3, 6), flat(color));
-  body.position.y = 0.65;
-  const head = new Mesh(new IcosahedronGeometry(0.28, 0), flat(0xf1c9a5));
-  head.position.y = 1.55;
-  const racket = new Mesh(new BoxGeometry(0.08, 0.7, 0.45), flat(0xeeeeee));
-  racket.position.set(RACKET_X, 1.1, 0);
-  group.add(body, head, racket);
-  return { group, racket };
-}
-
-function buildCourt(scene: Scene): void {
-  const ground = new Mesh(new PlaneGeometry(80, 80), flat(0x2f6b45));
-  ground.rotation.x = -Math.PI / 2;
-  ground.position.y = -0.02;
-  const court = new Mesh(new PlaneGeometry(COURT.halfW * 2 + 2, COURT.halfL * 2 + 6), flat(0x3b8f5a));
-  court.rotation.x = -Math.PI / 2;
-  scene.add(ground, court);
-
-  const lineMat = new MeshBasicMaterial({ color: 0xffffff });
-  const addLine = (w: number, d: number, x: number, z: number) => {
-    const line = new Mesh(new BoxGeometry(w, 0.02, d), lineMat);
-    line.position.set(x, 0.01, z);
-    scene.add(line);
-  };
-  const L = COURT.halfL;
-  const W = COURT.halfW;
-  addLine(W * 2, 0.08, 0, L);
-  addLine(W * 2, 0.08, 0, -L);
-  addLine(0.08, L * 2, -W, 0);
-  addLine(0.08, L * 2, W, 0);
-  addLine(0.08, L * 2, 0, 0);
-
-  const net = new Mesh(new BoxGeometry(W * 2 + 0.6, COURT.netH, 0.05), flat(0xf4f4f4));
-  net.position.y = COURT.netH / 2;
-  scene.add(net);
-}
+// how long a stroke animation lasts
+const SWING_MS = 320;
 
 export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo, onLeave: () => void): () => void {
   const view = document.createElement("div");
@@ -105,20 +59,15 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
   canvas.dataset.frames = "0";
 
   const scene = new Scene();
-  scene.background = new Color(0x9fd4ff);
-  scene.fog = new Fog(0x9fd4ff, 30, 70);
-  scene.add(new AmbientLight(0xffffff, 1.6));
-  const sun = new DirectionalLight(0xffffff, 2);
-  sun.position.set(6, 12, 4);
-  scene.add(sun);
-  buildCourt(scene);
+  buildStadium(scene);
 
-  const ball = new Mesh(new IcosahedronGeometry(0.22, 1), flat(0xe8ff3a));
-  const shadow = new Mesh(new CircleGeometry(0.22, 10), new MeshBasicMaterial({ color: 0x000000, opacity: 0.3, transparent: true }));
+  const ball = new Mesh(new SphereGeometry(0.2, 14, 10), new MeshLambertMaterial({ color: 0xffd426, emissive: 0x4a3a00 }));
+  const shadow = new Mesh(new CircleGeometry(0.22, 12), new MeshBasicMaterial({ color: 0x000000, opacity: 0.35, transparent: true }));
   shadow.rotation.x = -Math.PI / 2;
-  const players = [makePlayer(0x2f7fe0), makePlayer(0xe05a2f)] as const;
-  players[0].group.position.z = seatZ(0) + 1.2;
-  players[1].group.position.z = seatZ(1) - 1.2;
+  // a clearly different top for each seat
+  const players = [makePlayer(0x2f7fe0, 0x4a2c1a, 0x2a6fd6), makePlayer(0xe0453a, 0x1d1b1a, 0xe08a1a)] as const;
+  players[0].group.position.z = seatZ(0) + 0.8;
+  players[1].group.position.z = seatZ(1) - 0.8;
   players[1].group.rotation.y = Math.PI;
   scene.add(ball, shadow, players[0].group, players[1].group);
 
@@ -133,9 +82,10 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
 
   const camera = new PerspectiveCamera(55, 1, 0.1, 120);
   const behindSeat1 = info.seat === 1;
-  const camZ = (COURT.halfL + 9) * (behindSeat1 ? -1 : 1);
-  camera.position.set(0, 5.5, camZ);
-  camera.lookAt(0, 0, behindSeat1 ? 2 : -2);
+  // raised and behind the near player, looking down the court at about 30 degrees
+  const behind = behindSeat1 ? -1 : 1;
+  camera.position.set(0, 9, (COURT.halfL + 11) * behind);
+  camera.lookAt(0, 0, 1 * behind);
 
   const renderer = new WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance" });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -144,7 +94,7 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
     const { clientWidth: w, clientHeight: h } = view;
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
-    camera.fov = camera.aspect < 1 ? 88 : 55;
+    camera.fov = camera.aspect < 1 ? 72 : 50;
     camera.updateProjectionMatrix();
   };
   const observer = new ResizeObserver(resize);
@@ -238,7 +188,15 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
 
   const unsubscribe = conn.on((msg: ServerMsg) => {
     if (msg.t === "state") {
-      snap = msg.state as TennisSnapshot;
+      const next = msg.state as TennisSnapshot;
+      // the opponent (or bot) just hit: show their stroke, mid-swing at contact
+      const hitter = next.lastHitter;
+      if (snap && hitter !== null && hitter !== snap.lastHitter && hitter !== info.seat) {
+        const x = next.players[hitter].x;
+        strokeAnim[hitter] = { side: 1, backhand: naturalKind(hitter, x, next.ball.x) === "backhand" };
+        swingAnim[hitter] = performance.now() - SWING_MS * 0.45;
+      }
+      snap = next;
       snapAt = performance.now();
       updateHud();
     } else if (msg.t === "presence") {
@@ -288,16 +246,14 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
       for (const seat of [0, 1] as const) {
         const p = players[seat];
         p.group.position.x += (snap.players[seat].x - p.group.position.x) * 0.3;
-        const t = (now - swingAnim[seat]) / 220;
+        const t = (now - swingAnim[seat]) / SWING_MS;
         const { side, backhand } = strokeAnim[seat];
-        const swinging = t < 1;
-        // between swings, your avatar holds the racket the way your camera grip is turned
-        const camera = seat === info.seat ? cameraInput.grip() : null;
-        const restSide: 1 | -1 = camera ? (cameraInput.hand() === "right" ? 1 : -1) : side;
-        const held = swinging ? backhand : camera === "backhand";
-        // a backhand starts from the other side of the body and swings back out
-        p.racket.position.x = (held ? -1 : 1) * (swinging ? side : restSide) * RACKET_X;
-        p.racket.rotation.z = swinging ? -Math.sin(t * Math.PI) * 1.6 * side * (backhand ? -1 : 1) : 0;
+        if (t < 1) p.pose(t, backhand, side);
+        else {
+          // between swings, your avatar holds the racket the way your camera grip is turned
+          const grip = seat === info.seat ? cameraInput.grip() : null;
+          p.pose(null, grip === "backhand", grip ? (cameraInput.hand() === "right" ? 1 : -1) : side);
+        }
       }
       const landing =
         info.seat === null || snap.phase === "over"
