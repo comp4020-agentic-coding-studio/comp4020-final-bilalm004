@@ -158,4 +158,55 @@ describe("rooms over WebSocket", () => {
     peer.seen.length = 0;
     expect(((await peer.next("state")).state as TennisSnapshot).players[0].targetX).toBe(-1);
   });
+
+  it("pauses a practice room while its player asks, and resumes", async () => {
+    const { peer } = await Peer.connect();
+    peer.send({ t: "create", game: "tennis", practice: true });
+    await peer.next("room");
+    peer.send({ t: "pause", paused: true });
+    await new Promise((r) => setTimeout(r, 150));
+    peer.seen.length = 0;
+    const a = ((await peer.next("state")).state as TennisSnapshot).tick;
+    await new Promise((r) => setTimeout(r, 300));
+    peer.seen.length = 0;
+    expect(((await peer.next("state")).state as TennisSnapshot).tick).toBe(a);
+
+    peer.send({ t: "pause", paused: false });
+    await new Promise((r) => setTimeout(r, 300));
+    peer.seen.length = 0;
+    expect(((await peer.next("state")).state as TennisSnapshot).tick).toBeGreaterThan(a + 10);
+  });
+
+  it("ignores pause in a two-player room", async () => {
+    const a = await Peer.connect();
+    a.peer.send({ t: "create", game: "tennis", practice: false });
+    const room = await a.peer.next("room");
+    const b = await Peer.connect();
+    b.peer.send({ t: "join", room: room.room });
+    await b.peer.next("room");
+    a.peer.send({ t: "pause", paused: true });
+    await new Promise((r) => setTimeout(r, 150));
+    a.peer.seen.length = 0;
+    const t0 = ((await a.peer.next("state")).state as TennisSnapshot).tick;
+    await new Promise((r) => setTimeout(r, 300));
+    a.peer.seen.length = 0;
+    expect(((await a.peer.next("state")).state as TennisSnapshot).tick).toBeGreaterThan(t0 + 10);
+  });
+
+  it("unpauses a practice room when its player reconnects", async () => {
+    const first = await Peer.connect();
+    first.peer.send({ t: "create", game: "tennis", practice: true });
+    const room = await first.peer.next("room");
+    first.peer.send({ t: "pause", paused: true });
+    await new Promise((r) => setTimeout(r, 100));
+    first.peer.ws.close();
+
+    const again = await Peer.connect(first.token);
+    again.peer.send({ t: "join", room: room.room });
+    await again.peer.next("room");
+    const t0 = ((await again.peer.next("state")).state as TennisSnapshot).tick;
+    await new Promise((r) => setTimeout(r, 300));
+    again.peer.seen.length = 0;
+    expect(((await again.peer.next("state")).state as TennisSnapshot).tick).toBeGreaterThan(t0 + 10);
+  });
 });

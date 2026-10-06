@@ -150,6 +150,7 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
   const swingAnim: [number, number] = [0, 0];
   const worldSign = behindSeat1 ? -1 : 1;
   let reticleLevel: Level = 1;
+  let paused = false;
 
   const send = (level: Level, dirX: number, kind: SwingKind, hand?: Hand) => {
     if (info.seat === null) return;
@@ -178,6 +179,12 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
       if (info.seat !== null) conn.send({ t: "move", x: target * worldSign * (COURT.halfW + PLAYER.sideRoom) });
     },
     swing: (level, kind, aim, hand) => send(level, aim * worldSign, kind, hand),
+    pause: (p) => {
+      if (!info.practice) return;
+      paused = p;
+      conn.send({ t: "pause", paused: p });
+      updateHud();
+    },
   });
   const currentAim = () => {
     const cam = cameraInput.aim();
@@ -191,6 +198,7 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
     scoreEl.textContent = `${label(0)} ${snap.score[0]} – ${snap.score[1]} ${label(1)}`;
     if (snap.phase === "over") statusEl.textContent = snap.winner === info.seat ? "You win!" : `${label(snap.winner as 0 | 1)} wins`;
     else if (!info.practice && (names[0] === null || names[1] === null)) statusEl.textContent = `Waiting for an opponent. Share code ${info.room}`;
+    else if (paused) statusEl.textContent = "Paused while you set up the camera";
     else statusEl.textContent = info.seat === null ? "Spectating" : snap.phase === "serve" ? "Get ready…" : "";
   };
 

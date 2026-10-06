@@ -4,7 +4,7 @@ import type { Locator, Page } from "@playwright/test";
 // Runs with Chrome's fake webcam (playwright.config.ts): a test pattern, no
 // person in it, so the camera starts and the model loads but nothing is tracked.
 
-const ALLOWED_MESSAGES = new Set(["hello", "create", "join", "move", "swing", "leave"]);
+const ALLOWED_MESSAGES = new Set(["hello", "create", "join", "move", "swing", "pause", "leave"]);
 
 async function practice(page: Page): Promise<void> {
   await page.goto("/");
@@ -35,6 +35,7 @@ test("camera path: starts the fake webcam, loads the model, calibrates by skippi
   const panel = page.getByRole("dialog", { name: /camera setup/i });
   await expect(panel.getByRole("heading", { name: /play with your camera/i })).toBeVisible();
   await insideViewport(page, panel);
+  await expect(page.locator(".hud .status")).toHaveText(/paused/i);
   await panel.getByRole("button", { name: /left-handed/i }).click();
   await expect(panel.getByRole("button", { name: /left-handed/i })).toHaveAttribute("aria-pressed", "true");
   await panel.getByRole("button", { name: /start camera/i }).click();
@@ -56,6 +57,8 @@ test("camera path: starts the fake webcam, loads the model, calibrates by skippi
   await panel.getByRole("button", { name: "Skip" }).click();
   await panel.getByRole("button", { name: "Done" }).click();
   await expect(panel).toBeHidden();
+  await expect(page.locator(".hud .status")).not.toHaveText(/paused/i);
+  expect(sent.filter((m) => JSON.parse(m).t === "pause").map((m) => JSON.parse(m).paused)).toEqual([true, false]);
 
   // the keyboard still plays alongside the camera
   await page.keyboard.press("Digit3");

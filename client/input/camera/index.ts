@@ -21,6 +21,8 @@ export interface CameraCallbacks {
   move(target: number): void;
   /** Aim on screen, -1..1, as it was when the swing started. */
   swing(level: Level, kind: SwingKind, aim: number, hand: Hand): void;
+  /** The setup panel opened (true) or closed (false). */
+  pause(paused: boolean): void;
 }
 
 export interface CameraInput {
@@ -113,6 +115,7 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
     capture = null;
     panel.hidden = true;
     view.classList.remove("calibrating");
+    cb.pause(false);
     button.focus();
   };
 
@@ -128,6 +131,7 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
 
   const show = (html: string, actions: Record<string, () => void>) => {
     panel.innerHTML = html;
+    if (panel.hidden) cb.pause(true);
     panel.hidden = false;
     view.classList.add("calibrating");
     for (const [name, fn] of Object.entries(actions)) {

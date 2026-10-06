@@ -49,6 +49,7 @@ class Room {
     { start: 0, count: 0 },
   ];
   private ticks = 0;
+  private paused = false;
   private startedAt = performance.now();
   private recorded = false;
   private timer: NodeJS.Timeout;
@@ -101,7 +102,10 @@ class Room {
   }
 
   leave(c: Client): void {
-    if (c.seat !== null && this.seats[c.seat] === c) this.seats[c.seat] = null;
+    if (c.seat !== null && this.seats[c.seat] === c) {
+      this.seats[c.seat] = null;
+      this.paused = false;
+    }
     this.spectators.delete(c);
     log("room_leave", { room: this.id, name: c.name, seat: c.seat });
     c.room = null;
@@ -115,6 +119,13 @@ class Room {
     if (this.ticks - this.lastSwing[c.seat] < SWING_COOLDOWN_TICKS) return;
     this.lastSwing[c.seat] = this.ticks;
     this.pending.push({ seat: c.seat, input: { t: "swing", dirX: msg.dirX, kind: msg.kind, level: msg.level, hand: msg.hand } });
+  }
+
+  /** Only the player in a practice room can pause: nobody else is waiting on them. */
+  pause(c: Client, paused: boolean): void {
+    if (!this.practice || c.seat === null || this.paused === paused) return;
+    this.paused = paused;
+    log("room_pause", { room: this.id, paused });
   }
 
   move(c: Client, x: number): void {
@@ -153,7 +164,7 @@ class Room {
   }
 
   private advance(): void {
-    if (this.ready()) {
+    if (this.ready() && !this.paused) {
       const inputs = this.pending;
       for (const seat of [0, 1] as const) {
         const x = this.pendingMove[seat];

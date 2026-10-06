@@ -6,6 +6,8 @@ export type ClientMsg =
   | { t: "join"; room: string }
   | { t: "swing"; dirX: number; kind: SwingKind; level: Level; hand?: Hand }
   | { t: "move"; x: number }
+  // practice only: hold the game while the player sets up the camera
+  | { t: "pause"; paused: boolean }
   | { t: "leave" };
 
 export interface RoomInfo {
@@ -48,6 +50,8 @@ export function parseClientMsg(raw: string): ClientMsg | null {
     }
     case "move":
       return typeof m.x === "number" && Number.isFinite(m.x) ? { t: "move", x: m.x } : null;
+    case "pause":
+      return typeof m.paused === "boolean" ? { t: "pause", paused: m.paused } : null;
     case "leave":
       return { t: "leave" };
     default:
