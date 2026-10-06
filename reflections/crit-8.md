@@ -2,24 +2,8 @@
 
 ## What was the breakthrough that moved the work forward?
 
-Playtesting with my own webcam. On paper the camera layer was done: specs
-green, swing detection unit-tested on synthetic landmarks. In my hands it
-barely worked. Leaning never moved the player, because the first move was
-compared against NaN (6a8a25b). Only forehands appeared, because taking the
-racket back before a backhand looks like a forehand (e22647b). And the ball
-was nearly unhittable: the hit window was a fixed 1.6 m, about 0.1 s at
-rally speed, tighter than a webcam can time a swing (e6669a8). None of these
-showed up in tests that only checked what I had thought to check. Each one
-became a test that fails without its fix, and the window bug also got a miss
-label ("too early", "out of reach") so the game tells you why you missed.
+Testing the game with my own webcam and noting the experience playing it. Being designed for the user, and especially bringing real life movement into gameplay, I felt deterministic tests/getting Claude to test would not account for this very well. By playing the game myself, I could gauge what felt comfortable and enjoyable, and what did not - for example, movement speeds of the character when tilting shoulders, originally, felt too fast to keep up with. Furthermore, the more I played the game myself, the more ideas I was able to come up with to implement.
 
 ## What did this work change about who I want to be as a software developer?
 
-I want to judge "done" by using the thing, not by a green tick. I also
-learned to own the process as well as the code. I ran a second agent session
-on the menu in parallel, and its unfinished work got swept into a commit and
-made the e2e flaky, which nearly let a commit through on red. The fix was a
-rule in CLAUDE.md (a49ca27): gate on the test command's exit code, stage
-files by name, and verify against a clean build of HEAD. I want to keep
-turning mistakes like that into rules the agents follow, rather than hoping
-I remember next time.
+Honestly, it does feel kind of scary the pace at which Claude is able to figure out the technical side of things and implement them, and I have sometimes caught myself not understanding how certain features are implemented/work, which sometimes made it difficult to distinguish between bug/feature. However, as a software developer, whilst building this game, I was able to focus more on the user experience side of things, and quickly try, and drop, different approaches, without spending infeasible amounts of time that it would have taken if I did it by hand. As a software developer, I want to be able to branch out and explore/implement different features, seeing them in action and trying them out, and deciding their keep, rather than being thwarted by the time/cost it would have had doing it manually.
