@@ -11,8 +11,9 @@ the same events the keyboard sends. Camera is for gameplay only.
 - **Camera setup:** laptop webcam, head and shoulders visible, one arm
   swinging. Everything is measured in shoulder-widths, so distance from the
   camera doesn't matter.
-- **Movement:** shoulder tilt (roll of the shoulder line). Subtle: a dead zone
-  plus a high gain so about 8-10 degrees of tilt covers the court, calibrated
+- **Movement:** shoulder tilt (roll of the shoulder line). A 3 degree dead zone
+  so a natural sway doesn't move you, and about 16 degrees of tilt covers the
+  court (first playtest: 9 degrees was too quick), calibrated
   against a neutral. Movement is player-controlled and server-authoritative:
   the client sends a target position about 20-30 times a second, the server
   moves the player toward it at a capped speed, and a hit needs the ball within

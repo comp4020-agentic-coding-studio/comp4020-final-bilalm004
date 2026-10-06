@@ -100,16 +100,19 @@ describe("body frame", () => {
 });
 
 describe("tilt to movement", () => {
-  it("ignores small leans, then covers the court within about 9 degrees", () => {
-    expect(tiltToTarget(1, 0)).toBe(0);
-    expect(tiltToTarget(5, 0)).toBeGreaterThan(0.3);
-    expect(tiltToTarget(9, 0)).toBe(1);
-    expect(tiltToTarget(-20, 0)).toBe(-1);
+  // Playtest: 9 degrees for the whole court was too quick.
+  it("ignores a natural sway of up to 3 degrees, then takes about 16 degrees to cover the court", () => {
+    expect(tiltToTarget(3, 0)).toBe(0);
+    expect(tiltToTarget(-3, 0)).toBe(0);
+    expect(tiltToTarget(6, 0)).toBeLessThan(0.3);
+    expect(tiltToTarget(9, 0)).toBeLessThan(0.5);
+    expect(tiltToTarget(16, 0)).toBe(1);
+    expect(tiltToTarget(-30, 0)).toBe(-1);
   });
 
   it("is measured from the calibrated neutral", () => {
     expect(tiltToTarget(4, 4)).toBe(0);
-    expect(tiltToTarget(13, 4)).toBe(1);
+    expect(tiltToTarget(20, 4)).toBe(1);
   });
 });
 
@@ -126,7 +129,7 @@ describe("aim", () => {
     let upright: CameraOutput | null = null;
     for (let t = 0; t < 1000; t += 33) upright = c.update({ t, landmarks: pose({ across: -0.8 }), aspect: ASPECT });
     let leaning: CameraOutput | null = null;
-    for (let t = 1000; t < 2000; t += 33) leaning = c.update({ t, landmarks: pose({ across: -0.8, tilt: 8 }), aspect: ASPECT });
+    for (let t = 1000; t < 2000; t += 33) leaning = c.update({ t, landmarks: pose({ across: -0.8, tilt: 14 }), aspect: ASPECT });
     expect(leaning!.aim).toBeCloseTo(upright!.aim, 6);
     expect(leaning!.target).toBeGreaterThan(0.5);
   });
@@ -284,7 +287,7 @@ describe("move throttle", () => {
     const m = new MoveThrottle();
     const sent: number[] = [];
     for (let i = 0; i < 60; i++) {
-      const out = c.update({ t: i * 33, landmarks: pose({ tilt: i < 20 ? 0 : 9 }), aspect: ASPECT });
+      const out = c.update({ t: i * 33, landmarks: pose({ tilt: i < 20 ? 0 : 18 }), aspect: ASPECT });
       const target = m.next(i * 33, out.target);
       if (target !== null) sent.push(target);
     }

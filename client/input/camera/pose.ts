@@ -78,7 +78,9 @@ export interface TiltConfig {
   fullTilt: number;
 }
 
-export const DEFAULT_TILT: TiltConfig = { deadZone: 1.5, fullTilt: 9 };
+// Wide enough that a natural sway doesn't move you (playtest: 9 degrees for
+// the whole court was too twitchy).
+export const DEFAULT_TILT: TiltConfig = { deadZone: 3, fullTilt: 16 };
 
 /** Shoulder tilt to a movement target, -1 (far left on screen) to 1 (far right). */
 export function tiltToTarget(tilt: number, neutral: number, cfg: TiltConfig = DEFAULT_TILT): number {
@@ -311,7 +313,7 @@ const FREEZE_LOOKBACK_MS = 100;
  */
 export class CameraController {
   private aimFilter = new OneEuro(1, 0.5);
-  private tiltFilter = new OneEuro(1, 0.05);
+  private tiltFilter = new OneEuro(0.6, 0.02);
   private detector: SwingDetector;
   private target: number | null = null;
   private aim = 0;
