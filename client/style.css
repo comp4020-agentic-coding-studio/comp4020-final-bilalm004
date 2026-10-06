@@ -8,6 +8,15 @@
   color-scheme: dark;
 }
 
+/* self-hosted so the menu's CSP connect-src stays limited to this server
+   and the pose model hosts (spec/privacy.test.ts); no fonts.googleapis.com */
+@font-face {
+  font-family: "Fredoka";
+  font-weight: 600 700;
+  font-display: swap;
+  src: url("./assets/fonts/fredoka-latin-var.woff2") format("woff2");
+}
+
 * {
   box-sizing: border-box;
 }
@@ -53,44 +62,562 @@ a:focus-visible {
 }
 
 .menu {
-  max-width: 28rem;
-  margin: 0 auto;
-  padding: 2rem 1rem 3rem;
+  color-scheme: light;
+  position: relative;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  /* same sky as the stadium (client/games/tennis/stadium.ts), so the menu
+     previews the court instead of inventing its own palette */
+  background: linear-gradient(180deg, #3d8fe0 0%, #8cc8f5 55%, #d8eefc 100%);
+}
+
+.menu::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 42% 0;
+  background:
+    radial-gradient(34px 18px at 14% 24%, #ffffffd9, transparent 70%),
+    radial-gradient(46px 22px at 82% 16%, #ffffffbf, transparent 70%),
+    radial-gradient(26px 15px at 58% 34%, #ffffffb3, transparent 70%);
+}
+
+.menu-scene {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.menu-court {
+  /* the mown-stripe court, same greens as the stadium's inner court */
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 42%;
+  border-top: 5px solid #ffffffe6;
+  background: repeating-linear-gradient(180deg, #62b04f 0 36px, #55a044 36px 72px);
+  box-shadow: 0 -16px 30px -16px #0003 inset;
+}
+
+.menu-card {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 26rem;
+  padding: 2.5rem 1.75rem 2rem;
+  border-radius: 24px;
+  background: #fffdf7;
+  box-shadow: 0 20px 45px -20px #16324a66;
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  color: #1a2733;
 }
 
-.menu h1 {
+.menu-card h1 {
   margin: 0;
-  font-size: 2rem;
+  font-family: "Fredoka", ui-rounded, system-ui, sans-serif;
+  font-size: 2.25rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-align: center;
+  color: #163a5f;
 }
 
-.menu .muted,
+.menu-card .muted {
+  color: #5b6b7a;
+  text-align: center;
+}
+
 .hud .muted {
   color: var(--muted);
 }
 
-.menu form {
+.menu-card button {
+  min-height: 52px;
+  border-radius: 999px;
+  background: #eef3f8;
+  color: #1a2733;
+  font-family: "Fredoka", ui-rounded, system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  box-shadow: 0 3px 0 #c9d4de;
+  transition:
+    transform 0.08s ease,
+    box-shadow 0.08s ease;
+}
+
+.menu-card button:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #c9d4de;
+}
+
+.menu-card button.primary {
+  background: #ffc233;
+  color: #5a3300;
+  box-shadow: 0 3px 0 #d99900;
+}
+
+.menu-card button.primary:active {
+  box-shadow: 0 1px 0 #d99900;
+}
+
+.menu-card form {
   display: flex;
   gap: 0.5rem;
 }
 
-.menu input {
+.menu-card input {
   flex: 1;
   min-width: 0;
-  min-height: 48px;
+  min-height: 52px;
   padding: 0 0.75rem;
-  border: 3px solid var(--accent);
-  border-radius: 10px;
-  background: transparent;
+  border: 3px solid #4fb3ff;
+  border-radius: 12px;
+  background: #fff;
+  color: #1a2733;
   text-transform: uppercase;
   letter-spacing: 0.2em;
 }
 
-.menu .error {
+.menu-card form button {
+  flex: 0 0 auto;
+  padding: 0 1.25rem;
+  background: #4fb3ff;
+  color: #06263f;
+  box-shadow: 0 3px 0 #2f8fd6;
+}
+
+.menu-card form button:active {
+  box-shadow: 0 1px 0 #2f8fd6;
+}
+
+.menu-card .error {
   margin: 0;
-  color: #ff8f8f;
+  color: #c81e3a;
+  font-weight: 600;
+  text-align: center;
+}
+
+.menu-card a {
+  color: #1b6fb0;
+}
+
+.menu-card button:focus-visible,
+.menu-card input:focus-visible,
+.menu-card a:focus-visible {
+  outline-color: #1b6fb0;
+}
+
+/* Decorative Mii-style figures crossing the court behind the card, built the
+   same way as client/games/tennis/character.ts (round head, tapered torso,
+   bright top, dark trousers, oval racket) but as flat CSS shapes. One shared
+   10s cycle: the runner crosses, then (almost immediately after) the server
+   walks in, tosses, hits and runs on. All percentages below are positions on
+   that same cycle, so the arm/ball/leg animations stay in sync with the
+   body's position without any JS timing. */
+.sprite {
+  position: absolute;
+  bottom: calc(42% - 4px);
+  left: 0;
+  width: 54px;
+  height: 86px;
+  animation: menu-cross-runner 10s linear infinite;
+}
+
+.sprite--server {
+  animation-name: menu-cross-server;
+}
+
+.sprite-shadow {
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  width: 38px;
+  height: 11px;
+  margin-left: -19px;
+  border-radius: 50%;
+  background: #00000030;
+}
+
+.sprite-body {
+  position: absolute;
+  inset: 0;
+  animation: menu-jog-bob 0.4s ease-in-out infinite;
+}
+
+.sprite--server .sprite-body {
+  animation: none;
+}
+
+.sprite--runner {
+  --shirt: #ff5d5d;
+  --hair: #3d2b1f;
+}
+
+.sprite--server {
+  --shirt: #5d8bff;
+  --hair: #241a12;
+}
+
+.sprite-leg {
+  position: absolute;
+  bottom: 6px;
+  width: 10px;
+  height: 34px;
+  border-radius: 5px;
+  background: linear-gradient(#2b303b 0 80%, #4b5160 80% 100%);
+  transform-origin: top center;
+}
+
+.sprite-leg--l {
+  left: 16px;
+  animation: menu-limb-swing 0.4s ease-in-out infinite;
+}
+
+.sprite-leg--r {
+  left: 28px;
+  animation: menu-limb-swing 0.4s ease-in-out infinite reverse;
+}
+
+.sprite--server .sprite-leg--l {
+  animation: menu-server-leg-l 10s linear infinite;
+}
+
+.sprite--server .sprite-leg--r {
+  animation: menu-server-leg-r 10s linear infinite;
+}
+
+.sprite-torso {
+  position: absolute;
+  left: 12px;
+  bottom: 34px;
+  width: 30px;
+  height: 34px;
+  /* tapered, like the capsule torso in character.ts */
+  clip-path: polygon(14% 100%, 86% 100%, 100% 10%, 78% 0%, 22% 0%, 0% 10%);
+  background: var(--shirt);
+}
+
+.sprite-head {
+  position: absolute;
+  left: 13px;
+  bottom: 68px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #f3cfae;
+}
+
+/* two eye dots, drawn with one box-shadow so a single pseudo-element does both */
+.sprite-head::before {
+  content: "";
+  position: absolute;
+  top: 11px;
+  left: 8px;
+  width: 2.5px;
+  height: 3px;
+  border-radius: 50%;
+  background: #2a1d14;
+  box-shadow: 10px 0 0 #2a1d14;
+}
+
+.sprite-head::after {
+  content: "";
+  position: absolute;
+  bottom: 6px;
+  left: 10px;
+  width: 7px;
+  height: 3px;
+  border: 0 solid transparent;
+  border-bottom: 1.5px solid #8a5a3a;
+  border-radius: 0 0 50% 50%;
+}
+
+.sprite-hair {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  width: 28px;
+  height: 13px;
+  border-radius: 50% 50% 0 0;
+  background: var(--hair);
+}
+
+.sprite-arm {
+  position: absolute;
+  top: 10px;
+  width: 8px;
+  height: 25px;
+  border-radius: 4px;
+  background: linear-gradient(var(--shirt) 0 72%, #f3cfae 72% 100%);
+  transform-origin: top center;
+}
+
+.sprite-arm--off {
+  left: 5px;
+  transform: rotate(10deg);
+  animation: menu-limb-swing 0.4s ease-in-out infinite reverse;
+}
+
+.sprite-arm--main {
+  left: 41px;
+  transform: rotate(-10deg);
+  animation: menu-limb-swing 0.4s ease-in-out infinite;
+}
+
+.sprite--server .sprite-arm--off {
+  animation: menu-serve-toss 10s linear infinite;
+}
+
+.sprite--server .sprite-arm--main {
+  animation: menu-serve-swing 10s linear infinite;
+}
+
+.sprite-racket {
+  position: absolute;
+  bottom: -20px;
+  left: 50%;
+  width: 16px;
+  height: 22px;
+  margin-left: -8px;
+  border: 2px solid #e4e7eb;
+  border-radius: 50%;
+  /* strings crosshatch, like the canvas texture in character.ts */
+  background:
+    repeating-linear-gradient(0deg, transparent 0 3px, #ffffffb3 3px 3.6px),
+    repeating-linear-gradient(90deg, transparent 0 3px, #ffffffb3 3px 3.6px),
+    #ffffff30;
+}
+
+.sprite-racket::before {
+  /* throat + grip, connecting the hand to the head */
+  content: "";
+  position: absolute;
+  top: -7px;
+  left: 50%;
+  width: 3px;
+  height: 8px;
+  margin-left: -1.5px;
+  background: #22252c;
+}
+
+.sprite-ball {
+  position: absolute;
+  left: 40px;
+  bottom: 58px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #ff9f1c;
+  opacity: 0;
+  animation: menu-serve-ball 10s linear infinite;
+}
+
+/* body: bob + lean while jogging, same rhythm for both figures */
+@keyframes menu-jog-bob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-3deg);
+  }
+  50% {
+    transform: translateY(-6px) rotate(3deg);
+  }
+}
+
+/* legs/arms: generic alternating swing, reused with delay/reverse */
+@keyframes menu-limb-swing {
+  0%,
+  100% {
+    transform: rotate(22deg);
+  }
+  50% {
+    transform: rotate(-22deg);
+  }
+}
+
+/* positions: hold off-left, cross, hold off-right, on one shared 10s cycle.
+   The runner's cross and the server's walk-in overlap by a couple of
+   percent so there's almost never an empty stretch of court. */
+@keyframes menu-cross-runner {
+  0%,
+  2% {
+    transform: translateX(-15vw);
+  }
+  38% {
+    transform: translateX(115vw);
+  }
+  100% {
+    transform: translateX(115vw);
+  }
+}
+
+@keyframes menu-cross-server {
+  0%,
+  36% {
+    transform: translateX(-15vw);
+  }
+  44% {
+    transform: translateX(10vw);
+  }
+  68% {
+    transform: translateX(10vw);
+  }
+  94% {
+    transform: translateX(115vw);
+  }
+  100% {
+    transform: translateX(115vw);
+  }
+}
+
+@keyframes menu-server-leg-l {
+  0%,
+  36% {
+    transform: rotate(0deg);
+  }
+  38% {
+    transform: rotate(20deg);
+  }
+  40% {
+    transform: rotate(-20deg);
+  }
+  42%,
+  70% {
+    transform: rotate(0deg);
+  }
+  72% {
+    transform: rotate(-20deg);
+  }
+  74% {
+    transform: rotate(20deg);
+  }
+  76%,
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+@keyframes menu-server-leg-r {
+  0%,
+  36% {
+    transform: rotate(0deg);
+  }
+  38% {
+    transform: rotate(-20deg);
+  }
+  40% {
+    transform: rotate(20deg);
+  }
+  42%,
+  70% {
+    transform: rotate(0deg);
+  }
+  72% {
+    transform: rotate(20deg);
+  }
+  74% {
+    transform: rotate(-20deg);
+  }
+  76%,
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+/* serve: the off hand tosses the ball up and releases it, the racket arm
+   draws back into a trophy position then snaps through to strike and
+   follows through, like a real service motion. */
+@keyframes menu-serve-toss {
+  0%,
+  44% {
+    transform: rotate(10deg);
+  }
+  50% {
+    transform: rotate(-150deg);
+  }
+  54% {
+    transform: rotate(-160deg);
+  }
+  60% {
+    transform: rotate(-60deg);
+  }
+  66%,
+  100% {
+    transform: rotate(10deg);
+  }
+}
+
+@keyframes menu-serve-swing {
+  0%,
+  44% {
+    transform: rotate(-8deg);
+  }
+  48% {
+    transform: rotate(60deg);
+  }
+  /* trophy position: racket drawn up and back */
+  53% {
+    transform: rotate(175deg);
+  }
+  /* explosive forward swing to contact */
+  57% {
+    transform: rotate(-35deg);
+  }
+  61% {
+    transform: rotate(-60deg);
+  }
+  68%,
+  100% {
+    transform: rotate(-8deg);
+  }
+}
+
+@keyframes menu-serve-ball {
+  0%,
+  46% {
+    opacity: 0;
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(-6px, -22px) scale(1);
+  }
+  54% {
+    opacity: 1;
+    transform: translate(-2px, -34px) scale(1);
+  }
+  57% {
+    opacity: 1;
+    transform: translate(10px, -20px) scale(0.95);
+  }
+  64%,
+  100% {
+    opacity: 0;
+    transform: translate(85px, 15px) scale(0.5);
+  }
+}
+
+/* Below this width the card fills nearly the whole viewport (it's a ~26rem
+   card with ~1rem gutters), so a 54px figure spends almost the entire cycle
+   hidden behind it, including the whole stationary serve. Rather than
+   animate something nobody can see, mobile keeps the static court. */
+@media (prefers-reduced-motion: reduce), (max-width: 560px) {
+  .sprite,
+  .sprite-body,
+  .sprite-leg,
+  .sprite-arm,
+  .sprite-ball {
+    animation: none !important;
+  }
+
+  .sprite {
+    display: none;
+  }
 }
 
 .game {
