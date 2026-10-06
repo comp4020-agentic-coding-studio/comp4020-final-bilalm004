@@ -1,6 +1,6 @@
 # 03 Webcam swing input
 
-Status: design decided, not started
+Status: step 1 done (sim, protocol, bot, keyboard/touch fallback); step 2 (camera layer: MediaPipe, calibration, reticle) not started
 Model: Opus for the design and swing heuristic, Sonnet for wiring and tests
 
 ## Goal
@@ -71,13 +71,23 @@ the same events the keyboard sends. Camera is for gameplay only.
 - [ ] Level thresholds, hysteresis, forehand/backhand classification and the
       backhand cap are unit-tested; the sim stays deterministic and the old
       power-based sim tests are updated to levels.
-- [ ] Reach and speed cap: a wide shot is unreachable for humans and the bot
+- [x] Reach and speed cap: a wide shot is unreachable for humans and the bot
       alike (spec test).
 - [ ] Denying permission leaves a playable game and a visible explanation.
 - [ ] Network tab shows no video upload (verify, then say so in the README).
 - [ ] Playwright with the fake webcam flag covers the camera path starting and
       the denied/fallback path at both viewports; touch buttons are reachable
       at 390x844.
+
+## Step 1 notes
+- Stroke table in `shared/games/tennis/sim.ts` (speed, loft, height gain per
+  level and kind). Tuned so light is safe at any height and hard only works
+  from about 0.9 to 1.5 m; bot-vs-bot contacts land around 0.85-1.1 m.
+- Keyboard/touch move = target at the sideline while held, then the last
+  server position on release, so it overshoots by about one round trip of
+  movement. Revisit in task 04 if it feels sticky.
+- `predictLanding` assumes contact at your baseline with the swing that suits
+  the ball's side; it matches a real hit there exactly (spec test).
 
 ## Risks
 - Lighting and framing vary; a mobile CPU runs detection and the 3D renderer
