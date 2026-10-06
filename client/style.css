@@ -287,6 +287,10 @@ a:focus-visible {
   display: none;
 }
 
+.stroke[data-miss="true"] {
+  color: #ffb4a8;
+}
+
 .stroke[data-sent="false"] {
   color: var(--muted);
   font-weight: 400;

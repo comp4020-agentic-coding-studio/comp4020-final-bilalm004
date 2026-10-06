@@ -9,8 +9,8 @@ import {
   SphereGeometry,
   WebGLRenderer,
 } from "three";
-import { COURT, LEVEL_NAMES, PLAYER, naturalKind, predictLanding, seatZ, swingTiming } from "../../../shared/games/tennis/sim.ts";
-import type { Hand, Level, SwingKind, TennisSnapshot } from "../../../shared/games/tennis/sim.ts";
+import { COURT, LEVEL_NAMES, PLAYER, missReason, naturalKind, predictLanding, seatZ, swingTiming } from "../../../shared/games/tennis/sim.ts";
+import type { Hand, Level, Miss, SwingKind, TennisSnapshot } from "../../../shared/games/tennis/sim.ts";
 import type { RoomInfo, ServerMsg } from "../../../shared/protocol.ts";
 import { createCameraInput } from "../../input/camera/index.ts";
 import { createPlayInput } from "../../input/keyboard.ts";
@@ -112,9 +112,18 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
   ];
   const strokeEl = view.querySelector(".stroke") as HTMLElement;
   let strokeTimer = 0;
-  const showStroke = (kind: SwingKind, level: Level, note: string) => {
-    strokeEl.textContent = `${kind === "forehand" ? "Forehand" : "Backhand"} · ${LEVEL_NAMES[level]}${note}`;
+  const MISS_WORDS: Record<Miss, string> = {
+    "no ball": "no ball to hit",
+    early: "too early",
+    late: "too late",
+    reach: "out of reach",
+    high: "too high",
+  };
+  const showStroke = (kind: SwingKind, level: Level, note: string, miss: Miss | null = null) => {
+    const why = miss ? ` · ${MISS_WORDS[miss]}` : "";
+    strokeEl.textContent = `${kind === "forehand" ? "Forehand" : "Backhand"} · ${LEVEL_NAMES[level]}${note}${why}`;
     strokeEl.dataset.sent = String(note === "");
+    strokeEl.dataset.miss = String(miss !== null);
     clearTimeout(strokeTimer);
     strokeTimer = window.setTimeout(() => (strokeEl.textContent = ""), 1200);
   };
@@ -133,7 +142,8 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
     reticleLevel = level;
     // in follow mode the character is already copying the real swing
     if (cameraInput.arm() === null) animate(kind, hand);
-    showStroke(kind, level, "");
+    // a hint from the latest state: the server decides, a frame or two later
+    showStroke(kind, level, "", snap ? missReason({ ...snap, rng: 0 }, info.seat) : null);
   };
   // Keys and buttons have no forehand/backhand, so they use the one that suits the ball.
   const swing = (level: Level, dirX: number) => {

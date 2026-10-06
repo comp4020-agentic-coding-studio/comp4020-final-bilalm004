@@ -13,6 +13,9 @@ import {
   step,
   swingTiming,
   SWING_LEAD_TICKS,
+  HIT_WINDOW_S,
+  missReason,
+  seatZ,
 } from "../shared/games/tennis/sim.ts";
 import type { Ball, Level, Seat, SwingKind, TennisInput, TennisState } from "../shared/games/tennis/sim.ts";
 
@@ -380,5 +383,35 @@ describe("lift (camera follow mode)", () => {
   it("the adapter clamps lift and rejects a non-number", () => {
     expect(asInput(1, { t: "swing", dirX: 0, kind: "forehand", level: 1, lift: 5 })).toMatchObject({ lift: 1 });
     expect(asInput(1, { t: "swing", dirX: 0, kind: "forehand", level: 1, lift: "high" })).toBeNull();
+  });
+});
+
+describe("hit window", () => {
+  // Regression: the window was a fixed 1.6 m, only 0.09-0.15 s at rally
+  // speeds, tighter than a camera swing can be timed, so most camera swings
+  // missed while the label said they were sent.
+  it("connects a swing 0.2 s before a fast ball reaches the baseline", () => {
+    const vz = -18;
+    const s = receiving({ x: 0, y: 1, z: -COURT.halfL - vz * 0.2, vx: 0, vy: 0, vz }, 0);
+    expect(Math.abs(s.ball.z - seatZ(1))).toBeGreaterThan(COURT.hitWindow);
+    step(s, [swing(1, 1)]);
+    expect(s.lastHitter).toBe(1);
+  });
+
+  it("says why a swing would miss: early, late, out of reach, too high, or no ball", () => {
+    const vz = -14;
+    const at = (secondsBefore: number, extra: Partial<Ball> = {}) =>
+      receiving({ x: 0, y: 1, z: -COURT.halfL - vz * secondsBefore, vx: 0, vy: 0, vz, ...extra }, 0);
+    expect(missReason(at(0.1), 1)).toBeNull();
+    expect(missReason(at(HIT_WINDOW_S + 0.05), 1)).toBe("early");
+    expect(missReason(at(-(HIT_WINDOW_S + 0.05)), 1)).toBe("late");
+    expect(missReason(at(0, { x: PLAYER.reach + 0.2 }), 1)).toBe("reach");
+    expect(missReason(at(0, { y: PLAYER.maxContactY + 0.2 }), 1)).toBe("high");
+    expect(missReason(at(0), 0)).toBe("no ball");
+  });
+
+  it("the camera's early cut-off matches the server window, so a swing marked sent can connect", () => {
+    expect(SWING_LEAD_TICKS * DT).toBeGreaterThanOrEqual(HIT_WINDOW_S);
+    expect(SWING_LEAD_TICKS * DT).toBeLessThan(HIT_WINDOW_S + 0.1);
   });
 });

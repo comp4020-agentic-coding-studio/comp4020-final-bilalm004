@@ -221,12 +221,37 @@ function launch(b: Ball, seat: Seat, playerX: number, dirX: number, kind: SwingK
   b.vy = loft + clamp(lift, -1, 1) * LIFT_GAIN;
 }
 
-function canHit(s: TennisState, seat: Seat): boolean {
-  if (s.phase !== "rally" || s.lastHitter === seat) return false;
+// A swing connects within this long of the ball reaching your baseline, either
+// side. Camera swings land within about 0.1 s at best (frame interval plus
+// pose detection), so a fixed 1.6 m (0.09-0.15 s at rally speeds) was mostly
+// luck; time-based, the window is the same for fast and slow balls.
+export const HIT_WINDOW_S = 0.22;
+
+/** How far from the baseline (along the court) the ball can be and still be hit. */
+export function hitWindowDistance(b: Ball): number {
+  return Math.max(COURT.hitWindow, Math.abs(b.vz) * HIT_WINDOW_S);
+}
+
+export type Miss = "no ball" | "early" | "late" | "reach" | "high";
+
+/** Why a swing by `seat` right now would miss, or null if it would connect. */
+export function missReason(s: TennisState, seat: Seat): Miss | null {
+  if (s.phase !== "rally" || s.lastHitter === seat) return "no ball";
   const b = s.ball;
   const heading = seat === 0 ? b.vz > 0 : b.vz < 0;
-  if (!heading || Math.abs(b.z - seatZ(seat)) > COURT.hitWindow) return false;
-  return Math.abs(b.x - s.players[seat].x) <= PLAYER.reach && b.y <= PLAYER.maxContactY;
+  if (!heading) return "no ball";
+  // positive once the ball is past the baseline
+  const past = (b.z - seatZ(seat)) * Math.sign(seatZ(seat));
+  const window = hitWindowDistance(b);
+  if (past < -window) return "early";
+  if (past > window) return "late";
+  if (Math.abs(b.x - s.players[seat].x) > PLAYER.reach) return "reach";
+  if (b.y > PLAYER.maxContactY) return "high";
+  return null;
+}
+
+function canHit(s: TennisState, seat: Seat): boolean {
+  return missReason(s, seat) === null;
 }
 
 function tryHit(s: TennisState, swing: Swing): void {
@@ -320,7 +345,7 @@ export function predictContact(s: TennisState, seat: Seat, maxTicks = 600): Cont
   const baseline = seatZ(seat);
   for (let ticks = 0; ticks <= maxTicks; ticks++) {
     const past = (b.z - baseline) * Math.sign(baseline);
-    if (past >= 0) return past <= COURT.hitWindow ? { ball: b, ticks } : null;
+    if (past >= 0) return past <= hitWindowDistance(b) ? { ball: b, ticks } : null;
     const event = moveBall(b);
     if (event === "net") return null;
     if (event === "bounce" && ++bounces >= 2) return null;
@@ -328,9 +353,10 @@ export function predictContact(s: TennisState, seat: Seat, maxTicks = 600): Cont
   return null;
 }
 
-// How long before the ball reaches you a camera swing still counts as a shot
-// at it. A wind-up (taking the racket back) happens earlier than this.
-export const SWING_LEAD_TICKS = 18;
+// A camera swing counts as a shot at the ball from this long before the ball
+// reaches you: the server's hit window plus a little for the swing message to
+// arrive. Anything earlier is a wind-up and isn't sent.
+export const SWING_LEAD_TICKS = Math.round(HIT_WINDOW_S / DT) + 3;
 
 /**
  * Whether a swing now would be a shot at the ball: "ready" when it reaches
