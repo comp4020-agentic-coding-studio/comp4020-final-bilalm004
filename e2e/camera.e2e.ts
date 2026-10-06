@@ -41,6 +41,9 @@ test("camera path: starts the fake webcam, loads the model, calibrates by skippi
   await panel.getByRole("button", { name: /classic swing/i }).click();
   await expect(panel.getByRole("button", { name: /classic swing/i })).toHaveAttribute("aria-pressed", "true");
   await panel.getByRole("button", { name: /follow my arm/i }).click();
+  await expect(panel.getByRole("button", { name: /aim by pointing/i })).toHaveAttribute("aria-pressed", "true");
+  await panel.getByRole("button", { name: /aim by timing/i }).click();
+  await expect(panel.getByRole("button", { name: /aim by timing/i })).toHaveAttribute("aria-pressed", "true");
   await panel.getByRole("button", { name: /left-handed/i }).click();
   await expect(panel.getByRole("button", { name: /left-handed/i })).toHaveAttribute("aria-pressed", "true");
   await panel.getByRole("button", { name: /start camera/i }).click();
@@ -146,4 +149,16 @@ test("the reticle is always on the opponent's half and follows the aim", async (
     expect(r.z).toBeLessThan(0);
     await page.waitForTimeout(150);
   }
+});
+
+test("shots leave a trail and a bounce mark, and the incoming ball shows your shot's arc", async ({ page }) => {
+  test.setTimeout(45_000);
+  await practice(page);
+  const canvas = page.locator("canvas");
+  const n = async (attr: string) => Number((await canvas.getAttribute(attr)) ?? 0);
+  // the serve itself is a hit, so the trail and its bounce show without any input
+  await expect.poll(() => n("data-trail"), { timeout: 15_000 }).toBeGreaterThan(3);
+  await expect.poll(() => n("data-bounces"), { timeout: 15_000 }).toBeGreaterThan(0);
+  // the bot serves to you on alternate points: the arc shows then
+  await expect.poll(() => n("data-arc"), { timeout: 30_000 }).toBeGreaterThan(5);
 });

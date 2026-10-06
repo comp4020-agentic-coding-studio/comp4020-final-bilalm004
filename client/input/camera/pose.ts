@@ -304,9 +304,17 @@ export class SwingDetector {
  */
 export type SwingMode = "follow" | "classic";
 
+/**
+ * Where a camera shot goes. "point": where the racket hand pointed before the
+ * swing. "timing": how early or late the ball is met (early pulls it across,
+ * late pushes it down the line), worked out by the server.
+ */
+export type AimMode = "point" | "timing";
+
 export interface Calibration {
   hand: Hand;
   mode: SwingMode;
+  aim: AimMode;
   neutralTilt: number;
   neutralAcross: number;
   thresholds: [number, number];
@@ -315,6 +323,7 @@ export interface Calibration {
 export const DEFAULT_CALIBRATION: Calibration = {
   hand: "right",
   mode: "follow",
+  aim: "point",
   neutralTilt: 0,
   // a relaxed racket hand hangs about half a shoulder-width out to its side
   neutralAcross: -0.5,

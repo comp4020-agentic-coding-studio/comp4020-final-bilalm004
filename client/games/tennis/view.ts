@@ -16,6 +16,7 @@ import { createCameraInput } from "../../input/camera/index.ts";
 import { createPlayInput } from "../../input/keyboard.ts";
 import type { Connection } from "../../net/socket.ts";
 import { makePlayer } from "./character.ts";
+import { createShotFx } from "./shot-fx.ts";
 import { buildStadium } from "./stadium.ts";
 
 // where the reticle sits for a shot that won't clear the net
@@ -79,6 +80,8 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
   reticle.rotation.x = -Math.PI / 2;
   reticle.visible = false;
   scene.add(reticle);
+  const fx = createShotFx(scene);
+  let bounceMarks = 0;
 
   const camera = new PerspectiveCamera(55, 1, 0.1, 120);
   const behindSeat1 = info.seat === 1;
@@ -136,9 +139,9 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
   let reticleLevel: Level = 1;
   let paused = false;
 
-  const send = (level: Level, dirX: number, kind: SwingKind, hand?: Hand, lift?: number) => {
+  const send = (level: Level, dirX: number, kind: SwingKind, hand?: Hand, lift?: number, timingAim?: boolean) => {
     if (info.seat === null) return;
-    conn.send({ t: "swing", dirX, kind, level, hand, lift });
+    conn.send({ t: "swing", dirX, kind, level, hand, lift, timingAim });
     reticleLevel = level;
     // in follow mode the character is already copying the real swing
     if (cameraInput.arm() === null) animate(kind, hand);
@@ -167,10 +170,10 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
     },
     // Only a swing as the ball arrives is sent: an earlier one is a wind-up
     // (taking the racket back before a backhand looks like a forehand).
-    swing: (level, kind, aim, hand, lift) => {
+    swing: (level, kind, aim, hand, lift, timingAim) => {
       if (info.seat === null) return;
       const timing = snap ? swingTiming({ ...snap, rng: 0 }, info.seat) : "none";
-      if (timing === "ready") return send(level, aim * worldSign, kind, hand, lift);
+      if (timing === "ready") return send(level, aim * worldSign, kind, hand, lift, timingAim);
       if (cameraInput.arm() === null) animate(kind, hand);
       showStroke(kind, level, timing === "early" ? " · too early, not sent" : " · no ball to hit");
     },
@@ -206,6 +209,12 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
         const x = next.players[hitter].x;
         strokeAnim[hitter] = { side: 1, backhand: naturalKind(hitter, x, next.ball.x) === "backhand" };
         swingAnim[hitter] = performance.now() - SWING_MS * 0.45;
+      }
+      // the server recorded a touchdown (in or out): mark it
+      const lb = next.lastBounce;
+      if (lb && lb.tick !== snap?.lastBounce?.tick) {
+        fx.bounce(performance.now(), lb.x, lb.z, lb.in);
+        canvas.dataset.bounces = String(++bounceMarks);
       }
       snap = next;
       snapAt = performance.now();
@@ -254,6 +263,8 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
       ball.position.set(x, y, z);
       shadow.position.set(x, 0.02, z);
       shadow.scale.setScalar(Math.max(0.4, 1.2 - y * 0.15));
+      canvas.dataset.trail = String(fx.trail(now, ball.position, snap.phase === "rally" && snap.lastHitter !== null));
+      fx.update(now);
       for (const seat of [0, 1] as const) {
         const p = players[seat];
         p.group.position.x += (snap.players[seat].x - p.group.position.x) * 0.3;
@@ -282,8 +293,13 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
         material.opacity = landing.predicted ? 0.95 : 0.6;
         reticle.position.set(landing.x, 0.03, z);
         reticle.material = material;
+        // the arc of your next shot, only while the ball is actually coming at you
+        canvas.dataset.arc = String(fx.arc(landing.predicted ? landing.path : null, landing.in));
         canvas.dataset.reticle = `${landing.x.toFixed(2)},${z.toFixed(2)},${landing.in ? "in" : "out"},${landing.predicted ? "ball" : "aim"}`;
-      } else canvas.dataset.reticle = "";
+      } else {
+        canvas.dataset.reticle = "";
+        canvas.dataset.arc = String(fx.arc(null, true));
+      }
     }
     renderer.render(scene, camera);
     canvas.dataset.frames = String(++frames);

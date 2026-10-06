@@ -57,6 +57,11 @@ the same events the keyboard sends. Camera is for gameplay only.
     a swing (`SwingDetector`, peak speed sets the level), shown with the
     canned stroke animation. Nothing about it was removed; pick "Classic
     swing" in the camera panel to use it.
+  - **Aim (camera panel): by pointing (default) or by timing.** Timing:
+    the server judges how early or late the ball is met from its own ball
+    position (`timingAim` in the sim): early pulls it across the body, late
+    pushes it down the line. Over a real network the swing arrives late by
+    the latency, so this wants task 04's swing timestamps.
   - Not done: true racket-ball contact (camera and network delay put the
     on-screen racket 1.5-2 m behind a real swing). Possible later: a timing
     reward for crossing the line just as the ball arrives.

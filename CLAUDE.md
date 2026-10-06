@@ -26,7 +26,8 @@ lazily and only when a player enters a game. Video never leaves the browser.
   Rooms get their sim from the registry, so networking is game-agnostic.
 - `client/` Vite app: `games/<name>/view.ts` (scene, HUD, input wiring),
   `games/tennis/stadium.ts` (arena from primitives, instanced crowd/trees),
-  `games/tennis/character.ts` (Mii-style player and racket), `input/`
+  `games/tennis/character.ts` (Mii-style player and racket),
+  `games/tennis/shot-fx.ts` (ball trail, bounce marks, shot arc), `input/`
   (`keyboard.ts` for keys, pointer and buttons; `camera/` with `pose.ts` pure
   landmark maths, `camera.ts` webcam + lazy MediaPipe, `index.ts` setup
   panel), `net/socket.ts`, `ui/menu.ts`. Camera swings have two modes:
