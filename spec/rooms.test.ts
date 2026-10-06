@@ -112,6 +112,8 @@ describe("rooms over WebSocket", () => {
     expect((await peer.next("error")).message).toMatch(/bad message/);
     peer.ws.send(JSON.stringify({ t: "swing", dirX: 0, kind: "smash", level: 1 }));
     expect((await peer.next("error")).message).toMatch(/bad message/);
+    peer.ws.send(JSON.stringify({ t: "swing", dirX: 0, kind: "forehand", level: 1, lift: "high" }));
+    expect((await peer.next("error")).message).toMatch(/bad message/);
   });
 
   it("moves the sender's player at no more than the speed cap, stopping at the side room", async () => {

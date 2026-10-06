@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { botInputs } from "../shared/games/tennis/bot.ts";
-import { tennis } from "../shared/games/tennis/index.ts";
+import { asInput, tennis } from "../shared/games/tennis/index.ts";
 import {
   COURT,
   DT,
@@ -359,5 +359,26 @@ describe("swing timing", () => {
 
   it("is ready while the ball is in the hit window past the baseline", () => {
     expect(swingTiming(receiving({ ...atBaseline(1), z: -COURT.halfL - 0.5 }, 0), 1)).toBe("ready");
+  });
+});
+
+describe("lift (camera follow mode)", () => {
+  const landing = (lift?: number) => {
+    const s = receiving(atBaseline(1), 0);
+    step(s, [{ ...swing(1, 1), lift } as TennisInput]);
+    expect(s.lastHitter).toBe(1);
+    while (s.phase === "rally" && s.bounces === 0) step(s, []);
+    return s.ball.z;
+  };
+
+  it("a higher hand lofts the ball deeper, a lower one keeps it shorter; none is the same as 0", () => {
+    expect(landing(1)).toBeGreaterThan(landing(0));
+    expect(landing(-1)).toBeLessThan(landing(0));
+    expect(landing(undefined)).toBe(landing(0));
+  });
+
+  it("the adapter clamps lift and rejects a non-number", () => {
+    expect(asInput(1, { t: "swing", dirX: 0, kind: "forehand", level: 1, lift: 5 })).toMatchObject({ lift: 1 });
+    expect(asInput(1, { t: "swing", dirX: 0, kind: "forehand", level: 1, lift: "high" })).toBeNull();
   });
 });

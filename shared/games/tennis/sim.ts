@@ -57,6 +57,9 @@ const STROKES: Record<SwingKind, readonly [Stroke, Stroke, Stroke]> = {
   ],
 };
 
+// Extra upward speed (m/s) at full lift: a high hand at contact lofts the ball.
+const LIFT_GAIN = 0.9;
+
 // Swinging a forehand at a ball on the backhand side (or the reverse).
 const MISMATCH = { speed: 0.8, loft: 1.15 } as const;
 
@@ -103,6 +106,8 @@ export interface Swing {
   kind: SwingKind;
   level: Level;
   hand?: Hand;
+  // camera "follow" mode: hand height at contact, -1 low (flatter) .. 1 high (more loft)
+  lift?: number;
 }
 
 export interface Move {
@@ -206,14 +211,14 @@ function launchServe(s: TennisState): void {
 }
 
 /** Sends the ball back from wherever it is now. Shared by real hits and predictLanding. */
-function launch(b: Ball, seat: Seat, playerX: number, dirX: number, kind: SwingKind, level: Level, hand: Hand): void {
+function launch(b: Ball, seat: Seat, playerX: number, dirX: number, kind: SwingKind, level: Level, hand: Hand, lift = 0): void {
   const stroke = STROKES[kind][level];
   const matched = naturalKind(seat, playerX, b.x, hand) === kind;
   const speed = stroke.speed * (matched ? 1 : MISMATCH.speed);
   const loft = (stroke.loft + (b.y - IDEAL_CONTACT_Y) * stroke.heightGain) * (matched ? 1 : MISMATCH.loft);
   b.vz = (seat === 0 ? -1 : 1) * speed;
   b.vx = clamp(dirX, -1, 1) * speed * AIM_SPREAD;
-  b.vy = loft;
+  b.vy = loft + clamp(lift, -1, 1) * LIFT_GAIN;
 }
 
 function canHit(s: TennisState, seat: Seat): boolean {
@@ -226,7 +231,7 @@ function canHit(s: TennisState, seat: Seat): boolean {
 
 function tryHit(s: TennisState, swing: Swing): void {
   if (!canHit(s, swing.seat)) return;
-  launch(s.ball, swing.seat, s.players[swing.seat].x, swing.dirX, swing.kind, swing.level, swing.hand ?? "right");
+  launch(s.ball, swing.seat, s.players[swing.seat].x, swing.dirX, swing.kind, swing.level, swing.hand ?? "right", swing.lift);
   s.lastHitter = swing.seat;
   s.bounces = 0;
 }

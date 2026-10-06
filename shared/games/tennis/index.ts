@@ -14,11 +14,12 @@ export function asInput(seat: Seat, input: unknown): TennisInput | null {
     return typeof m.x === "number" && Number.isFinite(m.x) ? { t: "move", seat, x: m.x } : null;
   }
   if (m.t === "swing") {
-    const { dirX, kind, level, hand } = m;
+    const { dirX, kind, level, hand, lift } = m;
     if (typeof dirX !== "number" || !Number.isFinite(dirX)) return null;
     if (level !== 0 && level !== 1 && level !== 2) return null;
     if (!KINDS.includes(kind)) return null;
     if (hand !== undefined && !HANDS.includes(hand)) return null;
+    if (lift !== undefined && (typeof lift !== "number" || !Number.isFinite(lift))) return null;
     return {
       t: "swing",
       seat,
@@ -26,6 +27,7 @@ export function asInput(seat: Seat, input: unknown): TennisInput | null {
       kind: kind as SwingKind,
       level,
       hand: hand as Hand | undefined,
+      lift: lift === undefined ? undefined : Math.max(-1, Math.min(1, lift)),
     };
   }
   return null;

@@ -119,7 +119,7 @@ class Room {
     if (c.seat === null) return;
     if (this.ticks - this.lastSwing[c.seat] < SWING_COOLDOWN_TICKS) return;
     this.lastSwing[c.seat] = this.ticks;
-    this.pending.push({ seat: c.seat, input: { t: "swing", dirX: msg.dirX, kind: msg.kind, level: msg.level, hand: msg.hand } });
+    this.pending.push({ seat: c.seat, input: { t: "swing", dirX: msg.dirX, kind: msg.kind, level: msg.level, hand: msg.hand, lift: msg.lift } });
   }
 
   /** Only the player in a practice room can pause: nobody else is waiting on them. */
