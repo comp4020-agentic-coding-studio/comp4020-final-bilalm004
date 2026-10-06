@@ -9,7 +9,7 @@ export interface GameInstance {
   step(inputs: readonly SeatInput[]): void;
   snapshot(): unknown;
   finished(): { winner: 0 | 1; score: [number, number] } | null;
-  botInput(seat: 0 | 1): unknown;
+  botInputs(seat: 0 | 1): unknown[];
 }
 
 export interface GameDef {

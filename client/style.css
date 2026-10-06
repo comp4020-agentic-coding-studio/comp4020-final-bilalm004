@@ -136,11 +136,32 @@ a:focus-visible {
   text-align: center;
 }
 
-.swing {
+.controls {
   position: absolute;
-  left: 50%;
+  left: 0;
+  right: 0;
   bottom: max(1rem, env(safe-area-inset-bottom));
-  transform: translateX(-50%);
-  min-width: 10rem;
+  display: flex;
+  justify-content: center;
+  gap: 0.375rem;
+  padding: 0 0.5rem;
+}
+
+.controls[hidden] {
+  display: none;
+}
+
+.controls button {
   min-height: 56px;
+  padding: 0 0.25rem;
+  flex: 0 1 7rem;
+  min-width: 0;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.controls .move {
+  flex: 0 0 48px;
+  padding: 0;
 }

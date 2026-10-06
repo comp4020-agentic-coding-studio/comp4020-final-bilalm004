@@ -1,7 +1,7 @@
 import type { WebSocket } from "ws";
 import { games } from "../shared/games/registry.ts";
 import type { GameInstance } from "../shared/games/registry.ts";
-import type { ServerMsg } from "../shared/protocol.ts";
+import type { ClientMsg, ServerMsg } from "../shared/protocol.ts";
 import { recordMatch } from "./db.ts";
 import { log } from "./log.ts";
 
@@ -18,6 +18,8 @@ export interface Client {
 const TICK_MS = 1000 / 60;
 const BROADCAST_EVERY = 2;
 const SWING_COOLDOWN_TICKS = 15;
+// Clients send a move target about 20-30 times a second; more than this is dropped.
+const MOVES_PER_SECOND = 40;
 const MAX_CATCHUP_TICKS = 5;
 const EMPTY_ROOM_TTL_MS = 30_000;
 const BOT_SEAT: Seat = 1;
@@ -40,6 +42,12 @@ class Room {
   private instance: GameInstance;
   private pending: { seat: Seat; input: unknown }[] = [];
   private lastSwing: [number, number] = [-1000, -1000];
+  // latest move target per seat, applied once on the next tick
+  private pendingMove: [number | null, number | null] = [null, null];
+  private moveWindow: [{ start: number; count: number }, { start: number; count: number }] = [
+    { start: 0, count: 0 },
+    { start: 0, count: 0 },
+  ];
   private ticks = 0;
   private startedAt = performance.now();
   private recorded = false;
@@ -102,11 +110,22 @@ class Room {
     else this.broadcast(this.presence());
   }
 
-  swing(c: Client, dirX: number, power: number): void {
+  swing(c: Client, msg: Extract<ClientMsg, { t: "swing" }>): void {
     if (c.seat === null) return;
     if (this.ticks - this.lastSwing[c.seat] < SWING_COOLDOWN_TICKS) return;
     this.lastSwing[c.seat] = this.ticks;
-    this.pending.push({ seat: c.seat, input: { dirX, power } });
+    this.pending.push({ seat: c.seat, input: { t: "swing", dirX: msg.dirX, kind: msg.kind, level: msg.level, hand: msg.hand } });
+  }
+
+  move(c: Client, x: number): void {
+    if (c.seat === null) return;
+    const w = this.moveWindow[c.seat];
+    if (this.ticks - w.start >= 60) {
+      w.start = this.ticks;
+      w.count = 0;
+    }
+    if (++w.count > MOVES_PER_SECOND) return;
+    this.pendingMove[c.seat] = x;
   }
 
   isStale(now: number): boolean {
@@ -136,13 +155,17 @@ class Room {
   private advance(): void {
     if (this.ready()) {
       const inputs = this.pending;
+      for (const seat of [0, 1] as const) {
+        const x = this.pendingMove[seat];
+        if (x !== null) inputs.push({ seat, input: { t: "move", x } });
+      }
       if (this.practice) {
-        const bot = this.instance.botInput(BOT_SEAT);
-        if (bot !== null) inputs.push({ seat: BOT_SEAT, input: bot });
+        for (const input of this.instance.botInputs(BOT_SEAT)) inputs.push({ seat: BOT_SEAT, input });
       }
       this.instance.step(inputs);
     }
     this.pending = [];
+    this.pendingMove = [null, null];
     if (this.ticks % BROADCAST_EVERY === 0) this.broadcast({ t: "state", state: this.instance.snapshot() });
 
     const result = this.instance.finished();

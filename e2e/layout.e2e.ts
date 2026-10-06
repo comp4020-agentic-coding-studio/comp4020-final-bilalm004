@@ -31,18 +31,63 @@ test("practice game renders inside the viewport", async ({ page }) => {
   expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
 
   await expect(page.locator(".score")).toContainText("You");
-  const swing = page.getByRole("button", { name: /swing/i });
-  await expect(swing).toBeVisible();
-  const swingBox = (await swing.boundingBox())!;
-  expect(swingBox.y + swingBox.height).toBeLessThanOrEqual(viewport.height);
+  for (const name of [/move left/i, /light swing/i, /medium swing/i, /hard swing/i, /move right/i]) {
+    const button = page.getByRole("button", { name });
+    await expect(button).toBeVisible();
+    const b = (await button.boundingBox())!;
+    expect(b.x).toBeGreaterThanOrEqual(0);
+    expect(b.x + b.width).toBeLessThanOrEqual(viewport.width);
+    expect(b.y + b.height).toBeLessThanOrEqual(viewport.height);
+    expect(b.height).toBeGreaterThanOrEqual(44);
+  }
   expect(await noHorizontalScroll(page)).toBe(true);
 });
 
-test("a swing by keyboard does not break the game", async ({ page }) => {
+/** Collects the JSON messages the page sends over its WebSocket. */
+function sentMessages(page: Page): Record<string, unknown>[] {
+  const sent: Record<string, unknown>[] = [];
+  page.on("websocket", (ws) => ws.on("framesent", (f) => sent.push(JSON.parse(String(f.payload)))));
+  return sent;
+}
+
+test("keyboard moves, aims and swings at each level", async ({ page }) => {
+  const sent = sentMessages(page);
   await page.goto("/");
   await page.getByRole("button", { name: /practice vs bot/i }).click();
   await expect(page.locator("canvas")).toBeVisible();
+
+  await page.keyboard.down("KeyD");
+  await expect.poll(() => sent.some((m) => m.t === "move" && Number(m.x) > 0)).toBe(true);
+  await page.keyboard.up("KeyD");
+  await page.keyboard.down("ArrowLeft");
+  await page.keyboard.press("Digit3");
+  await page.keyboard.up("ArrowLeft");
+  await page.keyboard.press("Digit1");
   await page.keyboard.press("Space");
+  await expect.poll(() => sent.filter((m) => m.t === "swing").length).toBe(3);
+  const swings = sent.filter((m) => m.t === "swing");
+  expect(swings.map((m) => m.level)).toEqual([2, 0, 1]);
+  expect(swings[0].dirX).toBe(-1);
+  expect(swings.every((m) => m.kind === "forehand" || m.kind === "backhand")).toBe(true);
+
   await page.getByRole("button", { name: /leave/i }).click();
   await expect(page.getByRole("button", { name: /practice vs bot/i })).toBeVisible();
+});
+
+test("on-screen buttons move and swing", async ({ page }) => {
+  const sent = sentMessages(page);
+  await page.goto("/");
+  await page.getByRole("button", { name: /practice vs bot/i }).click();
+  await expect(page.locator("canvas")).toBeVisible();
+
+  const right = page.getByRole("button", { name: /move right/i });
+  const box = (await right.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await expect.poll(() => sent.some((m) => m.t === "move" && Number(m.x) > 0)).toBe(true);
+  await page.mouse.up();
+  await expect.poll(() => sent.filter((m) => m.t === "move").length).toBe(2);
+
+  await page.getByRole("button", { name: /hard swing/i }).click();
+  await expect.poll(() => sent.find((m) => m.t === "swing")?.level).toBe(2);
 });

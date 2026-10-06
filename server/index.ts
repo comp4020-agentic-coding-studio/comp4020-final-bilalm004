@@ -171,7 +171,10 @@ wss.on("connection", (ws: WebSocket) => {
         break;
       }
       case "swing":
-        client.room?.swing(client, msg.dirX, msg.power);
+        client.room?.swing(client, msg);
+        break;
+      case "move":
+        client.room?.move(client, msg.x);
         break;
       case "leave":
         leaveRoom(client);

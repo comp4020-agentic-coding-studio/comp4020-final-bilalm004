@@ -16,10 +16,10 @@ import {
   Scene,
   WebGLRenderer,
 } from "three";
-import { COURT, seatZ } from "../../../shared/games/tennis/sim.ts";
-import type { TennisSnapshot } from "../../../shared/games/tennis/sim.ts";
+import { COURT, PLAYER, naturalKind, seatZ } from "../../../shared/games/tennis/sim.ts";
+import type { Level, TennisSnapshot } from "../../../shared/games/tennis/sim.ts";
 import type { RoomInfo, ServerMsg } from "../../../shared/protocol.ts";
-import { createSwingInput } from "../../input/keyboard.ts";
+import { createPlayInput } from "../../input/keyboard.ts";
 import type { Connection } from "../../net/socket.ts";
 
 const flat = (color: number) => new MeshLambertMaterial({ color, flatShading: true });
@@ -77,7 +77,13 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
       </div>
       <div class="status" role="status"></div>
     </div>
-    <button class="primary swing" data-action="swing">Swing (Space)</button>
+    <div class="controls" hidden>
+      <button class="move" data-move="-1" aria-label="Move left (A)">◀</button>
+      <button class="primary" data-level="0" aria-label="Light swing (1)">Light</button>
+      <button class="primary" data-level="1" aria-label="Medium swing (Space)">Medium</button>
+      <button class="primary" data-level="2" aria-label="Hard swing (3)">Hard</button>
+      <button class="move" data-move="1" aria-label="Move right (D)">▶</button>
+    </div>
   `;
   root.replaceChildren(view);
 
@@ -131,11 +137,20 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
   let names: [string | null, string | null] = [null, null];
   const swingAnim: [number, number] = [0, 0];
 
-  const swing = (dirX: number, power: number) => {
-    conn.send({ t: "swing", dirX, power });
-    if (info.seat !== null) swingAnim[info.seat] = performance.now();
+  const swing = (level: Level, dirX: number) => {
+    if (info.seat === null) return;
+    const me = snap?.players[info.seat].x ?? 0;
+    const kind = naturalKind(info.seat, me, snap?.ball.x ?? me);
+    conn.send({ t: "swing", dirX, kind, level });
+    swingAnim[info.seat] = performance.now();
   };
-  const input = createSwingInput(canvas, behindSeat1 ? -1 : 1, swing);
+  // Hold: walk toward the sideline. Release: stop where the server last had us.
+  const move = (dir: -1 | 0 | 1) => {
+    if (info.seat === null) return;
+    const x = dir === 0 ? (snap?.players[info.seat].x ?? 0) : dir * (COURT.halfW + PLAYER.sideRoom);
+    conn.send({ t: "move", x });
+  };
+  const input = createPlayInput(canvas, behindSeat1 ? -1 : 1, { move, swing });
 
   const label = (seat: 0 | 1) => (seat === info.seat ? "You" : (names[seat] ?? `Player ${seat + 1}`));
 
@@ -158,7 +173,22 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
     }
   });
 
-  view.querySelector("[data-action=swing]")?.addEventListener("click", () => swing(0, 0.6));
+  const controls = view.querySelector(".controls") as HTMLElement;
+  controls.hidden = info.seat === null;
+  for (const button of controls.querySelectorAll<HTMLButtonElement>("[data-level]")) {
+    button.addEventListener("click", () => swing(Number(button.dataset.level) as Level, input.aim()));
+  }
+  for (const button of controls.querySelectorAll<HTMLButtonElement>("[data-move]")) {
+    const dir = Number(button.dataset.move) as -1 | 1;
+    button.addEventListener("pointerdown", (e) => {
+      button.setPointerCapture(e.pointerId);
+      input.holdMove(dir, true);
+    });
+    for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) {
+      button.addEventListener(type, () => input.holdMove(dir, false));
+    }
+    button.addEventListener("contextmenu", (e) => e.preventDefault());
+  }
   view.querySelector("[data-action=leave]")?.addEventListener("click", onLeave);
   view.querySelector("[data-action=copy]")?.addEventListener("click", (e) => {
     const button = e.currentTarget as HTMLButtonElement;
@@ -183,7 +213,7 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
       shadow.scale.setScalar(Math.max(0.4, 1.2 - y * 0.15));
       for (const seat of [0, 1] as const) {
         const p = players[seat];
-        p.group.position.x += (Math.max(-COURT.halfW, Math.min(COURT.halfW, x)) - p.group.position.x) * 0.08;
+        p.group.position.x += (snap.players[seat].x - p.group.position.x) * 0.3;
         const t = (now - swingAnim[seat]) / 220;
         p.racket.rotation.z = t < 1 ? -Math.sin(t * Math.PI) * 1.6 : 0;
       }

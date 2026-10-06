@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, inject, it } from "vitest";
 import WebSocket from "ws";
+import { COURT, DT, PLAYER } from "../shared/games/tennis/sim.ts";
+import type { TennisSnapshot } from "../shared/games/tennis/sim.ts";
 import type { ClientMsg, ServerMsg } from "../shared/protocol.ts";
 
 const wsUrl = new URL("/ws", inject("baseUrl"));
@@ -93,9 +95,67 @@ describe("rooms over WebSocket", () => {
     const { peer } = await Peer.connect();
     peer.send({ t: "create", game: "tennis", practice: true });
     await peer.next("room");
-    peer.send({ t: "swing", dirX: 1, power: 1 });
+    peer.send({ t: "swing", dirX: 1, kind: "forehand", level: 2 });
     const state = (await peer.next("state")).state as { phase: string; lastHitter: number | null };
     expect(state.phase).toBe("serve");
     expect(state.lastHitter).toBeNull();
+  });
+
+  it("rejects a swing without a valid level or kind", async () => {
+    const { peer } = await Peer.connect();
+    peer.ws.send(JSON.stringify({ t: "swing", dirX: 0, power: 1 }));
+    expect((await peer.next("error")).message).toMatch(/bad message/);
+    peer.ws.send(JSON.stringify({ t: "swing", dirX: 0, kind: "forehand", level: 3 }));
+    expect((await peer.next("error")).message).toMatch(/bad message/);
+    peer.ws.send(JSON.stringify({ t: "swing", dirX: 0, kind: "smash", level: 1 }));
+    expect((await peer.next("error")).message).toMatch(/bad message/);
+  });
+
+  it("moves the sender's player at no more than the speed cap, stopping at the side room", async () => {
+    const { peer } = await Peer.connect();
+    peer.send({ t: "create", game: "tennis", practice: true });
+    await peer.next("room");
+    const start = (await peer.next("state")).state as TennisSnapshot;
+    peer.send({ t: "move", x: 1000 });
+    const edge = COURT.halfW + PLAYER.sideRoom;
+    for (;;) {
+      const s = (await peer.next("state")).state as TennisSnapshot;
+      expect(s.players[0].x).toBeLessThanOrEqual((s.tick - start.tick) * PLAYER.speed * DT + 1e-9);
+      if (s.players[0].x === edge) break;
+    }
+  });
+
+  it("ignores moves from a spectator", async () => {
+    const a = await Peer.connect();
+    a.peer.send({ t: "create", game: "tennis", practice: false });
+    const room = await a.peer.next("room");
+    const b = await Peer.connect();
+    b.peer.send({ t: "join", room: room.room });
+    await b.peer.next("room");
+    const c = await Peer.connect();
+    c.peer.send({ t: "join", room: room.room });
+    await c.peer.next("room");
+    c.peer.send({ t: "move", x: 3 });
+    await new Promise((r) => setTimeout(r, 300));
+    c.peer.seen.length = 0;
+    const s = (await c.peer.next("state")).state as TennisSnapshot;
+    expect(s.players.map((p) => p.x)).toEqual([0, 0]);
+  });
+
+  it("drops moves past the per-second limit, then accepts them again", async () => {
+    const { peer } = await Peer.connect();
+    peer.send({ t: "create", game: "tennis", practice: true });
+    await peer.next("room");
+    for (let i = 0; i < 40; i++) peer.send({ t: "move", x: 1 });
+    for (let i = 0; i < 100; i++) peer.send({ t: "move", x: -1 });
+    await new Promise((r) => setTimeout(r, 600));
+    peer.seen.length = 0;
+    expect(((await peer.next("state")).state as TennisSnapshot).players[0].targetX).toBe(1);
+
+    await new Promise((r) => setTimeout(r, 1100));
+    peer.send({ t: "move", x: -1 });
+    await new Promise((r) => setTimeout(r, 100));
+    peer.seen.length = 0;
+    expect(((await peer.next("state")).state as TennisSnapshot).players[0].targetX).toBe(-1);
   });
 });

@@ -1,24 +1,34 @@
 import type { GameDef } from "../registry.ts";
-import { createState, COURT, seatZ, snapshot, step } from "./sim.ts";
-import type { Seat, Swing, TennisState } from "./sim.ts";
+import { botInputs } from "./bot.ts";
+import { createState, snapshot, step } from "./sim.ts";
+import type { Hand, Seat, SwingKind, TennisInput } from "./sim.ts";
 
-const BOT_REACH = 2.4;
+const KINDS: readonly unknown[] = ["forehand", "backhand"] satisfies SwingKind[];
+const HANDS: readonly unknown[] = ["right", "left"] satisfies Hand[];
 
-function asSwing(seat: Seat, input: unknown): Swing | null {
+/** Validates one seat's input. The seat comes from the connection, never the payload. */
+export function asInput(seat: Seat, input: unknown): TennisInput | null {
   if (typeof input !== "object" || input === null) return null;
-  const { dirX, power } = input as Record<string, unknown>;
-  if (typeof dirX !== "number" || typeof power !== "number") return null;
-  if (!Number.isFinite(dirX) || !Number.isFinite(power)) return null;
-  return { seat, dirX, power };
-}
-
-function botSwing(s: TennisState, seat: Seat): { dirX: number; power: number } | null {
-  if (s.phase !== "rally" || s.lastHitter === seat) return null;
-  const b = s.ball;
-  const heading = seat === 0 ? b.vz > 0 : b.vz < 0;
-  if (!heading || Math.abs(b.x) > BOT_REACH) return null;
-  if (Math.abs(b.z - seatZ(seat)) > COURT.hitWindow * 0.5) return null;
-  return { dirX: Math.sin(s.tick * 0.37) * 0.8, power: 0.5 };
+  const m = input as Record<string, unknown>;
+  if (m.t === "move") {
+    return typeof m.x === "number" && Number.isFinite(m.x) ? { t: "move", seat, x: m.x } : null;
+  }
+  if (m.t === "swing") {
+    const { dirX, kind, level, hand } = m;
+    if (typeof dirX !== "number" || !Number.isFinite(dirX)) return null;
+    if (level !== 0 && level !== 1 && level !== 2) return null;
+    if (!KINDS.includes(kind)) return null;
+    if (hand !== undefined && !HANDS.includes(hand)) return null;
+    return {
+      t: "swing",
+      seat,
+      dirX: Math.max(-1, Math.min(1, dirX)),
+      kind: kind as SwingKind,
+      level,
+      hand: hand as Hand | undefined,
+    };
+  }
+  return null;
 }
 
 export const tennis: GameDef = {
@@ -28,16 +38,16 @@ export const tennis: GameDef = {
     const s = createState(seed);
     return {
       step(inputs) {
-        const swings: Swing[] = [];
+        const parsed: TennisInput[] = [];
         for (const { seat, input } of inputs) {
-          const swing = asSwing(seat, input);
-          if (swing) swings.push(swing);
+          const p = asInput(seat, input);
+          if (p) parsed.push(p);
         }
-        step(s, swings);
+        step(s, parsed);
       },
       snapshot: () => snapshot(s),
       finished: () => (s.phase === "over" ? { winner: s.winner as Seat, score: [s.score[0], s.score[1]] } : null),
-      botInput: (seat) => botSwing(s, seat),
+      botInputs: (seat) => botInputs(s, seat),
     };
   },
 };
