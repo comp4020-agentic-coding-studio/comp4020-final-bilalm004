@@ -222,3 +222,18 @@ the format of the entries below (see CLAUDE.md, Docs).
   other session's uncommitted `client/style.css` and `client/ui/menu.ts`.
   Also: my first 8090 check ran against a stale server still holding the
   port; reran on a fresh one.
+
+## 2026-10-14 06:33 AEDT | bug | Flaky rewind test failed CI on a slower runner
+
+- **Situation:** CI run for 8aa0cdf failed `spec/rooms.test.ts` "rewinds a swing
+  with measured lag" (expected `allowed` 3, got 4); the next push passed with
+  no code change.
+- **Cause:** The test claimed `s.tick - 3` and asserted `allowed` was exactly
+  3. The server judges at its current tick, so a swing arriving one tick
+  late gives `now - claimed` of 4. The assertion depended on wall-clock timing.
+- **Fix:** Assert bounds instead of one value: `allowed` is at most
+  `min(ruling.tick - claimed, 9)` and at least 3 (the 50 ms margin alone covers
+  3 ticks), and `rewind` is at most `allowed`. Exact cap values are still
+  pinned in `spec/sim.test.ts`.
+- **Verification:** `pnpm check` 124/124 five times in a row; the one test 6/6
+  with four busy CPU loops running. Not reproduced on CI itself.

@@ -158,13 +158,18 @@ describe("rooms over WebSocket", () => {
       s = (await peer.next("state")).state as TennisSnapshot;
     }
     peer.seen.length = 0;
-    peer.send({ t: "swing", dirX: 0, kind: "forehand", level: 1, tick: s.tick - 3 });
+    const claimed = s.tick - 3;
+    peer.send({ t: "swing", dirX: 0, kind: "forehand", level: 1, tick: claimed });
     const ruling = await peer.next("swing");
-    // a local round trip is a few ms, so with the 50 ms margin 3 ticks back is
-    // within this player's measured lag: the room allows exactly what was claimed
-    expect(ruling.allowed).toBe(3);
-    // and if the ball was hittable then, that is where it was judged
-    if (ruling.outcome === "hit") expect([0, 3]).toContain(ruling.rewind);
+    // the swing may reach the server a tick or two later than it was sent, so
+    // bound the ruling instead of pinning it: never more than the claim as seen
+    // at the judged tick, never over the 9-tick cap
+    expect(ruling.allowed).toBeLessThanOrEqual(Math.min(ruling.tick - claimed, 9));
+    // a local round trip is a few ms, and the 50 ms margin alone covers 3 ticks,
+    // so the claim is honoured
+    expect(ruling.allowed).toBeGreaterThanOrEqual(3);
+    // how far it was actually judged back can't exceed what was allowed
+    expect(ruling.rewind).toBeLessThanOrEqual(ruling.allowed);
   });
 
   it("rejects a swing whose tick isn't a whole number", async () => {
