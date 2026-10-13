@@ -104,6 +104,39 @@ describe("rooms over WebSocket", () => {
     expect(state.lastHitter).toBeNull();
   });
 
+  it("pings each client and times the round trip", async () => {
+    const { peer } = await Peer.connect();
+    const ping = await peer.next("ping");
+    peer.send({ t: "pong", id: ping.id });
+    peer.send({ t: "create", game: "tennis", practice: true });
+    await peer.next("room");
+    peer.send({ t: "swing", dirX: 0, kind: "forehand", level: 1 });
+    const ruling = await peer.next("swing");
+    expect(ruling.rtt).not.toBeNull();
+    expect(ruling.rtt!).toBeGreaterThanOrEqual(0);
+    expect(ruling.rtt!).toBeLessThan(1000);
+  });
+
+  it("ignores a pong for a ping it never sent", async () => {
+    const { peer } = await Peer.connect();
+    const ping = await peer.next("ping");
+    peer.send({ t: "pong", id: ping.id + 99 });
+    peer.send({ t: "create", game: "tennis", practice: true });
+    await peer.next("room");
+    peer.send({ t: "swing", dirX: 0, kind: "forehand", level: 1 });
+    expect((await peer.next("swing")).rtt).toBeNull();
+  });
+
+  it("tells the swinger the server's ruling, here no ball during the serve", async () => {
+    const { peer } = await Peer.connect();
+    peer.send({ t: "create", game: "tennis", practice: true });
+    await peer.next("room");
+    peer.send({ t: "swing", dirX: 0, kind: "forehand", level: 1 });
+    const ruling = await peer.next("swing");
+    expect(ruling.outcome).toBe("no ball");
+    expect(ruling.tick).toBeGreaterThan(0);
+  });
+
   it("rejects a swing without a valid level or kind", async () => {
     const { peer } = await Peer.connect();
     peer.ws.send(JSON.stringify({ t: "swing", dirX: 0, power: 1 }));

@@ -90,6 +90,8 @@ export interface TennisState {
   players: [Player, Player];
   lastHitter: Seat | null;
   bounces: number;
+  // shots in the current rally, the serve included
+  shots: number;
   // where the ball last touched down, including a bounce that ends the point
   lastBounce: { x: number; z: number; in: boolean; tick: number } | null;
   score: [number, number];
@@ -123,6 +125,13 @@ export interface Move {
 
 export type TennisInput = Swing | Move;
 
+export type PointReason = "out" | "net" | "own side" | "unreturned";
+
+/** What a step did, for logs and replies; never needed to replay the game. */
+export type TennisEvent =
+  | { type: "swing"; seat: Seat; outcome: "hit" | Miss }
+  | { type: "point"; winner: Seat; shots: number; reason: PointReason };
+
 export const seatZ = (seat: Seat): number => (seat === 0 ? COURT.halfL : -COURT.halfL);
 export const other = (seat: Seat): Seat => (seat === 0 ? 1 : 0);
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
@@ -148,6 +157,7 @@ function resetServe(s: TennisState): void {
   s.phaseTick = 0;
   s.lastHitter = null;
   s.bounces = 0;
+  s.shots = 0;
   s.ball = { x: 0, y: 1, z: seatZ(s.server), vx: 0, vy: 0, vz: 0 };
 }
 
@@ -164,6 +174,7 @@ export function createState(seed: number, winScore: number | null = COURT.winSco
     ],
     lastHitter: null,
     bounces: 0,
+    shots: 0,
     lastBounce: null,
     score: [0, 0],
     winScore,
@@ -184,6 +195,7 @@ export function snapshot(s: TennisState): TennisSnapshot {
     players: [{ ...s.players[0] }, { ...s.players[1] }],
     lastHitter: s.lastHitter,
     bounces: s.bounces,
+    shots: s.shots,
     lastBounce: s.lastBounce ? { ...s.lastBounce } : null,
     score: [s.score[0], s.score[1]],
     winScore: s.winScore,
@@ -191,7 +203,8 @@ export function snapshot(s: TennisState): TennisSnapshot {
   };
 }
 
-function awardPoint(s: TennisState, winner: Seat): void {
+function awardPoint(s: TennisState, winner: Seat, reason: PointReason, ev: TennisEvent[]): void {
+  ev.push({ type: "point", winner, shots: s.shots, reason });
   s.score[winner]++;
   if (s.winScore !== null && s.score[winner] >= s.winScore) {
     s.phase = "over";
@@ -215,6 +228,7 @@ function launchServe(s: TennisState): void {
   s.phase = "rally";
   s.lastHitter = s.server;
   s.bounces = 0;
+  s.shots = 1;
 }
 
 /** Sends the ball back from wherever it is now. Shared by real hits and predictLanding. */
@@ -257,10 +271,6 @@ export function missReason(s: TennisState, seat: Seat): Miss | null {
   return null;
 }
 
-function canHit(s: TennisState, seat: Seat): boolean {
-  return missReason(s, seat) === null;
-}
-
 /**
  * Aim from timing: how early or late the ball is met, -1 (earliest in the
  * window) to 1 (latest), turned into a direction. Early pulls the ball across
@@ -275,13 +285,16 @@ export function timingAim(b: Ball, seat: Seat, kind: SwingKind, hand: Hand): num
   return toRight * (seat === 0 ? 1 : -1);
 }
 
-function tryHit(s: TennisState, swing: Swing): void {
-  if (!canHit(s, swing.seat)) return;
+function tryHit(s: TennisState, swing: Swing): Miss | null {
+  const miss = missReason(s, swing.seat);
+  if (miss) return miss;
   const hand = swing.hand ?? "right";
   const dirX = swing.timingAim ? timingAim(s.ball, swing.seat, swing.kind, hand) : swing.dirX;
   launch(s.ball, swing.seat, s.players[swing.seat].x, dirX, swing.kind, swing.level, hand, swing.lift);
   s.lastHitter = swing.seat;
   s.bounces = 0;
+  s.shots++;
+  return null;
 }
 
 function movePlayers(s: TennisState): void {
@@ -308,23 +321,27 @@ function moveBall(b: Ball): "net" | "bounce" | null {
   return null;
 }
 
-function onBounce(s: TennisState): void {
+function onBounce(s: TennisState, ev: TennisEvent[]): void {
   const b = s.ball;
   const hitter = s.lastHitter as Seat;
   const inBounds = Math.abs(b.x) <= COURT.halfW && Math.abs(b.z) <= COURT.halfL;
   const hitterSide = hitter === 0 ? 1 : -1;
   const good = inBounds && (s.bounces > 0 || Math.sign(b.z) !== hitterSide);
   s.lastBounce = { x: b.x, z: b.z, in: good, tick: s.tick };
-  if (!inBounds) return awardPoint(s, other(hitter));
-  if (Math.sign(b.z) === hitterSide) return awardPoint(s, other(hitter));
+  if (!inBounds) return awardPoint(s, other(hitter), "out", ev);
+  if (Math.sign(b.z) === hitterSide) return awardPoint(s, other(hitter), "own side", ev);
   s.bounces++;
-  if (s.bounces >= 2) awardPoint(s, hitter);
+  if (s.bounces >= 2) awardPoint(s, hitter, "unreturned", ev);
 }
 
-export function step(s: TennisState, inputs: readonly TennisInput[]): void {
+export function step(s: TennisState, inputs: readonly TennisInput[]): TennisEvent[] {
+  const ev: TennisEvent[] = [];
   s.tick++;
   s.phaseTick++;
-  if (s.phase === "over") return;
+  if (s.phase !== "rally") {
+    for (const input of inputs) if (input.t === "swing") ev.push({ type: "swing", seat: input.seat, outcome: "no ball" });
+  }
+  if (s.phase === "over") return ev;
 
   for (const input of inputs) {
     if (input.t === "move") s.players[input.seat].targetX = clamp(input.x, -maxPlayerX, maxPlayerX);
@@ -335,21 +352,28 @@ export function step(s: TennisState, inputs: readonly TennisInput[]): void {
     // the ball waits in front of the server, within the middle of the court
     s.ball.x = clamp(s.players[s.server].x, -COURT.halfW * 0.6, COURT.halfW * 0.6);
     if (s.phaseTick >= COURT.serveDelayTicks) launchServe(s);
-    return;
+    return ev;
   }
 
-  for (const input of inputs) if (input.t === "swing") tryHit(s, input);
+  for (const input of inputs) {
+    if (input.t === "swing") ev.push({ type: "swing", seat: input.seat, outcome: tryHit(s, input) ?? "hit" });
+  }
 
   const event = moveBall(s.ball);
-  if (event === "net") return awardPoint(s, other(s.lastHitter as Seat));
+  if (event === "net") {
+    awardPoint(s, other(s.lastHitter as Seat), "net", ev);
+    return ev;
+  }
   if (event === "bounce") {
-    onBounce(s);
-    if (s.phase !== "rally") return;
+    onBounce(s, ev);
+    if (s.phase !== "rally") return ev;
   }
   if (Math.abs(s.ball.z) > COURT.halfL + COURT.endMargin) {
     const hitter = s.lastHitter as Seat;
-    awardPoint(s, s.bounces >= 1 ? hitter : other(hitter));
+    if (s.bounces >= 1) awardPoint(s, hitter, "unreturned", ev);
+    else awardPoint(s, other(hitter), "out", ev);
   }
+  return ev;
 }
 
 export interface Contact {

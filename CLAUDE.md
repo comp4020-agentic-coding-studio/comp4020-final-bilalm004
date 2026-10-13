@@ -42,6 +42,8 @@ lazily and only when a player enters a game. Video never leaves the browser.
 - `pnpm build && pnpm start` runs the app on :8080 (`DATA_DIR` overrides
   `./data`). `pnpm check` (typecheck + spec) and `pnpm e2e` need it running.
 - `pnpm dev:server` + `pnpm dev:client` for hot reload (vite proxies to :8080).
+  On this `/mnt/c` drive `node --watch` misses edits: restart `dev:server`
+  before `pnpm check`, or the spec runs against the old server.
 - Docker isn't available in this WSL; CI builds the image, so keep the
   Dockerfile's runtime stage free of dev dependencies.
 

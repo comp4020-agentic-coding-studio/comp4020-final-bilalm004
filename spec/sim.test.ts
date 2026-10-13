@@ -475,3 +475,37 @@ describe("landing path", () => {
     expect(atNet.y).toBeGreaterThan(COURT.netH);
   });
 });
+
+describe("step events", () => {
+  it("reports a hit, then the point with its reason and shot count", () => {
+    const s = receiving(atBaseline(1), 0);
+    s.shots = 1;
+    const first = step(s, [swing(1, 1)]);
+    expect(first).toContainEqual({ type: "swing", seat: 1, outcome: "hit" });
+    expect(s.shots).toBe(2);
+    let point: Extract<ReturnType<typeof step>[number], { type: "point" }> | undefined;
+    for (let i = 0; i < 600 && !point; i++) point = step(s, []).find((e) => e.type === "point") as typeof point;
+    expect(point).toMatchObject({ type: "point", winner: 1, shots: 2 });
+    expect(["unreturned", "out"]).toContain(point!.reason);
+  });
+
+  it("reports a miss with the same reason missReason gives", () => {
+    const s = receiving(atBaseline(1), 3);
+    expect(missReason(s, 1)).toBe("reach");
+    expect(step(s, [swing(1, 1)])).toContainEqual({ type: "swing", seat: 1, outcome: "reach" });
+  });
+
+  it("reports a swing during the serve as no ball, without moving it", () => {
+    const s = createState(1);
+    expect(step(s, [swing(0, 2)])).toEqual([{ type: "swing", seat: 0, outcome: "no ball" }]);
+    expect(s.phase).toBe("serve");
+  });
+
+  it("counts the serve as the rally's first shot and resets on the next point", () => {
+    const s = createState(1);
+    untilRally(s);
+    expect(s.shots).toBe(1);
+    while (s.phase === "rally") step(s, []);
+    expect(s.shots).toBe(0);
+  });
+});

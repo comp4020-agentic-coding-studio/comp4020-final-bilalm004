@@ -84,3 +84,23 @@ the format of the entries below (see CLAUDE.md, Docs).
   [SnapNet: Rollback](https://www.snapnet.dev/blog/netcode-architectures-part-2-rollback/).
 - **Follow-up:** Add a "prior art" paragraph to ADR 001 citing Bernier and
   rollback.
+
+## 2026-10-14 03:40 AEDT | milestone | Task 04 step 1: lag is now measured
+
+- **Situation:** Rewind needs each player's real round trip (to cap it) and
+  a record of how swings are judged. Neither existed.
+- **Outcome:** Server pings every client every 2 s and keeps a smoothed round
+  trip; client answers pings. `step()` now returns events, and the server logs
+  `swing_resolve` (room, seat, name, tick, rewind, rtt, outcome) per swing and
+  `rally` (winner, shots, reason) per point. The swinger also gets the ruling
+  back as a `swing` message. No gameplay change.
+- **Tests written:** `spec/sim.test.ts` "step events" (hit then point with
+  reason and shot count; miss reason matches `missReason`; serve swing is
+  "no ball"; serve counts as shot 1 and resets). `spec/rooms.test.ts`: round
+  trip is timed (checked it fails with pong handling broken), a pong for an
+  unknown ping is ignored, the swinger gets the server's ruling. `pnpm check`
+  103/103.
+- **Bug found:** `node --watch` does not see edits on the `/mnt/c` drive, so
+  the first `pnpm check` ran the new tests against the old server and timed
+  out. Fix: restart `dev:server` before checking; noted in CLAUDE.md.
+- **Follow-up:** Step 2, latency harness and baseline hit rates.

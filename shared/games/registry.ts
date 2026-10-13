@@ -5,8 +5,15 @@ export interface SeatInput {
   input: unknown;
 }
 
+/** Something a step did, for logs and replies. `seat` set means it concerns that player. */
+export interface GameEvent {
+  type: string;
+  seat?: 0 | 1;
+  [field: string]: unknown;
+}
+
 export interface GameInstance {
-  step(inputs: readonly SeatInput[]): void;
+  step(inputs: readonly SeatInput[]): GameEvent[];
   snapshot(): unknown;
   finished(): { winner: 0 | 1; score: [number, number] } | null;
   botInputs(seat: 0 | 1): unknown[];

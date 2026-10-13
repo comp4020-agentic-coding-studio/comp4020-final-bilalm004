@@ -9,7 +9,7 @@ import type { WebSocket } from "ws";
 import { parseClientMsg } from "../shared/protocol.ts";
 import { getDemoPlayer, getOrCreatePlayer, matchCountFor } from "./db.ts";
 import { log } from "./log.ts";
-import { createRoom, getRoom, leaveRoom, roomCount, send } from "./rooms.ts";
+import { PING_MS, createRoom, getRoom, leaveRoom, onPong, roomCount, send, sendPing } from "./rooms.ts";
 import type { Client } from "./rooms.ts";
 
 const PORT = Number(process.env.PORT ?? 8080);
@@ -135,8 +135,9 @@ wss.on("connection", (ws: WebSocket) => {
   alive.add(ws);
   ws.on("pong", () => alive.add(ws));
 
-  const client: Client = { ws, token: "", name: "", room: null, seat: null };
+  const client: Client = { ws, token: "", name: "", room: null, seat: null, rtt: null, pings: 0, outstanding: null };
   let hello = false;
+  const pinger = setInterval(() => sendPing(client), PING_MS);
 
   ws.on("message", (data) => {
     const msg = parseClientMsg(data.toString());
@@ -153,6 +154,11 @@ wss.on("connection", (ws: WebSocket) => {
       hello = true;
       send(client, { t: "welcome", token: player.token, name: player.name, matches: matchCountFor(player.token) });
       log("hello", { name: player.name });
+      sendPing(client);
+      return;
+    }
+    if (msg.t === "pong") {
+      onPong(client, msg.id);
       return;
     }
     if (!hello) {
@@ -194,7 +200,10 @@ wss.on("connection", (ws: WebSocket) => {
     }
   });
 
-  ws.on("close", () => leaveRoom(client));
+  ws.on("close", () => {
+    clearInterval(pinger);
+    leaveRoom(client);
+  });
   ws.on("error", () => ws.terminate());
 });
 

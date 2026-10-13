@@ -86,6 +86,10 @@ export class Connection {
 
     ws.onmessage = (event) => {
       const msg = JSON.parse(String(event.data)) as ServerMsg;
+      if (msg.t === "ping") {
+        ws.send(JSON.stringify({ t: "pong", id: msg.id } satisfies ClientMsg));
+        return;
+      }
       if (msg.t === "welcome") {
         // a demo account's token isn't this browser's own identity: keep the
         // guest token intact so "play as guest" has something to return to

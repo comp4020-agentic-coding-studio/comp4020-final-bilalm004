@@ -1,6 +1,6 @@
 import type { WebSocket } from "ws";
 import { games } from "../shared/games/registry.ts";
-import type { GameInstance } from "../shared/games/registry.ts";
+import type { GameEvent, GameInstance } from "../shared/games/registry.ts";
 import type { ClientMsg, ServerMsg } from "../shared/protocol.ts";
 import { recordMatch } from "./db.ts";
 import { log } from "./log.ts";
@@ -13,6 +13,29 @@ export interface Client {
   name: string;
   room: Room | null;
   seat: Seat | null;
+  // smoothed round trip in ms, from app-level pings; null until the first pong
+  rtt: number | null;
+  pings: number;
+  // the ping still waiting for its pong
+  outstanding: { id: number; sentAt: number } | null;
+}
+
+export const PING_MS = 2000;
+// weight of the newest sample in the smoothed round trip
+const RTT_SMOOTHING = 0.25;
+
+export function sendPing(c: Client): void {
+  const id = ++c.pings;
+  c.outstanding = { id, sentAt: performance.now() };
+  send(c, { t: "ping", id });
+}
+
+/** Only a pong for the outstanding ping counts; a stale or repeated one is ignored. */
+export function onPong(c: Client, id: number): void {
+  if (c.outstanding?.id !== id) return;
+  const sample = performance.now() - c.outstanding.sentAt;
+  c.outstanding = null;
+  c.rtt = c.rtt === null ? sample : c.rtt + (sample - c.rtt) * RTT_SMOOTHING;
 }
 
 const TICK_MS = 1000 / 60;
@@ -150,6 +173,19 @@ class Room {
     log("room_destroy", { room: this.id });
   }
 
+  /** Logs what a step did; a player's own swing ruling also goes back to them. */
+  private report(e: GameEvent): void {
+    if (e.type === "swing") {
+      const c = e.seat === undefined ? null : this.seats[e.seat];
+      const rtt = c?.rtt === null || c?.rtt === undefined ? null : Math.round(c.rtt);
+      const outcome = String(e.outcome);
+      log("swing_resolve", { room: this.id, seat: e.seat, name: c?.name ?? "Bot", tick: this.ticks, rewind: 0, rtt, outcome });
+      if (c) send(c, { t: "swing", tick: this.ticks, outcome, rtt });
+    } else if (e.type === "point") {
+      log("rally", { room: this.id, winner: e.winner, shots: e.shots, reason: e.reason });
+    }
+  }
+
   private pump(): void {
     const target = Math.floor((performance.now() - this.startedAt) / TICK_MS);
     let ran = 0;
@@ -174,7 +210,7 @@ class Room {
       if (this.practice) {
         for (const input of this.instance.botInputs(BOT_SEAT)) inputs.push({ seat: BOT_SEAT, input });
       }
-      this.instance.step(inputs);
+      for (const e of this.instance.step(inputs)) this.report(e);
     }
     this.pending = [];
     this.pendingMove = [null, null];

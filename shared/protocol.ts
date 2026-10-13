@@ -13,6 +13,8 @@ export type ClientMsg =
   | { t: "move"; x: number }
   // practice only: hold the game while the player sets up the camera
   | { t: "pause"; paused: boolean }
+  // reply to the server's ping, echoing its id, so it can time the round trip
+  | { t: "pong"; id: number }
   | { t: "leave" };
 
 export interface RoomInfo {
@@ -27,6 +29,9 @@ export type ServerMsg =
   | ({ t: "room" } & RoomInfo)
   | { t: "presence"; names: [string | null, string | null]; spectators: number }
   | { t: "state"; state: unknown }
+  | { t: "ping"; id: number }
+  // the server's ruling on your swing: hit, or why it missed
+  | { t: "swing"; tick: number; outcome: string; rtt: number | null }
   | { t: "error"; message: string };
 
 export function parseClientMsg(raw: string): ClientMsg | null {
@@ -63,6 +68,8 @@ export function parseClientMsg(raw: string): ClientMsg | null {
       return typeof m.x === "number" && Number.isFinite(m.x) ? { t: "move", x: m.x } : null;
     case "pause":
       return typeof m.paused === "boolean" ? { t: "pause", paused: m.paused } : null;
+    case "pong":
+      return Number.isInteger(m.id) ? { t: "pong", id: m.id as number } : null;
     case "leave":
       return { t: "leave" };
     default:

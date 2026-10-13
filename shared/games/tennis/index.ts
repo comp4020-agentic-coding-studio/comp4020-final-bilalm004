@@ -47,7 +47,7 @@ export const tennis: GameDef = {
           const p = asInput(seat, input);
           if (p) parsed.push(p);
         }
-        step(s, parsed);
+        return step(s, parsed);
       },
       snapshot: () => snapshot(s),
       finished: () => (s.phase === "over" ? { winner: s.winner as Seat, score: [s.score[0], s.score[1]] } : null),
