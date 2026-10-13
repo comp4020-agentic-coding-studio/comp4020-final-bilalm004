@@ -2,6 +2,38 @@
 
 Status: accepted, 2026-10-14. Implementation: `tasks/04-netcode-feel.md`.
 
+## In plain terms
+
+The server counts 60 ticks a second, and every state it sends says which tick
+it is from, so a player's screen always knows which tick it is showing.
+
+Alice has a 100 ms round trip. Her screen shows tick 500 when she swings, so
+her swing says "I was looking at tick 500". Lag gets it to the server at tick
+506. Judged at 506 the ball may be past her and she misses. Instead the server
+goes back to its own record of tick 500 and checks the ball there.
+
+It won't go back as far as anyone asks. It allows her measured round trip plus
+50 ms (here 150 ms, 9 ticks), and never more than 9 ticks for anyone. If she
+claimed tick 480, it would still only go back as far as her limit allows, so
+claiming more lag buys nothing.
+
+## Reading the logs
+
+Every swing writes a `swing_resolve` line. Two fields say what rewind did:
+`allowed` is how many ticks back the server was willing to judge this swing,
+and `rewind` is how many it actually used. It uses them only if the ball was
+hittable back then; otherwise it judges at arrival, as before.
+
+| `allowed` | `rewind` | `outcome` | Meaning |
+|---|---|---|---|
+| 0 | 0 | any | No rewind possible: no measured lag yet, or no tick sent |
+| 6 | 6 | hit | Lag would have made it a miss; rewind saved it |
+| 6 | 0 | late | Late even on the player's own screen |
+| 6 | 0 | hit | On time even without rewind |
+
+Until the client sends the tick it is showing (task 04 step 4), every real
+player's swings log `allowed 0`.
+
 ## Context
 
 The server owns the ball. It steps the sim at 60 Hz and broadcasts the state

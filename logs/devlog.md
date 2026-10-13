@@ -139,3 +139,15 @@ the format of the entries below (see CLAUDE.md, Docs).
   cap into `server/rewind.ts` instead.
 - **Follow-up:** Step 4, client sends the tick on screen with each swing (real
   players get no rewind until then), then real round trips into PROCESS.md.
+
+## 2026-10-14 04:39 AEDT | event | ADR 001 gets a plain-language example and a log-reading table
+
+- **Situation:** User found "judged at the moment the player saw, limited to
+  measured lag plus 50 ms" hard to follow, and asked whether the explanation
+  was documented. It wasn't: the ADR had only the formal rules, the devlog
+  only that `allowed` and `rewind` exist.
+- **Outcome:** Added "In plain terms" (Alice, tick 500 vs 506, the limit, a
+  faked claim) and "Reading the logs" (what each `allowed`/`rewind`/`outcome`
+  combination means) near the top of ADR 001.
+- **Why:** Crit 10 has the author narrate from server logs alone, so the log
+  fields need a key that can be read aloud.
