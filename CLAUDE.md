@@ -51,6 +51,9 @@ lazily and only when a player enters a game. Video never leaves the browser.
   status line when it changes.
 - `README.md` 400-600 words on what "good" means here (served at `/readme/`).
   `PROCESS.md` 900-1100 words, rewritten each crit.
+- `logs/devlog.md` is append-only. When a design decision, milestone, notable
+  bug or config change happens, add an entry (date/time from `date`, type,
+  situation, outcome, why) in the format of the existing entries.
 
 ## Rules
 
