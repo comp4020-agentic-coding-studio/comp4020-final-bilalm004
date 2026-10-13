@@ -14,6 +14,13 @@ export interface GameEvent {
 
 export interface GameInstance {
   step(inputs: readonly SeatInput[]): GameEvent[];
+  /**
+   * Lag compensation (ADR 001): play `input` as if it had arrived `ticksAgo`
+   * ticks ago, then replay to now. Applied only if it connects there and no
+   * point was scored since; returns null otherwise and leaves the game as it
+   * was, so the caller judges the input now instead.
+   */
+  rewind?(input: SeatInput, ticksAgo: number): GameEvent[] | null;
   snapshot(): unknown;
   finished(): { winner: 0 | 1; score: [number, number] } | null;
   botInputs(seat: 0 | 1): unknown[];

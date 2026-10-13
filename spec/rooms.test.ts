@@ -137,6 +137,42 @@ describe("rooms over WebSocket", () => {
     expect(ruling.tick).toBeGreaterThan(0);
   });
 
+  it("judges a swing with no measured lag at arrival: an unanswered ping means no rewind", async () => {
+    const { peer } = await Peer.connect();
+    // never answer the ping
+    peer.send({ t: "create", game: "tennis", practice: true });
+    await peer.next("room");
+    const state = (await peer.next("state")).state as TennisSnapshot;
+    peer.send({ t: "swing", dirX: 0, kind: "forehand", level: 1, tick: state.tick - 5 });
+    expect((await peer.next("swing")).allowed).toBe(0);
+  });
+
+  it("rewinds a swing with measured lag to the tick it claims, within the cap", async () => {
+    const { peer } = await Peer.connect();
+    peer.send({ t: "pong", id: (await peer.next("ping")).id });
+    peer.send({ t: "create", game: "tennis", practice: true });
+    await peer.next("room");
+    // wait for the serve to reach this player, so there is a ball to rewind to
+    let s = (await peer.next("state")).state as TennisSnapshot;
+    for (let i = 0; i < 400 && !(s.phase === "rally" && s.lastHitter === 1 && s.ball.z > COURT.halfL - 3); i++) {
+      s = (await peer.next("state")).state as TennisSnapshot;
+    }
+    peer.seen.length = 0;
+    peer.send({ t: "swing", dirX: 0, kind: "forehand", level: 1, tick: s.tick - 3 });
+    const ruling = await peer.next("swing");
+    // a local round trip is a few ms, so with the 50 ms margin 3 ticks back is
+    // within this player's measured lag: the room allows exactly what was claimed
+    expect(ruling.allowed).toBe(3);
+    // and if the ball was hittable then, that is where it was judged
+    if (ruling.outcome === "hit") expect([0, 3]).toContain(ruling.rewind);
+  });
+
+  it("rejects a swing whose tick isn't a whole number", async () => {
+    const { peer } = await Peer.connect();
+    peer.ws.send(JSON.stringify({ t: "swing", dirX: 0, kind: "forehand", level: 1, tick: 1.5 }));
+    expect((await peer.next("error")).message).toMatch(/bad message/);
+  });
+
   it("rejects a swing without a valid level or kind", async () => {
     const { peer } = await Peer.connect();
     peer.ws.send(JSON.stringify({ t: "swing", dirX: 0, power: 1 }));

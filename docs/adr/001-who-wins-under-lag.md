@@ -62,8 +62,14 @@ that moment and bounded so it can't be abused:
    round trip plus a small jitter margin, and never more than 150 ms. A
    claimed tick older than that is treated as the oldest allowed tick, so
    faking lag buys nothing.
-3. **Points are final.** Rewind never crosses a point change. If the point was
-   already scored when the swing arrives, the swing is ignored.
+3. **Points are final once confirmed.** A ball that goes past the receiver
+   (unreturned, or landing out on their side) is decided at once but scored
+   150 ms later, the same as the rewind cap, while it carries on flying. A
+   rewound hit in that gap cancels it. Once scored, a point is never undone:
+   rewind never crosses it. A ball into the net or onto the hitter's own side
+   never reached the receiver, so it scores at once. *(Added after measuring:
+   without the delay, the point was scored before a lagged on-time swing could
+   arrive, and rewind refused it. At 150 ms that left the hit rate at 64%.)*
 4. **A miss is still a miss.** If the ball was outside the window or out of
    reach at tick T, it misses. Rewind removes lag, not bad timing.
 5. **The hitter sees an on-time return.** On swing the client plays the racket
@@ -90,14 +96,28 @@ that moment and bounded so it can't be abused:
 - **Determinism is unchanged.** A rewound hit is an input applied at an
   earlier tick and replayed; the same seed and input stream still give the
   same match.
-- **It's measurable.** Every swing logs the claimed tick, the server tick, the
-  rewind used, the player's round trip and the outcome. Hit rate with and
-  without rewind at simulated lag goes in `PROCESS.md`.
+- **The score shows 150 ms late** for a ball that goes past the receiver.
+  Nobody watching notices; the ball is already flying away.
+- **It's measurable.** Every swing logs the server tick, how far back it was
+  allowed, how far back it was judged, the player's round trip and the
+  outcome (`swing_resolve`); every point logs its winner, shots and reason
+  (`rally`).
 
-## How we'll know it worked
+## Measured
 
-- At a simulated 100-150 ms round trip with jitter, a scripted client that
-  swings when its own screen shows the ideal moment hits at least 95% of the
-  time with rewind, against a measured, lower rate without it.
-- A swing claiming a tick older than the cap is judged at the cap (spec test).
-- Swing logs show rewind used tracking each player's measured round trip.
+`spec/latency.test.ts` runs the real sim and the server's rewind rule with the
+network modelled in ticks. 400 swings per row, timed evenly across the hit
+window as seen on the player's own screen, so all of them hit with no lag:
+
+| Round trip | Rewind off | Rewind on |
+|---|---|---|
+| 0 ms | 100% | 100% |
+| 50 ms | 89.5% | 100% |
+| 100 ms | 81.3% | 100% |
+| 150 ms | 64.5% | 97.8% |
+| 200 ms | 56.3% | 89.5% (past the 150 ms cap, by design) |
+
+Checked on every `pnpm check`: at least 95% at 150 ms with rewind, under 85%
+without it, and rewind never lowers the rate. The cap itself (measured round
+trip plus margin, never over 150 ms, nothing for unmeasured lag) and "never
+across a point" are unit-tested in `spec/sim.test.ts`.

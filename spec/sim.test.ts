@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { botInputs } from "../shared/games/tennis/bot.ts";
-import { asInput, tennis } from "../shared/games/tennis/index.ts";
+import { asInput, tennis, tennisFrom } from "../shared/games/tennis/index.ts";
+import { MAX_REWIND_TICKS, TICK_MS, rewindTicks } from "../server/rewind.ts";
 import {
   COURT,
   DT,
   PLAYER,
+  CONFIRM_TICKS,
+  cloneState,
   createState,
   naturalKind,
   predictContact,
@@ -18,7 +21,7 @@ import {
   seatZ,
   timingAim,
 } from "../shared/games/tennis/sim.ts";
-import type { Ball, Level, Seat, SwingKind, TennisInput, TennisState } from "../shared/games/tennis/sim.ts";
+import type { Ball, Level, Seat, SwingKind, TennisInput, TennisSnapshot, TennisState } from "../shared/games/tennis/sim.ts";
 
 function run(s: TennisState, ticks: number, inputsAt: (s: TennisState) => TennisInput[] = () => []): void {
   for (let i = 0; i < ticks; i++) step(s, inputsAt(s));
@@ -507,5 +510,191 @@ describe("step events", () => {
     expect(s.shots).toBe(1);
     while (s.phase === "rally") step(s, []);
     expect(s.shots).toBe(0);
+  });
+});
+
+describe("rewind (ADR 001)", () => {
+  // seat 1's swing at the moment a serve from seat 0 reaches seat 1's baseline
+  const swing1 = { seat: 1 as const, input: { t: "swing", dirX: 0, kind: "forehand", level: 1 } };
+
+  /** A practice-free game stepped until the serve reaches seat 1's baseline, then `extra` ticks on. */
+  function served(extra: number) {
+    const g = tennis.create(7);
+    const peek = createState(7);
+    for (let i = 0; i < 1000; i++) {
+      const c = predictContact(peek, 1);
+      if (peek.phase === "rally" && c && c.ticks === 0) break;
+      // seat 1 stands where the ball will come
+      const x = c ? c.ball.x : 0;
+      const inputs = [{ seat: 1 as const, input: { t: "move", x } }];
+      g.step(inputs);
+      step(peek, [{ t: "move", seat: 1, x }]);
+    }
+    for (let i = 0; i < extra; i++) {
+      g.step([]);
+      step(peek, []);
+    }
+    return { g, peek };
+  }
+
+  it("a swing that would be late now, but was on time a few ticks ago, hits when rewound", () => {
+    // a slow, high ball reaching seat 1, who stands right under it: it stays
+    // in play well past the hit window, so "late" really happens
+    const start = createState(7);
+    start.phase = "rally";
+    start.lastHitter = 0;
+    start.shots = 1;
+    start.ball = { x: 0, y: 1.6, z: -COURT.halfL + 2, vx: 0, vy: 0, vz: -8 };
+    start.players[1] = { x: 0, targetX: 0 };
+    const g = tennisFrom(start);
+    const shadow = cloneState(start);
+    let onTimeAgo = -1;
+    for (let t = 0; t < 120; t++) {
+      if (missReason(shadow, 1) === null) onTimeAgo = 0;
+      else if (onTimeAgo >= 0) onTimeAgo++;
+      if (missReason(shadow, 1) === "late" && onTimeAgo === 3) break;
+      g.step([]);
+      step(shadow, []);
+    }
+    // now: too late; 3 ticks ago: in the window
+    expect(missReason(shadow, 1)).toBe("late");
+    expect(shadow.phase).toBe("rally");
+    const events = g.rewind!(swing1, 3);
+    expect(events).toContainEqual({ type: "swing", seat: 1, outcome: "hit" });
+    const after = g.snapshot() as TennisSnapshot;
+    expect(after.lastHitter).toBe(1);
+    // replayed to now: same tick, ball already on its way back
+    expect(after.tick).toBe(shadow.tick);
+    expect(after.ball.vz).toBeGreaterThan(0);
+  });
+
+  it("refuses a rewind that would still miss, and leaves the game untouched", () => {
+    const { g } = served(0);
+    // seat 1 moved away: out of reach at every recent tick
+    const before = JSON.stringify(g.snapshot());
+    const far = { seat: 1 as const, input: { t: "swing", dirX: 0, kind: "forehand", level: 1 } };
+    for (let i = 0; i < 40; i++) g.step([{ seat: 1, input: { t: "move", x: 5 } }]);
+    const mid = JSON.stringify(g.snapshot());
+    expect(g.rewind!(far, 3)).toBeNull();
+    expect(JSON.stringify(g.snapshot())).toBe(mid);
+    expect(mid).not.toBe(before);
+  });
+
+  it("never rewinds across a point", () => {
+    const { g } = served(0);
+    // let the ball run on until seat 0 wins the point
+    let ticks = 0;
+    while ((g.snapshot() as TennisSnapshot).score[0] === 0 && ticks < 600) {
+      g.step([]);
+      ticks++;
+    }
+    expect((g.snapshot() as TennisSnapshot).score[0]).toBe(1);
+    // reaching back to before the point is refused, however short the gap
+    expect(g.rewind!(swing1, 9)).toBeNull();
+  });
+
+  it("refuses to look further back than its history", () => {
+    const { g } = served(0);
+    expect(g.rewind!(swing1, 13)).toBeNull();
+    expect(g.rewind!(swing1, 0)).toBeNull();
+  });
+
+  it("stays deterministic: a rewound game equals one fed the swing at that tick", () => {
+    const back = 5;
+    const { g } = served(back);
+    expect(g.rewind!(swing1, back)).not.toBeNull();
+    // the same game, with the swing applied live at the earlier tick
+    const live = tennis.create(7);
+    const peek = createState(7);
+    let i = 0;
+    for (; i < 1000; i++) {
+      const c = predictContact(peek, 1);
+      if (peek.phase === "rally" && c && c.ticks === 0) break;
+      const x = c ? c.ball.x : 0;
+      live.step([{ seat: 1, input: { t: "move", x } }]);
+      step(peek, [{ t: "move", seat: 1, x }]);
+    }
+    live.step([swing1]);
+    for (let k = 1; k < back; k++) live.step([]);
+    expect(g.snapshot()).toEqual(live.snapshot());
+  });
+});
+
+describe("rewind cap (ADR 001)", () => {
+  it("rewinds to the tick on screen when the measured lag covers it", () => {
+    // 100 ms round trip + 50 ms margin = 9 ticks allowed; claimed 4 back
+    expect(rewindTicks(1000, 996, 100)).toBe(4);
+  });
+
+  it("never reaches further back than the measured round trip allows", () => {
+    // 20 ms round trip + 50 ms margin = 5 ticks, though 9 were claimed
+    expect(rewindTicks(1000, 991, 20)).toBe(5);
+  });
+
+  it("never reaches further back than 150 ms, whatever the lag", () => {
+    expect(rewindTicks(1000, 900, 2000)).toBe(MAX_REWIND_TICKS);
+    expect(MAX_REWIND_TICKS * TICK_MS).toBeCloseTo(150, 0);
+  });
+
+  it("gives nothing for unmeasured lag, no claim, or a claim from the future", () => {
+    expect(rewindTicks(1000, 995, null)).toBe(0);
+    expect(rewindTicks(1000, undefined, 100)).toBe(0);
+    expect(rewindTicks(1000, 1005, 100)).toBe(0);
+  });
+});
+
+describe("pending point (ADR 001: points are final once confirmed)", () => {
+  /** A ball heading past seat 1, too high and long to bounce in. */
+  function longBall(): TennisState {
+    const s = createState(3);
+    s.phase = "rally";
+    s.lastHitter = 0;
+    s.shots = 1;
+    s.ball = { x: 0, y: 1.1, z: -COURT.halfL + 8, vx: 0, vy: 2.5, vz: -14 };
+    s.players[1] = { x: 0, targetX: 0 };
+    return s;
+  }
+
+  it("scores an unreturned ball CONFIRM_TICKS after it is decided, not at once", () => {
+    const s = longBall();
+    let decidedAt = -1;
+    let scoredAt = -1;
+    for (let t = 0; t < 200 && scoredAt < 0; t++) {
+      const e = step(s, []);
+      if (decidedAt < 0 && s.pending) decidedAt = s.tick;
+      if (e.some((x) => x.type === "point")) scoredAt = s.tick;
+    }
+    expect(decidedAt).toBeGreaterThan(0);
+    expect(scoredAt - decidedAt).toBe(CONFIRM_TICKS);
+    // seat 0's shot landed out: seat 1 wins it
+    expect(s.score).toEqual([0, 1]);
+  });
+
+  it("a long ball bouncing out behind the receiver waits, as the receiver could have played it", () => {
+    const s = longBall();
+    for (let t = 0; t < 200 && !s.lastBounce; t++) step(s, []);
+    expect(s.lastBounce?.in).toBe(false);
+    expect(s.pending).toMatchObject({ winner: 1, reason: "out" });
+    expect(s.score).toEqual([0, 0]);
+  });
+
+  it("a ball into the net or on the hitter's own side still scores at once", () => {
+    const net = createState(3);
+    net.phase = "rally";
+    net.lastHitter = 0;
+    net.ball = { x: 0, y: 0.3, z: 0.1, vx: 0, vy: 0, vz: -14 };
+    expect(step(net, [])).toContainEqual(expect.objectContaining({ type: "point", winner: 1, reason: "net" }));
+    expect(net.pending).toBeNull();
+  });
+
+  it("nothing else can score while a point is pending", () => {
+    const s = longBall();
+    for (let t = 0; t < 200 && !s.pending; t++) step(s, []);
+    const pending = { ...s.pending! };
+    const before = [s.score[0], s.score[1]];
+    while (s.tick < pending.atTick - 1) {
+      expect(step(s, []).some((e) => e.type === "point")).toBe(false);
+    }
+    expect([s.score[0], s.score[1]]).toEqual(before);
   });
 });

@@ -4,6 +4,7 @@ import type { GameEvent, GameInstance } from "../shared/games/registry.ts";
 import type { ClientMsg, ServerMsg } from "../shared/protocol.ts";
 import { recordMatch } from "./db.ts";
 import { log } from "./log.ts";
+import { TICK_MS, rewindTicks } from "./rewind.ts";
 
 export type Seat = 0 | 1;
 
@@ -38,7 +39,6 @@ export function onPong(c: Client, id: number): void {
   c.rtt = c.rtt === null ? sample : c.rtt + (sample - c.rtt) * RTT_SMOOTHING;
 }
 
-const TICK_MS = 1000 / 60;
 const BROADCAST_EVERY = 2;
 const SWING_COOLDOWN_TICKS = 15;
 // Clients send a move target about 20-30 times a second; more than this is dropped.
@@ -72,6 +72,10 @@ class Room {
     { start: 0, count: 0 },
   ];
   private ticks = 0;
+  // ticks the game itself has stepped, which is what clients see and claim
+  private simTick = 0;
+  // how far back each seat's latest swing was allowed to be judged, for the log
+  private allowed: [number, number] = [0, 0];
   private paused = false;
   private startedAt = performance.now();
   private recorded = false;
@@ -142,7 +146,19 @@ class Room {
     if (c.seat === null) return;
     if (this.ticks - this.lastSwing[c.seat] < SWING_COOLDOWN_TICKS) return;
     this.lastSwing[c.seat] = this.ticks;
-    this.pending.push({ seat: c.seat, input: { t: "swing", dirX: msg.dirX, kind: msg.kind, level: msg.level, hand: msg.hand, lift: msg.lift, timingAim: msg.timingAim } });
+    const swing = { seat: c.seat, input: { t: "swing", dirX: msg.dirX, kind: msg.kind, level: msg.level, hand: msg.hand, lift: msg.lift, timingAim: msg.timingAim } };
+    const back = this.rewindAllowed(c, msg.tick);
+    this.allowed[c.seat] = back;
+    const events = back > 0 && this.ready() && !this.paused ? this.instance.rewind?.(swing, back) : null;
+    if (events) {
+      for (const e of events) this.report(e, e.type === "swing" ? back : 0);
+      return;
+    }
+    this.pending.push(swing);
+  }
+
+  private rewindAllowed(c: Client, claimed: number | undefined): number {
+    return rewindTicks(this.simTick, claimed, c.rtt);
   }
 
   /** Only the player in a practice room can pause: nobody else is waiting on them. */
@@ -174,13 +190,14 @@ class Room {
   }
 
   /** Logs what a step did; a player's own swing ruling also goes back to them. */
-  private report(e: GameEvent): void {
+  private report(e: GameEvent, rewind: number): void {
     if (e.type === "swing") {
       const c = e.seat === undefined ? null : this.seats[e.seat];
       const rtt = c?.rtt === null || c?.rtt === undefined ? null : Math.round(c.rtt);
       const outcome = String(e.outcome);
-      log("swing_resolve", { room: this.id, seat: e.seat, name: c?.name ?? "Bot", tick: this.ticks, rewind: 0, rtt, outcome });
-      if (c) send(c, { t: "swing", tick: this.ticks, outcome, rtt });
+      const allowed = e.seat === undefined || !c ? 0 : this.allowed[e.seat];
+      log("swing_resolve", { room: this.id, seat: e.seat, name: c?.name ?? "Bot", tick: this.simTick, allowed, rewind, rtt, outcome });
+      if (c) send(c, { t: "swing", tick: this.simTick, outcome, rtt, allowed, rewind });
     } else if (e.type === "point") {
       log("rally", { room: this.id, winner: e.winner, shots: e.shots, reason: e.reason });
     }
@@ -210,7 +227,8 @@ class Room {
       if (this.practice) {
         for (const input of this.instance.botInputs(BOT_SEAT)) inputs.push({ seat: BOT_SEAT, input });
       }
-      for (const e of this.instance.step(inputs)) this.report(e);
+      this.simTick++;
+      for (const e of this.instance.step(inputs)) this.report(e, 0);
     }
     this.pending = [];
     this.pendingMove = [null, null];

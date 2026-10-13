@@ -104,3 +104,38 @@ the format of the entries below (see CLAUDE.md, Docs).
   the first `pnpm check` ran the new tests against the old server and timed
   out. Fix: restart `dev:server` before checking; noted in CLAUDE.md.
 - **Follow-up:** Step 2, latency harness and baseline hit rates.
+
+## 2026-10-14 04:31 AEDT | milestone | Task 04 steps 2-3: rewind built, 64% -> 98% at 150 ms
+
+- **Situation:** Step 1 measured lag; next was a baseline harness, then the
+  server rewind from ADR 001.
+- **Outcome:** Server judges a swing at the tick the client claims, capped by
+  `rewindTicks` (`server/rewind.ts`): the measured round trip plus 50 ms,
+  never over 9 ticks (150 ms), nothing without a pong. The tennis adapter
+  keeps 12 ticks of state history and replays forward after an accepted
+  rewound hit. Logs now show `allowed` and `rewind` per swing.
+- **Tests written and results:** `spec/latency.test.ts` (400 swings spread
+  across the on-screen window, network in ticks, about 1 s): hit rate rewind
+  off / on = 100/100 at 0 ms, 89.5/100 at 50, 81.3/100 at 100, 64.5/97.8 at
+  150, 56.3/89.5 at 200. Asserts >=95% at 150 ms with rewind, <85% without.
+  `spec/sim.test.ts`: rewind hits a swing that is late now but was on time;
+  refuses one that still misses and leaves the game untouched; never crosses
+  a point; refuses past its history; a rewound game equals one fed the swing
+  live (determinism); cap tests; pending-point tests. `spec/rooms.test.ts`:
+  no rewind without measured lag; non-integer tick rejected; room allows
+  exactly the claimed ticks when lag covers them. Each key test checked to
+  fail with its guard removed. `pnpm check` 124/124 in 21 s.
+- **Design change found by measuring:** first rewind run gave no improvement
+  at all. Points past the receiver were scored before a lagged swing arrived,
+  and "points are final" then refused the rewind. Fix (user chose option 1 of
+  3): a ball past the receiver (unreturned, or bouncing out on their side) is
+  decided at once but scored 9 ticks later; a rewound hit cancels it. Net and
+  own-side balls still score at once. ADR rule 3 updated.
+- **Mistakes:** spent about 25 minutes on a real-time WebSocket-proxy harness
+  that ran minutes per attempt, printed nothing until done, hung on a
+  counting bug, and dropped "no ball" rulings (exactly the misses lag
+  causes). User flagged the run time; replaced it with the tick-model test.
+  Also briefly imported tennis code into the game-agnostic room; moved the
+  cap into `server/rewind.ts` instead.
+- **Follow-up:** Step 4, client sends the tick on screen with each swing (real
+  players get no rewind until then), then real round trips into PROCESS.md.

@@ -42,6 +42,11 @@ interface Stroke {
 
 const IDEAL_CONTACT_Y = 1;
 
+// An unreturned ball's point is scored this many ticks after it is decided,
+// matching the most a swing can be rewound (150 ms, ADR 001), so a lagged
+// swing that was on time is never refused because the point beat it.
+export const CONFIRM_TICKS = 9;
+
 // Indexed by level. Backhand hard is slower than forehand hard but steadier
 // (less sensitive to contact height).
 const STROKES: Record<SwingKind, readonly [Stroke, Stroke, Stroke]> = {
@@ -92,6 +97,9 @@ export interface TennisState {
   bounces: number;
   // shots in the current rally, the serve included
   shots: number;
+  // an unreturned ball's point, decided but not yet scored: it is scored once
+  // `atTick` comes, so a lagged swing judged earlier by rewind can still play it
+  pending: { winner: Seat; reason: PointReason; atTick: number } | null;
   // where the ball last touched down, including a bounce that ends the point
   lastBounce: { x: number; z: number; in: boolean; tick: number } | null;
   score: [number, number];
@@ -158,6 +166,7 @@ function resetServe(s: TennisState): void {
   s.lastHitter = null;
   s.bounces = 0;
   s.shots = 0;
+  s.pending = null;
   s.ball = { x: 0, y: 1, z: seatZ(s.server), vx: 0, vy: 0, vz: 0 };
 }
 
@@ -175,6 +184,7 @@ export function createState(seed: number, winScore: number | null = COURT.winSco
     lastHitter: null,
     bounces: 0,
     shots: 0,
+    pending: null,
     lastBounce: null,
     score: [0, 0],
     winScore,
@@ -196,11 +206,17 @@ export function snapshot(s: TennisState): TennisSnapshot {
     lastHitter: s.lastHitter,
     bounces: s.bounces,
     shots: s.shots,
+    pending: s.pending ? { ...s.pending } : null,
     lastBounce: s.lastBounce ? { ...s.lastBounce } : null,
     score: [s.score[0], s.score[1]],
     winScore: s.winScore,
     winner: s.winner,
   };
+}
+
+/** A full copy, rng included, so stepping it is exactly stepping the original. */
+export function cloneState(s: TennisState): TennisState {
+  return { ...snapshot(s), rng: s.rng };
 }
 
 function awardPoint(s: TennisState, winner: Seat, reason: PointReason, ev: TennisEvent[]): void {
@@ -294,6 +310,7 @@ function tryHit(s: TennisState, swing: Swing): Miss | null {
   s.lastHitter = swing.seat;
   s.bounces = 0;
   s.shots++;
+  s.pending = null;
   return null;
 }
 
@@ -328,10 +345,18 @@ function onBounce(s: TennisState, ev: TennisEvent[]): void {
   const hitterSide = hitter === 0 ? 1 : -1;
   const good = inBounds && (s.bounces > 0 || Math.sign(b.z) !== hitterSide);
   s.lastBounce = { x: b.x, z: b.z, in: good, tick: s.tick };
-  if (!inBounds) return awardPoint(s, other(hitter), "out", ev);
-  if (Math.sign(b.z) === hitterSide) return awardPoint(s, other(hitter), "own side", ev);
+  // a shot that never crossed is decided by the shot itself
+  if (Math.sign(b.z) === hitterSide) {
+    if (!inBounds) return awardPoint(s, other(hitter), "out", ev);
+    return awardPoint(s, other(hitter), "own side", ev);
+  }
+  // out on the receiver's side: they could have played it before it landed
+  if (!inBounds) {
+    s.pending = { winner: other(hitter), reason: "out", atTick: s.tick + CONFIRM_TICKS };
+    return;
+  }
   s.bounces++;
-  if (s.bounces >= 2) awardPoint(s, hitter, "unreturned", ev);
+  if (s.bounces >= 2 && !s.pending) s.pending = { winner: hitter, reason: "unreturned", atTick: s.tick + CONFIRM_TICKS };
 }
 
 export function step(s: TennisState, inputs: readonly TennisInput[]): TennisEvent[] {
@@ -360,19 +385,23 @@ export function step(s: TennisState, inputs: readonly TennisInput[]): TennisEven
   }
 
   const event = moveBall(s.ball);
-  if (event === "net") {
+  if (event === "net" && !s.pending) {
     awardPoint(s, other(s.lastHitter as Seat), "net", ev);
     return ev;
   }
-  if (event === "bounce") {
+  // once a point is decided the ball just runs on; nothing else can score
+  if (event === "bounce" && !s.pending) {
     onBounce(s, ev);
     if (s.phase !== "rally") return ev;
   }
-  if (Math.abs(s.ball.z) > COURT.halfL + COURT.endMargin) {
+  // past the receiver's end: they could have played it, so it waits for rewind
+  if (Math.abs(s.ball.z) > COURT.halfL + COURT.endMargin && !s.pending) {
     const hitter = s.lastHitter as Seat;
-    if (s.bounces >= 1) awardPoint(s, hitter, "unreturned", ev);
-    else awardPoint(s, other(hitter), "out", ev);
+    s.pending = s.bounces >= 1
+      ? { winner: hitter, reason: "unreturned", atTick: s.tick + CONFIRM_TICKS }
+      : { winner: other(hitter), reason: "out", atTick: s.tick + CONFIRM_TICKS };
   }
+  if (s.pending && s.tick >= s.pending.atTick) awardPoint(s, s.pending.winner, s.pending.reason, ev);
   return ev;
 }
 

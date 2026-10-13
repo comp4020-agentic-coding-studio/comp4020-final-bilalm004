@@ -1,6 +1,7 @@
 # 04 Netcode feel
 
-Status: decided, not built. Design in `docs/adr/001-who-wins-under-lag.md`.
+Status: server side built and measured (steps 1-3, 5); client (step 4) not started.
+Design in `docs/adr/001-who-wins-under-lag.md`.
 Model: Opus
 
 ## Goal
@@ -16,10 +17,11 @@ authority on the ball.
    - Log `swing_resolve` per swing: room, seat, claimed tick, server tick,
      rewind used, round trip, outcome (hit or miss reason).
    - Log `rally` per point: shots in the rally, how it ended.
-2. **Latency harness (spec).** A small WebSocket proxy adding a configurable
-   delay with jitter. A scripted client swings when its own rendered state
-   says the ball is at the ideal point. Record hit rate at 0, 100 and 150 ms
-   round trip, before rewind (the baseline number for PROCESS.md).
+2. **Latency harness (spec).** `spec/latency.test.ts`: the real sim and the
+   server's rewind rule, network modelled in ticks, swings spread across the
+   on-screen window. Runs in about 1 s inside `pnpm check`. (A first version
+   through a real delaying WebSocket proxy took minutes per run and had a
+   counting bug; replaced.)
 3. **Server rewind.**
    - Swing message gains `tick` (the server tick the client's screen showed).
    - Room keeps the last ~10 ticks of sim state plus the inputs applied.
@@ -42,14 +44,17 @@ authority on the ball.
    trips from the logs into PROCESS.md and the ADR.
 
 ## Done when
-- [ ] Simulated 100-150 ms round trip with jitter: a swing on time on screen
-      hits at least 95% of the time (spec, harness).
-- [ ] A swing claiming a tick older than the cap is judged at the cap, and
-      one claiming a tick before the last point is ignored (spec).
-- [ ] Rewind never exceeds a client's measured round trip plus margin (spec).
-- [ ] `swing_resolve` and `rally` lines appear in the server log (feeds 08).
-- [ ] Hit rates before and after, and real round trips, are in PROCESS.md.
-- [ ] Sim stays deterministic; `spec/sim.test.ts` still passes.
+- [x] Simulated 150 ms round trip: a swing on time on screen hits at least
+      95% of the time (97.8%; 64.5% without rewind).
+- [x] A swing claiming a tick older than the cap is judged at the cap, and
+      rewind never crosses a scored point (spec).
+- [x] Rewind never exceeds a client's measured round trip plus margin (spec).
+- [x] `swing_resolve` and `rally` lines appear in the server log (feeds 08).
+- [ ] Hit rates before and after, and real round trips, are in PROCESS.md
+      (rates are in the ADR; real round trips need play on the deployed app).
+- [x] Sim stays deterministic, rewound or not; `spec/sim.test.ts` passes.
+- [ ] Client sends `tick` with swings (step 4): until then real players get
+      no rewind.
 
 ## Notes
 This changes `shared/`, `server/` and the protocol, so run `pnpm check`
