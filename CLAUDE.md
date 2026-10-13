@@ -1,4 +1,4 @@
-# Webcam Tennis
+# Weblympics
 
 Wii-Tennis-style game in the browser. Two players (or one vs a bot) hit a shared
 ball by swinging in front of their webcam; spectators watch live. The server
