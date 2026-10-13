@@ -195,3 +195,30 @@ the format of the entries below (see CLAUDE.md, Docs).
 - **Lesson:** With another session in the tree, verify on clean HEAD before
   attributing failures to the environment (already in CLAUDE.md; I checked
   the trail test that way but not the camera one).
+
+## 2026-10-14 05:32 AEDT | bug | Joiner's view cut off: their camera sat inside the end stand
+
+- **Situation:** User reported that the player who joins by invite link sees
+  half the page cut off.
+- **Cause:** Reproduced with two browsers at both viewports. Page layout was
+  fine (both canvases fill the screen); the 3D view was not. The arena was
+  built for the seat-0 camera only: end stand, wall segment, trees, clouds
+  and hills all at -z. The seat-1 camera sits at z -22, y 9, inside the end
+  stand's footprint (z -17.6 to -24.2), so it looked down through the tiers.
+  The bottom half of the joiner's screen was one flat green, hiding their
+  own player.
+- **Fix:** `buildStadium(scene, behindSeat1)` builds the arena (lights
+  included) into a group and turns it 180 degrees for seat 1, so the joiner
+  gets the host's exact view. Background and fog stay on the scene. Rejected:
+  removing the end stand (both ends bare) and moving both cameras (re-tuning
+  at two viewports).
+- **Test written:** e2e "the player who joins by invite link sees the whole
+  court, not a wall": host creates a room, a second browser opens the invite
+  link, and the brightness spread over the joiner's near court must exceed
+  60. Without the fix it is exactly 0 at both viewports (checked).
+- **Verification:** shared-tree e2e had one desktop camera failure (a click
+  timeout on "Stop camera"). On a clean worktree of HEAD plus only these
+  files, `pnpm e2e --workers=1` passed 22/22, so the failure comes from the
+  other session's uncommitted `client/style.css` and `client/ui/menu.ts`.
+  Also: my first 8090 check ran against a stale server still holding the
+  port; reran on a fresh one.

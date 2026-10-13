@@ -124,3 +124,51 @@ test("a swing carries the tick on screen, and the server allows rewind for it (A
   // rewind; before the client sent its tick this was 0 for every real swing
   expect(rulings.some((r) => (r.allowed as number) > 0)).toBe(true);
 });
+
+/** Spread of brightness over a region of a screenshot (0 = one flat colour). */
+async function brightnessSpread(page: Page, png: Buffer, region: { x: number; y: number; w: number; h: number }): Promise<number> {
+  const probe = await page.context().newPage();
+  const spread = await probe.evaluate(
+    async ({ data, r }) => {
+      const img = new Image();
+      img.src = `data:image/png;base64,${data}`;
+      await img.decode();
+      const c = document.createElement("canvas");
+      c.width = img.width;
+      c.height = img.height;
+      const g = c.getContext("2d")!;
+      g.drawImage(img, 0, 0);
+      const px = g.getImageData(Math.round(r.x * img.width), Math.round(r.y * img.height), Math.round(r.w * img.width), Math.round(r.h * img.height)).data;
+      let min = 255;
+      let max = 0;
+      for (let i = 0; i < px.length; i += 4) {
+        const v = (px[i] + px[i + 1] + px[i + 2]) / 3;
+        min = Math.min(min, v);
+        max = Math.max(max, v);
+      }
+      return max - min;
+    },
+    { data: png.toString("base64"), r: region },
+  );
+  await probe.close();
+  return spread;
+}
+
+test("the player who joins by invite link sees the whole court, not a wall", async ({ page, browser }, testInfo) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: /create/i }).first().click();
+  await expect(page).toHaveURL(/#\/room\/[A-Z]{4}$/);
+  const viewport = page.viewportSize()!;
+  const guestContext = await browser.newContext({ viewport, isMobile: testInfo.project.name === "mobile", hasTouch: testInfo.project.name === "mobile" });
+  const guest = await guestContext.newPage();
+  await guest.goto(page.url());
+  await expect(guest.locator("canvas")).toBeVisible();
+  // the joiner takes seat 1, the end the arena was first built facing away from
+  await expect(guest.locator(".score")).toContainText("You");
+  await expect.poll(async () => Number(await guest.locator("canvas").getAttribute("data-frames"))).toBeGreaterThan(30);
+  // the near court, where the joiner's own player stands: lines, stripes and
+  // a player, never one flat colour (that was the end stand blocking the view)
+  const near = { x: 0.3, y: 0.62, w: 0.4, h: 0.22 };
+  expect(await brightnessSpread(guest, await guest.locator("canvas").screenshot(), near)).toBeGreaterThan(60);
+  await guestContext.close();
+});

@@ -87,7 +87,7 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
   canvas.dataset.frames = "0";
 
   const scene = new Scene();
-  buildStadium(scene);
+  buildStadium(scene, info.seat === 1);
 
   const ball = new Mesh(new SphereGeometry(0.2, 14, 10), new MeshLambertMaterial({ color: 0xffd426, emissive: 0x4a3a00 }));
   const shadow = new Mesh(new CircleGeometry(0.22, 12), new MeshBasicMaterial({ color: 0x000000, opacity: 0.35, transparent: true }));

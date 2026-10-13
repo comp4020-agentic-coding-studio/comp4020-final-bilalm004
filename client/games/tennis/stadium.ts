@@ -21,6 +21,7 @@ import {
   RepeatWrapping,
   Scene,
   SRGBColorSpace,
+  Group,
 } from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { COURT } from "../../../shared/games/tennis/sim.ts";
@@ -69,7 +70,7 @@ function stripes(light: string, dark: string, bands: number, widthRepeat = 1): C
   return tex;
 }
 
-function sky(scene: Scene): void {
+function sky(scene: Scene, arena: Object3D): void {
   scene.background = canvasTexture(2, 256, (g) => {
     const grad = g.createLinearGradient(0, 0, 0, 256);
     grad.addColorStop(0, "#3d8fe0");
@@ -100,7 +101,7 @@ function sky(scene: Scene): void {
     }
   }
   clouds.count = i;
-  scene.add(clouds);
+  arena.add(clouds);
 
   // distant hills
   const hills = new Mesh(
@@ -114,10 +115,10 @@ function sky(scene: Scene): void {
     ),
     flat(0x6f9a6a),
   );
-  scene.add(hills);
+  arena.add(hills);
 }
 
-function grounds(scene: Scene): void {
+function grounds(scene: Object3D): void {
   const outside = new Mesh(new PlaneGeometry(220, 220), new MeshLambertMaterial({ color: 0x3f7f45 }));
   outside.rotation.x = -Math.PI / 2;
   outside.position.y = -0.05;
@@ -160,7 +161,7 @@ function grounds(scene: Scene): void {
   scene.add(new Mesh(lines, new MeshBasicMaterial({ color: 0xffffff })));
 }
 
-function net(scene: Scene): void {
+function net(scene: Object3D): void {
   const width = W * 2 + 0.8;
   const mesh = canvasTexture(64, 16, (g) => {
     g.clearRect(0, 0, 64, 16);
@@ -212,7 +213,7 @@ const TIER_DEPTH = 1.1;
 const TIER_RISE = 0.6;
 const WALL_H = 1;
 
-function stands(scene: Scene): void {
+function stands(scene: Object3D): void {
   const list: Stand[] = [
     { x: -(INNER.halfW + 0.6), z: -2, length: INNER.halfL * 2 - 4, angle: Math.PI / 2 },
     { x: INNER.halfW + 0.6, z: -2, length: INNER.halfL * 2 - 4, angle: -Math.PI / 2 },
@@ -280,7 +281,7 @@ function stands(scene: Scene): void {
 const SHIRTS = [0xff5d5d, 0xffb347, 0xfff07a, 0x7ad8ff, 0x5d8bff, 0xc77dff, 0xff7ac8, 0xffffff, 0x7aff9b, 0xff9d5d];
 const SKIN = [0xf6d2b0, 0xe8b48c, 0xc68a5e, 0x8d5a3b, 0xfbe0c8];
 
-function crowd(scene: Scene, seats: Matrix4[]): void {
+function crowd(scene: Object3D, seats: Matrix4[]): void {
   const rand = rng(42);
   const filled = seats.filter(() => rand() < 0.82);
   const bodies = new InstancedMesh(new BoxGeometry(0.42, 0.55, 0.32), flat(0xffffff), filled.length);
@@ -298,7 +299,7 @@ function crowd(scene: Scene, seats: Matrix4[]): void {
   scene.add(bodies, heads);
 }
 
-function trees(scene: Scene): void {
+function trees(scene: Object3D): void {
   const rand = rng(99);
   const spots: [number, number][] = [];
   for (let i = 0; i < 26; i++) {
@@ -327,14 +328,23 @@ function trees(scene: Scene): void {
   scene.add(leaves, crowns, trunks);
 }
 
-export function buildStadium(scene: Scene): void {
-  scene.add(new HemisphereLight(0xe6f4ff, 0x5a8a4a, 1.5));
+/**
+ * The arena is laid out for a camera behind the +z baseline (seat 0): the end
+ * stand, trees, clouds and hills are at -z. `behindSeat1` turns it all round,
+ * so the seat-1 camera at -z gets the same view instead of sitting inside the
+ * end stand looking down through its tiers.
+ */
+export function buildStadium(scene: Scene, behindSeat1 = false): void {
+  const arena = new Group();
+  arena.add(new HemisphereLight(0xe6f4ff, 0x5a8a4a, 1.5));
   const sun = new DirectionalLight(0xfff6e6, 2.2);
   sun.position.set(8, 16, 10);
-  scene.add(sun);
-  sky(scene);
-  grounds(scene);
-  net(scene);
-  stands(scene);
-  trees(scene);
+  arena.add(sun);
+  sky(scene, arena);
+  grounds(arena);
+  net(arena);
+  stands(arena);
+  trees(arena);
+  if (behindSeat1) arena.rotation.y = Math.PI;
+  scene.add(arena);
 }
