@@ -178,7 +178,7 @@ the format of the entries below (see CLAUDE.md, Docs).
   record real round trips and `allowed`/`rewind` from the logs for PROCESS.md
   and `reflections/crit-9.md`.
 
-## 2026-10-14 05:09 AEDT | bug | Privacy e2e broke when the client started sending pong
+## 2026-10-14 05:03 AEDT | bug | Privacy e2e broke when the client started sending pong
 
 - **Situation:** Verified commit 85a5e38 against a clean worktree of HEAD
   (another session is editing `client/style.css` and `client/ui/menu.ts`).
