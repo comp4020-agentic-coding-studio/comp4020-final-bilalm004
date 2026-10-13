@@ -1,7 +1,7 @@
 # Dev log
 
-Append-only record of decisions and key events, newest at the bottom. Format
-and rules are in CLAUDE.md under "Dev log".
+Append-only record of decisions and key events, newest at the bottom. Copy
+the format of the entries below (see CLAUDE.md, Docs).
 
 ## 2026-10-14 02:49 AEDT | decision | Crit 9 is the current crit, not crit 10
 
@@ -21,3 +21,23 @@ and rules are in CLAUDE.md under "Dev log".
 - **Decision:** Set `ANTHROPIC_MODEL` to `claude-sonnet-5-5` in
   `.claude/settings.local.json` (gitignored, so not committed).
 - **Follow-up:** Takes effect on the next new session.
+
+## 2026-10-14 03:23 AEDT | decision | Under lag, the hitter's view wins, within limits
+
+- **Situation:** Crit 9 needs one recorded multi-user decision. Swings are
+  judged when they reach the server, so lag (about 120 ms round trip) spends
+  over half the 0.22 s hit window and on-time swings come back "too late".
+  Nothing measures lag today.
+- **Decision:** Judge each swing at the server tick the player's screen
+  showed (rewind), checked against the server's own history. Capped at the
+  player's measured round trip plus margin, never over 150 ms, never across a
+  point change. Client plays the hit instantly and draws the confirmed return
+  from where it is now. Written up as `docs/adr/001-who-wins-under-lag.md`.
+- **Why:** Rejected server time only (lag silently eats the window, worst for
+  the slower connection), a wider window (same slack for everyone, timing
+  stops meaning anything) and drawing the ball ahead (jumps on every return).
+  The cost lands on the opponent as a small late correction at the far end of
+  their court.
+- **Follow-up:** Build per `tasks/04-netcode-feel.md`: measure first (ping,
+  `swing_resolve` logs, latency harness baseline), then rewind, then client.
+  Spin shots for classic + timing parked until after.

@@ -12,7 +12,7 @@ Model column: **Opus** for judgment, design and writing the marker reads;
 | 01 | [README: what "good" means](01-readme-good.md) | 9, rewrite 10, 11 | Opus | - |
 | 02 | [First deploy and ship](02-deploy-ship.md) | 9 | Sonnet | - |
 | 03 | [Webcam swing input](03-webcam-input.md) | 10 | Opus then Sonnet | - |
-| 04 | [Netcode feel](04-netcode-feel.md) | 10 | Opus | - |
+| 04 | [Netcode feel](04-netcode-feel.md) (ADR 001) | 10 | Opus | - |
 | 05 | [Multi-user rules and reconnect](05-multiuser-rules.md) | 10 | Opus then Sonnet | 01 |
 | 06 | [Persistence and leaderboard](06-persistence-leaderboard.md) | 10-11 | Sonnet | 05 |
 | 07 | [Spec coverage](07-spec-coverage.md) | every crit | Sonnet | alongside 03-06 |
