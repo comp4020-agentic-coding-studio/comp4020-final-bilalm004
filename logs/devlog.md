@@ -177,3 +177,21 @@ the format of the entries below (see CLAUDE.md, Docs).
 - **Follow-up:** Push and deploy (ask first), then play two real sessions to
   record real round trips and `allowed`/`rewind` from the logs for PROCESS.md
   and `reflections/crit-9.md`.
+
+## 2026-10-14 05:09 AEDT | bug | Privacy e2e broke when the client started sending pong
+
+- **Situation:** Verified commit 85a5e38 against a clean worktree of HEAD
+  (another session is editing `client/style.css` and `client/ui/menu.ts`).
+  `pnpm check` 124/124, but the camera path e2e failed at both viewports.
+- **Cause:** That test allowlists every message type the page may send (the
+  "no video leaves the browser" check). Step 1 made the client answer pings
+  with `pong`, which wasn't on the list. The other session had already added
+  it in the shared tree, which is why my shared-tree e2e run passed.
+- **Correction:** The 04:57 entry put all three earlier e2e failures down to
+  parallel load. The trail one was load; the camera ones were this bug, and
+  my parallel run hid that.
+- **Fix:** Added `"pong"` to the allowlist (only that hunk; the other session's
+  menu and style work left uncommitted). Clean HEAD camera path e2e now 2/2.
+- **Lesson:** With another session in the tree, verify on clean HEAD before
+  attributing failures to the environment (already in CLAUDE.md; I checked
+  the trail test that way but not the camera one).

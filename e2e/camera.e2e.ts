@@ -4,7 +4,7 @@ import type { Locator, Page } from "@playwright/test";
 // Runs with Chrome's fake webcam (playwright.config.ts): a test pattern, no
 // person in it, so the camera starts and the model loads but nothing is tracked.
 
-const ALLOWED_MESSAGES = new Set(["hello", "create", "join", "move", "swing", "pause", "leave"]);
+const ALLOWED_MESSAGES = new Set(["hello", "create", "join", "move", "swing", "pause", "leave", "pong"]);
 
 async function practice(page: Page): Promise<void> {
   await page.goto("/");
