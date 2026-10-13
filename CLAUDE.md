@@ -85,6 +85,9 @@ scroll, controls reachable, canvas not clipped. Check both for any UI change.
 - Changes to `shared/`, `server/`, the protocol, the db or `spec/`: run
   `pnpm check` without being asked.
 - UI or layout changes: run `pnpm e2e` (both viewports) without being asked.
+  Use `pnpm e2e --workers=1` here: in parallel, several software-rendered
+  1080p browsers starve the frame rate, and the trail and camera tests fail
+  on code that passes one at a time.
 - Never commit or push on red. Commit when green, in small commits with clear
   messages. Gate on the test command's own exit code, never on a
   pipe into `grep` (the pipe's status is grep's, so red can look green).

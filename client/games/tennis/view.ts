@@ -9,8 +9,8 @@ import {
   SphereGeometry,
   WebGLRenderer,
 } from "three";
-import { COURT, LEVEL_NAMES, PLAYER, missReason, naturalKind, predictLanding, seatZ, swingTiming } from "../../../shared/games/tennis/sim.ts";
-import type { Hand, Level, Miss, SwingKind, TennisSnapshot } from "../../../shared/games/tennis/sim.ts";
+import { COURT, DT, LEVEL_NAMES, PLAYER, missReason, naturalKind, predictLanding, seatZ, step, swingTiming } from "../../../shared/games/tennis/sim.ts";
+import type { Hand, Level, Miss, SwingKind, TennisSnapshot, TennisState } from "../../../shared/games/tennis/sim.ts";
 import type { RoomInfo, ServerMsg } from "../../../shared/protocol.ts";
 import { createCameraInput } from "../../input/camera/index.ts";
 import { shownAim } from "../../input/camera/pose.ts";
@@ -25,6 +25,32 @@ const NET_MARK_Z = 0.8;
 
 // how long a stroke animation lasts
 const SWING_MS = 320;
+
+// Between server states the screen runs the shared sim ahead on its own, at
+// most this far: past it, something is wrong with the connection and the
+// ball should wait for the server rather than keep guessing.
+const MAX_AHEAD_TICKS = 9;
+
+let audio: AudioContext | null = null;
+
+/** A short click on every swing sent, so the hit feels instant whatever the lag. */
+function hitSound(level: Level): void {
+  try {
+    audio ??= new AudioContext();
+    const t = audio.currentTime;
+    const osc = audio.createOscillator();
+    const gain = audio.createGain();
+    osc.frequency.setValueAtTime(380 + level * 140, t);
+    osc.frequency.exponentialRampToValueAtTime(120, t + 0.07);
+    gain.gain.setValueAtTime(0.18, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+    osc.connect(gain).connect(audio.destination);
+    osc.start(t);
+    osc.stop(t + 0.09);
+  } catch {
+    // no audio (blocked or unsupported): the swing still goes
+  }
+}
 
 export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo, onLeave: () => void): () => void {
   const view = document.createElement("div");
@@ -107,6 +133,17 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
 
   let snap: TennisSnapshot | null = null;
   let snapAt = performance.now();
+  // What the screen shows: the latest server state run forward by the shared
+  // sim for the time since it arrived. Drawn, and its tick sent with every
+  // swing so the server can judge it there (ADR 001). Never decides anything:
+  // each new server state replaces it.
+  let shown: TennisState | null = null;
+  const advanceShown = (now: number): void => {
+    if (!snap) return;
+    const target = snap.tick + Math.min(MAX_AHEAD_TICKS, Math.floor((now - snapAt) / 1000 / DT));
+    if (!shown || shown.tick > target) shown = { ...structuredClone(snap), rng: 0 };
+    while (shown.tick < target) step(shown, []);
+  };
   let names: [string | null, string | null] = [null, null];
   const swingAnim: [number, number] = [0, 0];
   // racket on the right-hand side (1) or left (-1), and whether the swing is a backhand
@@ -142,7 +179,9 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
 
   const send = (level: Level, dirX: number, kind: SwingKind, hand?: Hand, lift?: number, timingAim?: boolean) => {
     if (info.seat === null) return;
-    conn.send({ t: "swing", dirX, kind, level, hand, lift, timingAim });
+    advanceShown(performance.now());
+    conn.send({ t: "swing", dirX, kind, level, hand, lift, timingAim, tick: shown?.tick });
+    hitSound(level);
     reticleLevel = level;
     // in follow mode the character is already copying the real swing
     if (cameraInput.arm() === null) animate(kind, hand);
@@ -217,6 +256,7 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
       }
       snap = next;
       snapAt = performance.now();
+      shown = null;
       updateHud();
     } else if (msg.t === "presence") {
       names = msg.names;
@@ -254,11 +294,9 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
   const frame = (now: number) => {
     raf = requestAnimationFrame(frame);
     if (snap) {
-      const e = Math.min((now - snapAt) / 1000, 0.15);
-      const b = snap.ball;
-      const x = b.x + b.vx * e;
-      const y = Math.max(0, b.y + b.vy * e - 0.5 * COURT.gravity * e * e);
-      const z = b.z + b.vz * e;
+      advanceShown(now);
+      const { x, y, z } = shown!.ball;
+      canvas.dataset.tick = String(shown!.tick);
       ball.position.set(x, y, z);
       shadow.position.set(x, 0.02, z);
       shadow.scale.setScalar(Math.max(0.4, 1.2 - y * 0.15));

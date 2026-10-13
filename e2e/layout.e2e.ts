@@ -93,3 +93,34 @@ test("on-screen buttons move and swing", async ({ page }) => {
   await page.getByRole("button", { name: /hard swing/i }).click();
   await expect.poll(() => sent.find((m) => m.t === "swing")?.level).toBe(2);
 });
+
+test("a swing carries the tick on screen, and the server allows rewind for it (ADR 001)", async ({ page }) => {
+  const sent = sentMessages(page);
+  const received: Record<string, unknown>[] = [];
+  page.on("websocket", (ws) => ws.on("framereceived", (f) => received.push(JSON.parse(String(f.payload)))));
+  await page.goto("/");
+  await page.getByRole("button", { name: /practice vs bot/i }).click();
+  await expect(page.locator("canvas")).toBeVisible();
+  // the page answers pings, so the server has measured this player's lag
+  await expect.poll(() => sent.some((m) => m.t === "pong")).toBe(true);
+  await expect.poll(() => received.filter((m) => m.t === "state").length).toBeGreaterThan(10);
+
+  // a few swings, spaced past the server's swing cooldown
+  for (let i = 0; i < 4; i++) {
+    await page.keyboard.press("Space");
+    await page.waitForTimeout(350);
+  }
+  await expect.poll(() => received.filter((m) => m.t === "swing").length).toBe(4);
+  const swings = sent.filter((m) => m.t === "swing");
+  const states = received.filter((m) => m.t === "state").map((m) => (m.state as { tick: number }).tick);
+  for (const swing of swings) {
+    expect(Number.isInteger(swing.tick)).toBe(true);
+    // the screen never runs more than 9 ticks past what the server sent
+    expect(swing.tick as number).toBeLessThanOrEqual(Math.max(...states) + 9);
+  }
+  const rulings = received.filter((m) => m.t === "swing");
+  expect(rulings.every((r) => r.rtt !== null)).toBe(true);
+  // the screen is always a little behind the server, so the server allows
+  // rewind; before the client sent its tick this was 0 for every real swing
+  expect(rulings.some((r) => (r.allowed as number) > 0)).toBe(true);
+});

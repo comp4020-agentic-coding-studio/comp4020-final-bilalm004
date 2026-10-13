@@ -20,7 +20,7 @@ The ball is a shared state - exactly one of it, living on the server, not sync c
 
 ## When lag makes two screens disagree
 
-Every player sees the ball slightly in the past, so a swing that looked on time can reach the server late. The rule: if the ball was hittable on your screen when you swung, it counts. The server checks that against its own record of that moment, never your word for it. It only looks back as far as your measured lag (at most 150 ms), and a point already scored stays scored. The cost falls on your opponent, who may see your return leave a moment late. Options and trade-offs are in [ADR 001](docs/adr/001-who-wins-under-lag.md). Status: decided, being built.
+Every player sees the ball slightly in the past, so a swing that looked on time can reach the server late. The rule: if the ball was hittable on your screen when you swung, it counts. The server checks that against its own record of that moment, never your word for it. It only looks back as far as your measured lag (at most 150 ms), and a point already scored stays scored. A ball that gets past you is scored 150 ms after it does, so a lagged swing isn't beaten by the point. The cost falls on your opponent, who may see your return leave a moment late. At 150 ms of lag this keeps 98% of on-time swings as hits, against 64% without it. Options, trade-offs and the measurements are in [ADR 001](docs/adr/001-who-wins-under-lag.md).
 
 ## Controls
 In tennis specifically: shift your shoulders to move your player along the baseline. Pick one racket hand when you set up the camera — you swing with that same arm throughout — and it's how you turn that hand, not which arm you use, that decides forehand or backhand: palm to the screen is a forehand, the back of your hand is a backhand.

@@ -151,3 +151,29 @@ the format of the entries below (see CLAUDE.md, Docs).
   combination means) near the top of ADR 001.
 - **Why:** Crit 10 has the author narrate from server logs alone, so the log
   fields need a key that can be read aloud.
+
+## 2026-10-14 04:57 AEDT | milestone | Task 04 step 4: real players now get rewind
+
+- **Situation:** Server rewind was built but no browser sent a tick, so every
+  real swing logged `allowed 0`.
+- **Outcome:** The game view now runs the latest server state forward with
+  the shared sim (at most 9 ticks ahead) and draws that, so bounces and the
+  net are drawn exactly and a confirmed return appears already on its way.
+  Every swing sends the tick on screen and plays a short Web Audio click at
+  once. The screen state never decides anything; each server state replaces
+  it. Spectator delay left out (optional).
+- **Tests written:** e2e "a swing carries the tick on screen, and the server
+  allows rewind for it": four swings in a real browser each carry a
+  whole-number tick no more than 9 past the latest state, every ruling has a
+  measured round trip, and at least one has `allowed > 0`. Checked it fails
+  with the client not sending the tick. `pnpm check` 124/124; `pnpm e2e
+  --workers=1` 20/20 at both viewports.
+- **Bug investigated, not ours:** first `pnpm e2e` had 3 failures (camera path
+  at both viewports, desktop trail). Ran the same tests against HEAD and the
+  pre-session commit in a clean worktree on :8090: the trail test failed on
+  step-1 code in parallel but passed 3/3 one at a time, and the whole suite
+  passes with `--workers=1`. Cause: parallel software-rendered 1080p browsers
+  starve the frame rate. Noted in CLAUDE.md: run e2e with `--workers=1` here.
+- **Follow-up:** Push and deploy (ask first), then play two real sessions to
+  record real round trips and `allowed`/`rewind` from the logs for PROCESS.md
+  and `reflections/crit-9.md`.

@@ -1,6 +1,7 @@
 # 04 Netcode feel
 
-Status: server side built and measured (steps 1-3, 5); client (step 4) not started.
+Status: built (steps 1-4); real round trips from the deployed app still to
+record in PROCESS.md. Spectator delay (part of step 4) not done.
 Design in `docs/adr/001-who-wins-under-lag.md`.
 Model: Opus
 
@@ -53,8 +54,9 @@ authority on the ball.
 - [ ] Hit rates before and after, and real round trips, are in PROCESS.md
       (rates are in the ADR; real round trips need play on the deployed app).
 - [x] Sim stays deterministic, rewound or not; `spec/sim.test.ts` passes.
-- [ ] Client sends `tick` with swings (step 4): until then real players get
-      no rewind.
+- [x] Client sends the tick on screen with swings, and the server allows
+      rewind for a real browser (e2e, both viewports).
+- [ ] Spectators watch ~100 ms behind live (optional; not done).
 
 ## Notes
 This changes `shared/`, `server/` and the protocol, so run `pnpm check`
