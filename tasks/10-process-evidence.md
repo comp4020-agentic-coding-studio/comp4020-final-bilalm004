@@ -1,6 +1,6 @@
 # 10 Process evidence
 
-Status: ongoing (CLAUDE.md written; crit 9 reflection and PROCESS.md written but 594 words against the 900-1100 target; rewrite each crit)
+Status: owned by the user, not assigned to agents. Ongoing (CLAUDE.md written; crit 9 reflection and PROCESS.md written but 594 words against the 900-1100 target; rewrite each crit)
 Model: Opus
 
 ## Goal

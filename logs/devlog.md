@@ -438,3 +438,11 @@ the format of the entries below (see CLAUDE.md, Docs).
   a standing rule). Files are kept; the overview has the new table.
 - **Why:** Each pair edits the same code or the same document, so one branch
   avoids the sim.ts-style conflicts seen on the first merge.
+
+## 2026-10-15 00:27 AEDT | decision | Process evidence (task 10) is the user's own, not a deliverable
+
+- **Situation:** I had grouped 01 + 10 as a "crit docs" deliverable for an agent.
+- **Outcome:** User said process evidence is theirs. Removed it from the
+  deliverables; agents leave `PROCESS.md` and the reflections alone and only
+  append devlog entries. README (01) stays a deliverable.
+- **Why:** The process mark rests on the user's own account of how they worked.

@@ -70,7 +70,11 @@ The task files stay as the detail; these are what actually gets built together.
 | Scoring and results | 11 + the storage and rating half of 06 | Both change what a match is; the leaderboard is step 2 after the score is wired |
 | Room lifecycle | 05 + 13 | One state machine in `rooms.ts`: seats, reconnect, duplicate tab, ready-up, formats, unlimited |
 | Aim aids and training mode | 16 + 17 | The three-arc aid is what training mode teaches; one set of code |
-| Crit docs | 01 + 10 (07 as a standing rule) | README and PROCESS.md are rewritten together each crit; spec coverage is part of every task's done-when, not a separate job |
+| README | 01 (07 as a standing rule) | Rewritten each crit to match what is built; spec coverage is part of every task's done-when, not a separate job |
+
+Not a deliverable: 10 (process evidence) is the user's own work. Agents don't
+edit `PROCESS.md` or the reflections; they only add devlog entries, which the
+user can draw on.
 
 Stay separate: 02 (ship), 08 (observability), 09 (menu and accessibility), 12
 (done bar the HUD level), 14 (done bar the stroke animation), 15 (auto-move;
