@@ -42,6 +42,9 @@ merge in one pass on an integration branch, run `pnpm check` and
 
 ## Old numbers (the devlog and done/ files use these)
 
+These are the numbers from before the renumbering. Tasks 12 and 13 above are new
+tasks (rally fixes, home screen) and are not the old 12 and 13 below.
+
 | Old | Now |
 |---|---|
 | 01 README | 10 |
