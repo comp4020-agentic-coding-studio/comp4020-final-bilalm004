@@ -1117,6 +1117,19 @@ a:focus-visible {
   background: var(--muted);
 }
 
+/* auto-move (task 2): leaning doesn't move you, so the gauge steps back */
+.cam-hud[data-move="auto"] .tilt-gauge {
+  opacity: 0.3;
+}
+
+.move-mode {
+  justify-self: end;
+  min-height: 44px;
+  padding: 0 0.7rem;
+  font-size: 0.85rem;
+  pointer-events: auto;
+}
+
 .camera-panel ul {
   margin: 0 0 0.75rem;
   padding-left: 1.2rem;

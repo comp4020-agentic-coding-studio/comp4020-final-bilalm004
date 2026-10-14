@@ -1,4 +1,4 @@
-import type { Hand, Level, SwingKind } from "../../../shared/games/tennis/sim.ts";
+import type { Hand, Level, MoveMode, SwingKind } from "../../../shared/games/tennis/sim.ts";
 import { CameraError, openCamera, startPose } from "./camera.ts";
 import type { CameraSession, CameraStats } from "./camera.ts";
 import {
@@ -20,8 +20,10 @@ import type { AimMode, ArmPose, CameraFrame, Calibration, SwingMode, Visibility 
 // leaves the keyboard and buttons working with a message saying why.
 
 export interface CameraCallbacks {
-  /** Movement target on screen, -1..1. */
+  /** Movement target on screen, -1..1. Only in "tilt" movement mode. */
   move(target: number): void;
+  /** The player switched movement mode with the toggle under the preview. */
+  moveMode(mode: MoveMode): void;
   /** Aim on screen, -1..1, as it was when the swing started. `lift` only in follow mode. */
   swing(level: Level, kind: SwingKind, aim: number, hand: Hand, lift?: number, timingAim?: boolean): void;
   /** The setup panel opened (true) or closed (false). */
@@ -46,11 +48,14 @@ export interface CameraInput {
   aimMode(): AimMode;
   /** The camera is running (tracking or not). */
   on(): boolean;
+  /** "auto" (default): the server moves you to the ball. "tilt": lean to move. */
+  moveMode(): MoveMode;
   dispose(): void;
 }
 
 const STORAGE_KEY = "camera-calibration";
 const SAFETY_KEY = "camera-safety-ack";
+const MOVE_MODE_KEY = "move-mode";
 const SWINGS_PER_LEVEL = 2;
 const LEVEL_WORDS = ["light", "medium", "hard"] as const;
 
@@ -81,6 +86,23 @@ function safetyAcknowledged(): boolean {
   }
 }
 
+// Per viewer; auto unless they picked lean, and auto when storage is unavailable.
+function loadMoveMode(): MoveMode {
+  try {
+    return localStorage.getItem(MOVE_MODE_KEY) === "tilt" ? "tilt" : "auto";
+  } catch {
+    return "auto";
+  }
+}
+
+function saveMoveMode(mode: MoveMode): void {
+  try {
+    localStorage.setItem(MOVE_MODE_KEY, mode);
+  } catch {
+    // storage unavailable: auto next time
+  }
+}
+
 function rememberSafety(): void {
   try {
     localStorage.setItem(SAFETY_KEY, "1");
@@ -106,13 +128,31 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
   hud.innerHTML = `<div class="grip-badge" data-grip="none" role="status" aria-live="polite" aria-label="Detected grip">NO GRIP</div>
     <div class="tilt-gauge" role="img" aria-label="Lean gauge: the middle band is no movement, the ends are the sidelines">
       <span class="tilt-dz"></span><span class="tilt-edge" data-side="l"></span><span class="tilt-edge" data-side="r"></span><span class="tilt-mark"></span>
-    </div>`;
+    </div>
+    <button class="move-mode" type="button" title="Auto: the game walks you to the ball, you only swing. Lean: shift your shoulders to move."></button>`;
   // the preview and its labels stack in one dock, so the preview can be any shape
   const dock = document.createElement("div");
   dock.className = "cam-dock";
   dock.append(video, hud);
   view.append(dock, panel);
   const gripBadge = hud.querySelector(".grip-badge") as HTMLElement;
+  const modeButton = hud.querySelector(".move-mode") as HTMLButtonElement;
+  let moveMode = loadMoveMode();
+  // the lean gauge only means something while leaning moves you: dimmed in auto
+  const renderMode = () => {
+    hud.dataset.move = moveMode;
+    modeButton.dataset.mode = moveMode;
+    modeButton.textContent = moveMode === "auto" ? "Move: auto" : "Move: lean";
+    modeButton.setAttribute("aria-label", `Movement mode: ${moveMode === "auto" ? "auto" : "lean to move"}`);
+  };
+  renderMode();
+  modeButton.addEventListener("click", () => {
+    moveMode = moveMode === "auto" ? "tilt" : "auto";
+    saveMoveMode(moveMode);
+    moves.reset();
+    renderMode();
+    cb.moveMode(moveMode);
+  });
   const tiltMark = hud.querySelector(".tilt-mark") as HTMLElement;
   // gauge spans this many degrees either side of neutral; the dead zone and edges are drawn to scale
   const GAUGE_RANGE = DEFAULT_TILT.fullTilt * 1.4;
@@ -169,7 +209,8 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
     peak = out.peak;
     // no gameplay while calibrating
     if (capture || !panel.hidden) return;
-    const target = moves.next(f.t, out.target);
+    // in auto the server moves you; leaning sends nothing
+    const target = moveMode === "tilt" ? moves.next(f.t, out.target) : null;
     if (target !== null) cb.move(target);
     if (out.swing) {
       lastLevel = out.swing.level;
@@ -255,7 +296,7 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
     let aimMode: AimMode = calib.aim;
     show(
       `<h2>Play with your camera</h2>
-       <p>Keep your head, shoulders and racket arm in view. Lean to move, swing to hit. Palm to the screen is a forehand, the back of your hand a backhand. The video stays on this device.</p>
+       <p>Keep your head, shoulders and racket arm in view. Swing to hit: the game walks you to the ball (switch to lean-to-move under the preview). Palm to the screen is a forehand, the back of your hand a backhand. The video stays on this device.</p>
        <div class="row" role="group" aria-label="Racket hand">
          <button data-hand="right">Right-handed</button>
          <button data-hand="left">Left-handed</button>
@@ -320,7 +361,7 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
   const check = () => {
     show(
       `<h2>Can we see you?</h2>
-       <p>Move until both shoulders and your racket hand are in the preview. Lean to move and it follows you; there is nothing to calibrate.</p>
+       <p>Move until both shoulders and your racket hand are in the preview. There is nothing to calibrate.</p>
        <ul class="vis" role="status">
          <li data-v="shoulders">Shoulders <b></b></li>
          <li data-v="arm">Racket wrist <b></b></li>
@@ -438,6 +479,7 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
     mode: () => calib.mode,
     aimMode: () => calib.aim,
     on: () => session !== null,
+    moveMode: () => moveMode,
     dispose() {
       button.removeEventListener("click", onButton);
       window.removeEventListener("keydown", onKey);

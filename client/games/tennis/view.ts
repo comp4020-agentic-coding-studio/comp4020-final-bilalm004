@@ -272,6 +272,9 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
     move: (target) => {
       if (info.seat !== null) conn.send({ t: "move", x: target * worldSign * (COURT.halfW + PLAYER.sideRoom) });
     },
+    moveMode: (mode) => {
+      if (info.seat !== null) conn.send({ t: "mode", mode });
+    },
     // Only a swing as the ball arrives is sent: an earlier one is a wind-up
     // (taking the racket back before a backhand looks like a forehand).
     swing: (level, kind, aim, hand, lift, timingAim) => {
@@ -290,6 +293,16 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
       updateHud();
     },
   });
+  // The server applies the movement mode to this seat; it starts each new
+  // occupant in auto, so say ours now and again after every (re)join.
+  const sendMode = () => {
+    if (info.seat !== null) conn.send({ t: "mode", mode: cameraInput.moveMode() });
+  };
+  sendMode();
+  // this view is made while the "room" message is being dispatched, and a
+  // handler added during a Set's iteration gets that same message: skip it
+  let roomEcho = true;
+  queueMicrotask(() => (roomEcho = false));
   // in world x; aiming by timing shows the on-time (straight) shot
   const currentAim = () => shownAim(cameraInput.aim(), cameraInput.aimMode(), input.aim() * worldSign) * worldSign;
 
@@ -329,6 +342,8 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
       snapAt = performance.now();
       shown = null;
       updateHud();
+    } else if (msg.t === "room" && msg.room === info.room) {
+      if (!roomEcho) sendMode();
     } else if (msg.t === "presence") {
       names = msg.names;
       updateHud();
