@@ -16,7 +16,7 @@ import type { Hand, Level, Seat, SwingKind, TennisState } from "../shared/games/
 
 /** A rally ball 6 m short of `seat`'s baseline, coming at them, with `seat` standing where it will arrive. */
 function incoming(seat: Seat): TennisState {
-  const s = createState(7, null);
+  const s = createState(7, { endless: true });
   const toward = seat === 0 ? 1 : -1;
   s.phase = "rally";
   s.lastHitter = other(seat);
@@ -107,7 +107,7 @@ describe("trajectory aid: three timing arcs", () => {
   });
 
   it("shows nothing when no ball is coming at you", () => {
-    const s = createState(1, null);
+    const s = createState(1, { endless: true });
     expect(timingArcs(s, 0, 1, "right")).toBeNull();
     expect(windowPosition(s, 0)).toBeNull();
     const mine = incoming(0);
