@@ -31,15 +31,15 @@ export type Hand = "right" | "left";
 export const LEVEL_NAMES = ["light", "medium", "hard"] as const;
 
 interface Stroke {
-  // forward speed (m/s)
+  // forward speed (m/s); the arc is lifted (and slowed) only if this is too
+  // flat to clear the net
   speed: number;
-  // upward speed at the ideal contact height (m/s)
-  loft: number;
-  // extra upward speed per metre of contact height above ideal: high balls fly
-  // long, low balls dip into the net, and the harder the swing the more so
-  heightGain: number;
+  // where the ball first lands: metres past the net on the opponent's half
+  depth: number;
 }
 
+// Height a launched ball is at when the player stands still to hit it: the
+// fallback contact for predictLanding when no ball is coming.
 const IDEAL_CONTACT_Y = 1;
 
 // An unreturned ball's point is scored this many ticks after it is decided,
@@ -47,30 +47,40 @@ const IDEAL_CONTACT_Y = 1;
 // swing that was on time is never refused because the point beat it.
 export const CONFIRM_TICKS = 9;
 
-// Indexed by level. Backhand hard is slower than forehand hard but steadier
-// (less sensitive to contact height).
-const STROKES: Record<SwingKind, readonly [Stroke, Stroke, Stroke]> = {
+// Indexed by level. Strength sets depth and pace; contact height never
+// changes where the ball lands (launch solves the upward speed). Backhand hard
+// is a little slower than forehand hard, same depth.
+export const STROKES: Record<SwingKind, readonly [Stroke, Stroke, Stroke]> = {
   forehand: [
-    { speed: 11, loft: 7, heightGain: 0.3 },
-    { speed: 14, loft: 5.2, heightGain: 0.9 },
-    { speed: 18, loft: 3.5, heightGain: 2.8 },
+    { speed: 11, depth: 4 },
+    { speed: 14, depth: 6 },
+    { speed: 18, depth: 8 },
   ],
   backhand: [
-    { speed: 11, loft: 7, heightGain: 0.3 },
-    { speed: 14, loft: 5.2, heightGain: 0.9 },
-    { speed: 16.5, loft: 4, heightGain: 1.8 },
+    { speed: 11, depth: 4 },
+    { speed: 14, depth: 6 },
+    { speed: 16.5, depth: 8 },
   ],
 };
 
-// Extra upward speed (m/s) at full lift: a high hand at contact lofts the ball.
-const LIFT_GAIN = 0.9;
+// Extra depth (m) at full lift in camera follow mode: a high hand lands deeper.
+const LIFT_DEPTH = 1;
+// Landing depth is kept within this, past the net, whatever the lift.
+const MIN_DEPTH = 2.5;
+const MAX_DEPTH = COURT.halfL - 1.5;
+// Height the ball must have when it passes over the net.
+export const NET_CLEARANCE = COURT.netH + 0.3;
 
-// Swinging a forehand at a ball on the backhand side (or the reverse).
-const MISMATCH = { speed: 0.8, loft: 1.15 } as const;
+// A ball this close to the player's middle can be taken on either side, so a
+// keyboard swing judged from a slightly older ball, or a camera swing at a ball
+// straight at you, isn't a wrong-side miss.
+export const EITHER_SIDE = 0.3;
 
-// Lateral speed per unit of forward speed at full aim, so aim lands in a
-// similar place whatever the level.
-const AIM_SPREAD = 0.2;
+// Lateral speed per unit of forward speed at full aim, by level: sideways
+// travel at full aim is this share of the flight's length. Hard spreads more,
+// so a hard shot timed at the edge of the window goes wide; that is what
+// keeps hard from being the only shot worth playing.
+const AIM_SPREAD = [0.15, 0.2, 0.26] as const;
 
 export interface Ball {
   x: number;
@@ -247,15 +257,35 @@ function launchServe(s: TennisState): void {
   s.shots = 1;
 }
 
-/** Sends the ball back from wherever it is now. Shared by real hits and predictLanding. */
-function launch(b: Ball, seat: Seat, playerX: number, dirX: number, kind: SwingKind, level: Level, hand: Hand, lift = 0): void {
+/**
+ * Sends the ball back from wherever it is now, so it first lands `depth` past
+ * the net whatever the contact height. Shared by real hits, predictLanding and
+ * so the bot. The flight time T comes from the stroke's speed; the upward
+ * speed is solved from T. If that arc would pass the net lower than
+ * NET_CLEARANCE, T is lengthened (the ball slowed and lofted) just enough.
+ * Exact for the tick integration in moveBall, not only the continuous arc.
+ */
+function launch(b: Ball, seat: Seat, dirX: number, kind: SwingKind, level: Level, lift = 0): void {
   const stroke = STROKES[kind][level];
-  const matched = naturalKind(seat, playerX, b.x, hand) === kind;
-  const speed = stroke.speed * (matched ? 1 : MISMATCH.speed);
-  const loft = (stroke.loft + (b.y - IDEAL_CONTACT_Y) * stroke.heightGain) * (matched ? 1 : MISMATCH.loft);
+  const depth = clamp(stroke.depth + clamp(lift, -1, 1) * LIFT_DEPTH, MIN_DEPTH, MAX_DEPTH);
+  // distance to the net and to the landing spot, along the court
+  const toNet = Math.max(0, b.z * Math.sign(seatZ(seat)));
+  const dist = toNet + depth;
+  let t = dist / stroke.speed;
+  // height over the net with flight time t is y(1-f) + g f(1-f) t^2 / 2,
+  // f the share of the flight spent reaching the net (same with tick steps)
+  const f = toNet / dist;
+  if (f > 0 && f < 1) {
+    const minT2 = (2 * (NET_CLEARANCE - b.y * (1 - f))) / (COURT.gravity * f * (1 - f));
+    if (minT2 > t * t) t = Math.sqrt(minT2);
+  }
+  // land on the tick the flight time says: y(n) = y + vy n dt - g dt^2 n(n+1)/2
+  const n = t / DT;
+  const vy = (COURT.gravity * DT * DT * n * (n + 1) * 0.5 - b.y) / (n * DT);
+  const speed = dist / t;
   b.vz = (seat === 0 ? -1 : 1) * speed;
-  b.vx = clamp(dirX, -1, 1) * speed * AIM_SPREAD;
-  b.vy = loft + clamp(lift, -1, 1) * LIFT_GAIN;
+  b.vx = clamp(dirX, -1, 1) * speed * AIM_SPREAD[level];
+  b.vy = vy;
 }
 
 // A swing connects within this long of the ball reaching your baseline, either
@@ -269,10 +299,22 @@ export function hitWindowDistance(b: Ball): number {
   return Math.max(COURT.hitWindow, Math.abs(b.vz) * HIT_WINDOW_S);
 }
 
-export type Miss = "no ball" | "early" | "late" | "reach" | "high";
+export type Miss = "no ball" | "early" | "late" | "reach" | "high" | "wrong side";
 
-/** Why a swing by `seat` right now would miss, or null if it would connect. */
-export function missReason(s: TennisState, seat: Seat): Miss | null {
+/**
+ * Whether `kind` suits a ball at `ballX`: the natural swing, or either one
+ * when the ball is within EITHER_SIDE of the player's middle.
+ */
+export function kindFits(seat: Seat, playerX: number, ballX: number, kind: SwingKind, hand: Hand = "right"): boolean {
+  return Math.abs(ballX - playerX) <= EITHER_SIDE || naturalKind(seat, playerX, ballX, hand) === kind;
+}
+
+/**
+ * Why a swing by `seat` right now would miss, or null if it would connect.
+ * With `kind`, a forehand at a ball on the backhand side (or the reverse) is
+ * a "wrong side" miss; without it, the side isn't checked.
+ */
+export function missReason(s: TennisState, seat: Seat, kind?: SwingKind, hand: Hand = "right"): Miss | null {
   if (s.phase !== "rally" || s.lastHitter === seat) return "no ball";
   const b = s.ball;
   const heading = seat === 0 ? b.vz > 0 : b.vz < 0;
@@ -284,6 +326,7 @@ export function missReason(s: TennisState, seat: Seat): Miss | null {
   if (past > window) return "late";
   if (Math.abs(b.x - s.players[seat].x) > PLAYER.reach) return "reach";
   if (b.y > PLAYER.maxContactY) return "high";
+  if (kind && !kindFits(seat, s.players[seat].x, b.x, kind, hand)) return "wrong side";
   return null;
 }
 
@@ -302,11 +345,11 @@ export function timingAim(b: Ball, seat: Seat, kind: SwingKind, hand: Hand): num
 }
 
 function tryHit(s: TennisState, swing: Swing): Miss | null {
-  const miss = missReason(s, swing.seat);
-  if (miss) return miss;
   const hand = swing.hand ?? "right";
+  const miss = missReason(s, swing.seat, swing.kind, hand);
+  if (miss) return miss;
   const dirX = swing.timingAim ? timingAim(s.ball, swing.seat, swing.kind, hand) : swing.dirX;
-  launch(s.ball, swing.seat, s.players[swing.seat].x, dirX, swing.kind, swing.level, hand, swing.lift);
+  launch(s.ball, swing.seat, dirX, swing.kind, swing.level, swing.lift);
   s.lastHitter = swing.seat;
   s.bounces = 0;
   s.shots++;
@@ -465,8 +508,9 @@ const PATH_EVERY_TICKS = 3;
 
 /**
  * Where `seat`'s next shot would first touch down with this aim and level,
- * using `kind` (a mismatched side is weaker, as in a real hit) or, if not
- * given, the swing that suits the ball's side. When the ball is coming at
+ * using `kind` or, if not given, the swing that suits the ball's side (a
+ * wrong-side swing at a coming ball is a miss, so it is reported not `in`).
+ * When the ball is coming at
  * them, it is hit at the predicted contact point and matches a real hit there
  * exactly. Otherwise (serve, their own shot still travelling, a ball that won't
  * reach them) it is hit from where they stand at a comfortable height, so aim
@@ -484,7 +528,9 @@ export function predictLanding(
   const playerX = s.players[seat].x;
   const contact = predictContact(s, seat);
   const b = contact ? contact.ball : { x: playerX, y: IDEAL_CONTACT_Y, z: seatZ(seat), vx: 0, vy: 0, vz: 0 };
-  launch(b, seat, playerX, aim, kind ?? naturalKind(seat, playerX, b.x, hand), level, hand);
+  // a held grip that doesn't suit the coming ball misses: shown as not in
+  const fits = !contact || !kind || kindFits(seat, playerX, b.x, kind, hand);
+  launch(b, seat, aim, kind ?? naturalKind(seat, playerX, b.x, hand), level);
   const predicted = contact !== null;
   const path = [{ x: b.x, y: b.y, z: b.z }];
   for (let i = 1; i < 600; i++) {
@@ -494,7 +540,7 @@ export function predictLanding(
     if (event === "bounce") {
       const inBounds = Math.abs(b.x) <= COURT.halfW && Math.abs(b.z) <= COURT.halfL;
       const farSide = Math.sign(b.z) === (seat === 0 ? -1 : 1);
-      return { x: b.x, z: b.z, in: inBounds && farSide, net: false, farSide, predicted, path };
+      return { x: b.x, z: b.z, in: inBounds && farSide && fits, net: false, farSide, predicted, path };
     }
   }
   // unreachable: a launched ball always comes down within 10 s

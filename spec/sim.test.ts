@@ -7,6 +7,9 @@ import {
   DT,
   PLAYER,
   CONFIRM_TICKS,
+  EITHER_SIDE,
+  LEVEL_NAMES,
+  STROKES,
   cloneState,
   createState,
   naturalKind,
@@ -51,18 +54,6 @@ function receiving(ball: Ball, playerX: number): TennisState {
 
 /** A ball at seat 1's baseline at height y, on seat 1's forehand (side 1) or backhand (side -1). */
 const atBaseline = (y: number, side: 1 | -1 = 1): Ball => ({ x: -0.5 * side, y, z: -COURT.halfL, vx: 0, vy: 0, vz: -1 });
-
-/** Hits the ball at once and runs until the point ends or seat 0 has to play it. */
-function outcome(s: TennisState, input: TennisInput): "in" | "fault" {
-  step(s, [input]);
-  expect(s.lastHitter).toBe(1);
-  for (let i = 0; i < 600; i++) {
-    if (s.score[1] > 0 || (s.bounces === 1 && s.ball.z > 0)) return "in";
-    if (s.score[0] > 0) return "fault";
-    step(s, []);
-  }
-  throw new Error("point never resolved");
-}
 
 /** A player who moves to where the ball will be and swings whenever it is close. */
 function chaser(seat: Seat): (s: TennisState) => TennisInput[] {
@@ -148,12 +139,13 @@ describe("movement and reach", () => {
 
   it("misses a ball just outside reach and hits one just inside", () => {
     const ball = atBaseline(1);
+    // seat 1 stands on the ball's +x side, so it is on their right: forehand
     const far = receiving(ball, ball.x + PLAYER.reach + 0.05);
-    step(far, [swing(1, 1, "backhand")]);
+    step(far, [swing(1, 1, "forehand")]);
     expect(far.lastHitter).toBe(0);
 
     const near = receiving(ball, ball.x + PLAYER.reach - 0.05);
-    step(near, [swing(1, 1, "backhand")]);
+    step(near, [swing(1, 1, "forehand")]);
     expect(near.lastHitter).toBe(1);
   });
 
@@ -184,7 +176,26 @@ describe("movement and reach", () => {
   });
 });
 
-describe("swing levels and contact height", () => {
+/**
+ * Seat 1 hits `ball` at once; follows the shot to its first touchdown.
+ * Returns where it landed and how high it was as it crossed the net.
+ */
+function firstLanding(ball: Ball, playerX: number, input: TennisInput): { z: number; x: number; netY: number | null; net: boolean } {
+  const s = receiving(ball, playerX);
+  step(s, [input]);
+  expect(s.lastHitter).toBe(1);
+  let netY: number | null = null;
+  for (let i = 0; i < 600; i++) {
+    const prevZ = s.ball.z;
+    const events = step(s, []);
+    if (prevZ <= 0 && s.ball.z > 0) netY = s.ball.y;
+    if (events.some((e) => e.type === "point" && e.reason === "net")) return { z: 0, x: s.ball.x, netY, net: true };
+    if (s.lastBounce) return { z: s.lastBounce.z, x: s.lastBounce.x, netY, net: false };
+  }
+  throw new Error("never landed");
+}
+
+describe("swing levels: strength sets depth, height is not a control", () => {
   it("each level hits harder than the one below", () => {
     const speeds = ([0, 1, 2] as const).map((level) => {
       const s = receiving(atBaseline(1), 0);
@@ -196,18 +207,44 @@ describe("swing levels and contact height", () => {
     expect(speeds[2]).toBeGreaterThan(speeds[1]);
   });
 
-  it("a low ball hit hard goes into the net, while light gets it over", () => {
-    expect(outcome(receiving(atBaseline(0.5), 0), swing(1, 2))).toBe("fault");
-    expect(outcome(receiving(atBaseline(0.5), 0), swing(1, 0))).toBe("in");
+  // Regression: depth used to depend on contact height (loft + heightGain),
+  // so a low ball hit hard went into the net and a high one went long.
+  const heights = [0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.4, 1.5];
+  for (const kind of ["forehand", "backhand"] as const) {
+    for (const level of [0, 1, 2] as const) {
+      it(`${kind} ${LEVEL_NAMES[level]} clears the net and lands in, at its depth, from any contact height`, () => {
+        // seat 1's forehand side is -x
+        const side = kind === "forehand" ? 1 : -1;
+        for (const y of heights) {
+          const l = firstLanding(atBaseline(y, side), 0, swing(1, level, kind));
+          expect(l.net, `y ${y}`).toBe(false);
+          expect(l.netY!, `y ${y}`).toBeGreaterThan(COURT.netH);
+          expect(l.z, `y ${y}`).toBeGreaterThan(0);
+          expect(l.z, `y ${y}`).toBeLessThanOrEqual(COURT.halfL);
+          expect(Math.abs(l.x), `y ${y}`).toBeLessThanOrEqual(COURT.halfW);
+          expect(Math.abs(l.z - STROKES[kind][level].depth), `y ${y}`).toBeLessThan(0.5);
+        }
+      });
+    }
+  }
+
+  it("lands light short, medium mid-court and hard deep, inside the far half", () => {
+    const depth = ([0, 1, 2] as const).map((level) => firstLanding(atBaseline(1), 0, swing(1, level)).z);
+    expect(depth[0]).toBeLessThan(depth[1]);
+    expect(depth[1]).toBeLessThan(depth[2]);
+    expect(depth[2]).toBeLessThan(COURT.halfL);
   });
 
-  it("a high ball hit hard goes long, while medium keeps it in", () => {
-    expect(outcome(receiving(atBaseline(2), 0), swing(1, 2))).toBe("fault");
-    expect(outcome(receiving(atBaseline(2), 0), swing(1, 1))).toBe("in");
-  });
-
-  it("a ball at a comfortable height can be hit hard", () => {
-    expect(outcome(receiving(atBaseline(1.1), 0), swing(1, 2))).toBe("in");
+  it("still clears the net from early or late in the hit window", () => {
+    // a 14 m/s ball: the window reaches about 3 m either side of the baseline
+    for (const ahead of [-2.8, 2.8]) {
+      for (const level of [0, 1, 2] as const) {
+        const l = firstLanding({ ...atBaseline(0.5), z: -COURT.halfL + ahead, vz: -14 }, 0, swing(1, level));
+        expect(l.net).toBe(false);
+        expect(l.z).toBeGreaterThan(0);
+        expect(l.z).toBeLessThanOrEqual(COURT.halfL);
+      }
+    }
   });
 });
 
@@ -226,18 +263,31 @@ describe("forehand and backhand", () => {
     expect(back.ball.vz).toBeLessThan(fore.ball.vz);
   });
 
-  it("backhand hard is steadier: it keeps a high ball in where forehand hard goes long", () => {
-    expect(outcome(receiving(atBaseline(1.6, 1), 0), swing(1, 2, "forehand"))).toBe("fault");
-    expect(outcome(receiving(atBaseline(1.6, -1), 0), swing(1, 2, "backhand"))).toBe("in");
+  it("a swing that doesn't match the ball's side is a miss: wrong side", () => {
+    const matched = receiving(atBaseline(1, -1), 0);
+    expect(step(matched, [swing(1, 1, "backhand")])).toContainEqual({ type: "swing", seat: 1, outcome: "hit" });
+    for (const [side, kind] of [[-1, "forehand"], [1, "backhand"]] as const) {
+      const s = receiving(atBaseline(1, side), 0);
+      expect(missReason(s, 1, kind)).toBe("wrong side");
+      expect(step(s, [swing(1, 1, kind)])).toContainEqual({ type: "swing", seat: 1, outcome: "wrong side" });
+      expect(s.lastHitter).toBe(0);
+    }
   });
 
-  it("a swing that doesn't match the ball's side is weaker", () => {
-    const matched = receiving(atBaseline(1, -1), 0);
-    step(matched, [swing(1, 1, "backhand")]);
-    const mismatched = receiving(atBaseline(1, -1), 0);
-    step(mismatched, [swing(1, 1, "forehand")]);
-    expect(mismatched.lastHitter).toBe(1);
-    expect(mismatched.ball.vz).toBeLessThan(matched.ball.vz);
+  it("wrong side follows the hand: a left-hander's forehand is on the other side", () => {
+    const s = receiving(atBaseline(1, 1), 0);
+    expect(missReason(s, 1, "forehand", "left")).toBe("wrong side");
+    expect(missReason(s, 1, "backhand", "left")).toBeNull();
+    step(s, [{ ...swing(1, 1, "backhand"), hand: "left" } as TennisInput]);
+    expect(s.lastHitter).toBe(1);
+  });
+
+  it("a ball straight at you can be taken on either side", () => {
+    for (const kind of ["forehand", "backhand"] as const) {
+      const s = receiving({ ...atBaseline(1), x: EITHER_SIDE - 0.05 }, 0);
+      step(s, [swing(1, 1, kind)]);
+      expect(s.lastHitter).toBe(1);
+    }
   });
 });
 
@@ -257,23 +307,18 @@ describe("predictLanding", () => {
         run(s, contact.ticks);
         step(s, [swing(1, level, naturalKind(1, s.players[1].x, s.ball.x), aim)]);
         expect(s.lastHitter).toBe(1);
-        let prev = { ...s.ball };
-        while (s.phase === "rally" && s.lastHitter === 1 && s.bounces === 0) {
-          prev = { ...s.ball };
-          step(s, []);
-        }
-        const landed = { x: prev.x + prev.vx * DT, z: prev.z + prev.vz * DT };
+        s.lastBounce = null;
+        while (s.lastBounce === null) step(s, []);
+        const landed = s.lastBounce as { x: number; z: number; in: boolean };
         expect(predicted.x).toBeCloseTo(landed.x, 6);
         expect(predicted.z).toBeCloseTo(landed.z, 6);
+        expect(predicted.in).toBe(landed.in);
       }
     }
   });
 
-  it("reports a low ball hit hard as not in", () => {
-    const landing = predictLanding(receiving(atBaseline(0.5), 0), 1, 0, 2);
-    expect(landing.in).toBe(false);
-    expect(landing.farSide).toBe(false);
-    expect(predictLanding(receiving(atBaseline(0.5), 0), 1, 0, 0).in).toBe(true);
+  it("reports a low ball hit hard as in, like any level", () => {
+    for (const level of [0, 1, 2] as const) expect(predictLanding(receiving(atBaseline(0.5), 0), 1, 0, level).in).toBe(true);
   });
 
   it("falls back to aim alone during the serve and while your own shot is travelling", () => {
@@ -300,13 +345,22 @@ describe("predictLanding", () => {
     expect(predictLanding(s, 0, -1, 1).x).toBeLessThan(predictLanding(s, 0, 1, 1).x);
   });
 
-  it("uses the grip you hold: a backhand at a forehand-side ball lands shorter", () => {
+  it("uses the grip you hold: a backhand at a forehand-side ball is shown as not in", () => {
     // seat 1's forehand side is -x; this ball is on it
     const s = receiving(atBaseline(1, 1), 0);
     const natural = predictLanding(s, 1, 0, 1);
-    const held = predictLanding(s, 1, 0, 1, "right", "backhand");
     expect(predictLanding(s, 1, 0, 1, "right", "forehand")).toEqual(natural);
-    expect(Math.abs(held.z)).toBeLessThan(Math.abs(natural.z));
+    expect(natural.in).toBe(true);
+    expect(predictLanding(s, 1, 0, 1, "right", "backhand").in).toBe(false);
+  });
+
+  it("full aim stays in at light and medium but goes wide at hard: hard is the risky shot", () => {
+    const s = receiving(atBaseline(1), 0);
+    s.ball.x = 0;
+    expect(predictLanding(s, 1, 1, 0).in).toBe(true);
+    expect(predictLanding(s, 1, 1, 1).in).toBe(true);
+    expect(predictLanding(s, 1, 1, 2).in).toBe(false);
+    expect(predictLanding(s, 1, 0.6, 2).in).toBe(true);
   });
 
   it("moves the landing point with the aim", () => {
@@ -458,6 +512,26 @@ describe("timing aim", () => {
     expect(timingAim(early, 1, "forehand", "left")).toBeCloseTo(-fh, 6);
     const mirrored = { ...early, z: -early.z, vz: -early.vz };
     expect(timingAim(mirrored, 0, "forehand", "right")).toBeCloseTo(-fh, 6);
+  });
+
+  it("maps timing to a side for every seat, hand and kind (early pulls across the body)", () => {
+    // [seat, hand, kind] -> world sign of an early swing's aim
+    const table = [
+      [1, "right", "forehand", 1],
+      [1, "right", "backhand", -1],
+      [1, "left", "forehand", -1],
+      [1, "left", "backhand", 1],
+      [0, "right", "forehand", -1],
+      [0, "right", "backhand", 1],
+      [0, "left", "forehand", 1],
+      [0, "left", "backhand", -1],
+    ] as const;
+    for (const [seat, hand, kind, sign] of table) {
+      const early = seat === 1 ? ballAt(0.15) : { ...ballAt(0.15), z: COURT.halfL - 14 * 0.15, vz: 14 };
+      const late = seat === 1 ? ballAt(-0.15) : { ...ballAt(-0.15), z: COURT.halfL + 14 * 0.15, vz: 14 };
+      expect(Math.sign(timingAim(early, seat, kind, hand)), `${seat} ${hand} ${kind}`).toBe(sign);
+      expect(Math.sign(timingAim(late, seat, kind, hand)), `${seat} ${hand} ${kind}`).toBe(-sign);
+    }
   });
 
   it("a timing-aimed swing ignores dirX and uses the server's own ball position", () => {

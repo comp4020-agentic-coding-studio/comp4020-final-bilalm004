@@ -159,6 +159,7 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
     late: "too late",
     reach: "out of reach",
     high: "too high",
+    "wrong side": "wrong side",
   };
   const showStroke = (kind: SwingKind, level: Level, note: string, miss: Miss | null = null) => {
     const why = miss ? ` · ${MISS_WORDS[miss]}` : "";
@@ -186,7 +187,7 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
     // in follow mode the character is already copying the real swing
     if (cameraInput.arm() === null) animate(kind, hand);
     // a hint from the latest state: the server decides, a frame or two later
-    showStroke(kind, level, "", snap ? missReason({ ...snap, rng: 0 }, info.seat) : null);
+    showStroke(kind, level, "", snap ? missReason({ ...snap, rng: 0 }, info.seat, kind, hand) : null);
   };
   // Keys and buttons have no forehand/backhand, so they use the one that suits the ball.
   const swing = (level: Level, dirX: number) => {

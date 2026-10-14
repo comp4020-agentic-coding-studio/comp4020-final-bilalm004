@@ -273,3 +273,39 @@ the format of the entries below (see CLAUDE.md, Docs).
 - **Output:** tasks 11-18 and the "Gameplay rework" section in
   `tasks/00-overview.md` (build order and which tasks can run as parallel
   agents). Open: three or two strength levels; target depths need playtesting.
+
+## 2026-10-14 23:17 AEDT | decision | Shot rules: strength sets depth, height solved, wrong side is a miss (task 12)
+
+- **Situation:** Depth depended on contact height (`loft + heightGain`), so a
+  low ball hit hard went into the net and a high one long, though the player
+  never controls height. A mismatched forehand/backhand was a weaker shot.
+- **Measured first** (throwaway bot-vs-bot script, 200 seeds x 2 min, old
+  code): medium returns are met at 0.84-1.11 m (median 0.91), serve returns at
+  1.04-1.11 m. With every swing forced light, contact is 1.11-1.46 m; forced
+  hard, 0.38-1.11 m (median 0.45) and 4871 of 5003 points end in the net.
+  Old `predictLanding` at 0.5-1.5 m: medium depth drifts 3.7-8.1 m, hard is in
+  the net at 0.6-0.8 m and out at 1.5 m.
+- **Decision:** `STROKES` is `{ speed, depth }`; light 11 m/s to 4 m past the
+  net, medium 14 m/s to 6 m, hard 18 m/s (backhand 16.5) to 8 m, all inside
+  the 11 m half. `launch()` takes the flight time from speed and solves the
+  upward speed for the tick integration (`moveBall`), lengthening the flight
+  only if the ball would cross lower than net + 0.3 m. Sweep of 2250 cases
+  (contact 0.1-2.6 m, anywhere in the hit window, all levels, kinds, aims):
+  none in the net, none long; depth within 0.3 m of target. `MISMATCH` deleted;
+  `missReason(s, seat, kind, hand)` returns `"wrong side"`, except within 0.3 m
+  of the player's middle where either side works. Follow-mode lift now moves
+  depth by up to 1 m. The client labels the miss "wrong side".
+- **Why three levels, and why hard doesn't win everything:** with height gone,
+  hard would be strictly best, so hard gets a wider aim spread (0.15 / 0.2 /
+  0.26 per level). Over the whole timing window, timing-aimed shots go out 8%
+  light, 15% medium, 29% hard; hard reaches the far baseline in 1.2 s against
+  1.56 s medium and 1.98 s light. Three distinct trade-offs, so three levels.
+  Bot-only rallies at forced hard still last (mean 15.7 shots), because the
+  bot never aims at full width; only people take the risk.
+- **Tests:** table test (0.5-1.5 m, every level, both kinds: clears the net,
+  lands in, near its depth) failed 13 tests on the old sim (hard in the net or
+  long; light/medium off depth) and passes now; wrong side for each kind and
+  for a left hand; timing side mapping for every seat, hand and kind.
+  `pnpm check` 132/132.
+- **Open:** HUD showing the detected level (task 12), playtest of the depths,
+  and task 14 must make the grip reliable now that a wrong grip is a miss.

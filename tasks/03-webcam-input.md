@@ -30,9 +30,10 @@ the same events the keyboard sends. Camera is for gameplay only.
   drive the same marker.
 - **Swing strength: three levels, light / medium / hard.** Peak wrist speed
   (shoulder-widths per second) against two calibrated thresholds with
-  hysteresis. Each level sets launch speed and loft. Contact height matters: a
-  low ball hit hard risks the net, a high ball hit hard risks going long, so
-  hard is riskier. The swing event sends `level` (0, 1, 2) instead of `power`.
+  hysteresis. Each level sets launch speed and landing depth; since task 12
+  contact height no longer matters (`launch()` solves the arc), and hard is
+  riskier through a wider aim spread instead. The swing event sends `level`
+  (0, 1, 2) instead of `power`.
 - **Forehand vs backhand: the grip, not the swing direction** (changed after
   the first playtest). Palm toward the camera is a forehand grip, the back of
   the hand a backhand, read from the forearm (elbow to wrist) against the
@@ -40,9 +41,9 @@ the same events the keyboard sends. Camera is for gameplay only.
   or not. An unclear reading keeps the last grip. The swing uses the grip
   held when it started. In a backhand stance, aim is measured from the
   calibrated neutral reflected across the body, and the reticle shows the
-  backhand (mismatch penalty included). Forehand gets all three levels at full
-  strength; backhand hard is capped slightly below forehand hard but steadier.
-  A swing type that doesn't match the ball's side is weaker.
+  backhand. Forehand gets all three levels at full strength; backhand hard is
+  capped slightly below forehand hard. A swing type that doesn't match the
+  ball's side is a "wrong side" miss (task 12; it used to be a weaker shot).
 
 - **Swing style: two modes, switchable in the camera panel** (remembered per
   browser; code: `Calibration.mode` in `client/input/camera/pose.ts`).
@@ -117,6 +118,7 @@ the same events the keyboard sends. Camera is for gameplay only.
 - Stroke table in `shared/games/tennis/sim.ts` (speed, loft, height gain per
   level and kind). Tuned so light is safe at any height and hard only works
   from about 0.9 to 1.5 m; bot-vs-bot contacts land around 0.85-1.1 m.
+  Replaced in task 12 by speed and depth per level, with the arc solved.
 - Keyboard/touch move = target at the sideline while held, then the last
   server position on release, so it overshoots by about one round trip of
   movement. Revisit in task 04 if it feels sticky.

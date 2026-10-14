@@ -1,6 +1,6 @@
 # 12 Shot rules: strength, height, timing, wrong side
 
-Status: planned
+Status: in progress (sim rules, tests and miss label done; HUD level display open)
 Model: Opus for the design and tuning, Sonnet for the tests
 
 ## Goal
@@ -29,11 +29,35 @@ timing aim are the camera's only modes.
   wrong camera grip costly, so task 14 must make the grip reliable first or
   auto-pick the kind from the ball's side.
 
+## Decisions (first pass, see devlog 2026-10-14 23:17)
+- Measured bot-vs-bot contact heights (200 seeds x 2 min): medium returns are
+  met at 0.84-1.11 m (median 0.91), serve returns at 1.04-1.11 m. Everyone
+  hitting light meets the ball at 1.1-1.46 m; everyone hitting hard at
+  0.38-1.11 m (median 0.45). So 0.5-1.5 m covers real play.
+- `STROKES` is now `{ speed, depth }`: light 11 m/s to 4 m past the net,
+  medium 14 m/s to 6 m, hard 18 m/s (backhand 16.5) to 8 m. `launch()` takes
+  the flight time from the speed and solves the upward speed for the tick
+  integration, so the first bounce is within a tick's travel of the depth
+  (measured 0.02-0.3 m) from 0.1 to 2.6 m contact anywhere in the window. If
+  the arc would cross the net below `NET_CLEARANCE` (net + 0.3 m) it is
+  slowed and lofted just enough.
+- Follow-mode `lift` now adds up to +-1 m of depth (clamped 2.5 m to 9.5 m)
+  instead of upward speed.
+- **Three levels kept.** Hard pays with a wider aim spread (`AIM_SPREAD`
+  0.15 / 0.2 / 0.26): over the whole timing window, timing-aimed shots go out
+  8% light, 15% medium, 29% hard; hard reaches the far baseline in 1.2 s vs
+  1.56 s medium and 1.98 s light. Full aim stays in at light/medium and goes
+  wide at hard.
+- Wrong side: `missReason(s, seat, kind, hand)` returns `"wrong side"`; a ball
+  within `EITHER_SIDE` (0.3 m) of the player's middle can be taken either way.
+  `predictLanding` with a held grip that doesn't fit shows `in: false`.
+
 ## Done when
-- [ ] Table test: contact heights 0.5-1.5 m, every level, both kinds: lands in
+- [x] Table test: contact heights 0.5-1.5 m, every level, both kinds: lands in
       bounds and clears the net (fails on current code).
-- [ ] Test: a swing of the wrong kind returns `"wrong side"`.
-- [ ] `predictLanding` uses the same `launch()`; bot unchanged in behaviour.
+- [x] Test: a swing of the wrong kind returns `"wrong side"`.
+- [x] `predictLanding` uses the same `launch()`; bot unchanged in behaviour
+      (bot-vs-bot mean rally 3.77 shots before, 3.9 after).
 - [ ] Detected level shown after each swing (HUD).
-- [ ] Three levels vs two decided and written here.
-- [ ] `pnpm check` green.
+- [x] Three levels vs two decided and written here.
+- [x] `pnpm check` green.
