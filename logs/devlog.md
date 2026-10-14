@@ -569,3 +569,32 @@ the format of the entries below (see CLAUDE.md, Docs).
   The layout e2e "invite link" frame-count check fails on and off on this
   branch and on a clean build of main alike while other agents' browsers keep
   the load average at 15-22; it isn't caused by this change.
+
+## 2026-10-15 02:46 AEDT | milestone | Auto-move (task 2): the server walks you to the ball, slower than you can run
+
+- **Situation:** With the camera, moving meant leaning while also timing a
+  swing, which is two skills at once. Task 2: a movement mode, the default,
+  where the server moves you and you only swing. Lean stays as the other mode.
+- **Outcome:** Each seat has a mode, `auto` or `tilt`, sent as
+  `{ t: "mode" }` (anything else is a bad message) and fed to the sim as an
+  input, so it stays in the input stream and rewind replays it. In auto
+  `autoTargetX` aims 0.6 m (`AUTO_OFFSET`) short of the predicted contact, on
+  the side the ball is heading to, so it comes on a clear forehand or backhand
+  side (past `EITHER_SIDE`, inside reach). The wrong kind still misses. The
+  bot moves by the same rule. Auto walks at `AUTO_SPEED` = 0.7 x 5 m/s.
+  Measured from the far sideline on in-landing shots, full aim is reached
+  100% light, 50% medium, 0% hard; straight shots 100% at every level.
+  Bot-vs-bot mean rally is 3.91 (3.92 before). Camera: "Move: auto / Move:
+  lean" under the preview, remembered in localStorage; in auto no lean
+  targets are sent and the lean gauge is dimmed. Tests:
+  `spec/auto-move.test.ts` (5 sim mutations each caught),
+  `spec/rooms.test.ts` "movement mode" (all 3 fail on the old server),
+  `e2e/auto-move.e2e.ts` at both viewports.
+- **Why:** The user decided auto must be slower than manual movement. At full
+  speed it reached 100/100/33% of full-aim shots, so strength would stop
+  mattering. 0.6 (80/25/0) was closer to "light almost never beats it" but
+  cut the bot's rallies to 3.76; 0.7 keeps them in the old band and gives
+  medium a true 50/50. Keyboard/touch: every seat starts in auto, and a move
+  key takes over at full speed until the next ball comes at you. Keyboard
+  players get the help by default and can still go anywhere, and no
+  keyboard-only toggle is needed. The user may overrule this.

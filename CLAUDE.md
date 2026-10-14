@@ -40,7 +40,10 @@ lazily and only when a player enters a game. Video never leaves the browser.
   panel), `net/socket.ts`, `ui/menu.ts`. Camera swings have two modes,
   "classic" (default) and "follow" (character copies the arm, hit at the
   hitting line), and two aim modes, "timing" (default) and "point"; see
-  the camera setup notes in `tasks/done/`.
+  the camera setup notes in `tasks/done/`. Movement has two modes per seat,
+  "auto" (default: the server walks you to the ball, `autoTargetX` in
+  `sim.ts`) and "tilt" (lean to move); keys and buttons move you in either
+  (task 2).
 - `spec/*.test.ts` vitest against the running app, plus the sim unit tests.
 - `e2e/*.e2e.ts` Playwright at both viewports, fake webcam.
 
@@ -83,6 +86,10 @@ lazily and only when a player enters a game. Video never leaves the browser.
   it also blocks MediaPipe's own usage pings. Don't widen it casually.
 - Camera is used for gameplay only. Every camera action has a keyboard/mouse
   equivalent, and the lobby and room work with no camera at all.
+- Auto-move (`spec/auto-move.test.ts`) walks slower than manual movement
+  (`AUTO_SPEED` share of `PLAYER.speed`) so a wide hard shot can beat it;
+  strength must keep mattering. The movement mode is an input to the sim,
+  never a client claim of position.
 - Every bug fix adds a test that fails without it. When I correct you, put the
   rule here or in `spec/`, not only in the chat.
 - Keep `README.md`, this file and `spec/` consistent; a claim in one needs to
