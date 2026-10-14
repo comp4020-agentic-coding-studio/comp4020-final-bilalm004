@@ -27,6 +27,7 @@ lazily and only when a player enters a game. Video never leaves the browser.
 - `client/` Vite app: `games/<name>/view.ts` (scene, HUD, input wiring),
   `games/tennis/stadium.ts` (arena from primitives, instanced crowd/trees),
   `games/tennis/character.ts` (Mii-style player and racket),
+  `games/tennis/stroke.ts` (forehand/backhand keyframes, shot label text),
   `games/tennis/shot-fx.ts` (ball trail, bounce marks, shot arc), `input/`
   (`keyboard.ts` for keys, pointer and buttons; `camera/` with `pose.ts` pure
   landmark maths, `camera.ts` webcam + lazy MediaPipe, `index.ts` setup
