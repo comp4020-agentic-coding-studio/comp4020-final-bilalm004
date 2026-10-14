@@ -332,3 +332,16 @@ the format of the entries below (see CLAUDE.md, Docs).
   `pnpm check` 132/132.
 - **Open:** HUD showing the detected level (task 12), playtest of the depths,
   and task 14 must make the grip reliable now that a wrong grip is a miss.
+
+## 2026-10-14 23:01 AEDT | milestone | Pure tennis scoring module (task 11, step 1)
+
+- **Situation:** Task 11 needs real tennis scoring, but `sim.ts` is being
+  changed by another session, so wiring it in now would conflict.
+- **Outcome:** Added `shared/games/tennis/scoring.ts` (immutable `ScoreState`,
+  `createScore`, `pointWon`, `fault`, `pointCalls`, `displayScore`) and
+  `spec/scoring.test.ts` (32 table-driven tests: 0/15/30/40, deuce and
+  advantage, games, sets, tiebreak serve order and win-by-2, oneSet and
+  bestOfThree, serve alternation, double fault). Sim, protocol and client
+  untouched.
+- **Why:** A pure module with no I/O or randomness keeps the server
+  authoritative and the logic testable. Wiring comes after the sim change lands.
