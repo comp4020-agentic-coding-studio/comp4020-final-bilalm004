@@ -63,7 +63,7 @@ lazily and only when a player enters a game. Video never leaves the browser.
   status line when it changes.
 - `README.md` 400-600 words on what "good" means here (served at `/readme/`).
   `PROCESS.md` 900-1100 words, rewritten each crit.
-- `logs/devlog.md` is append-only. Log when it happens, not in a batch: design
+- `logs/devlog.md` is append-only. Log design
   decisions, milestones, bugs, config changes, playtest findings, merges (with
   the checks run) and anything left unresolved. Entry: date/time from `date`,
   type, situation, outcome, why, in the format of the existing entries.
