@@ -106,6 +106,70 @@ describe("schema migrations", () => {
   });
 });
 
+/** What schema v2 made (v1 plus the V2 step), with a row in it. */
+function makeV2(path: string): void {
+  makeV1(path);
+  const db = new DatabaseSync(path);
+  db.exec(`
+    ALTER TABLE matches ADD COLUMN format TEXT NOT NULL DEFAULT 'points5';
+    ALTER TABLE matches ADD COLUMN sets TEXT NOT NULL DEFAULT '[]';
+    ALTER TABLE matches ADD COLUMN practice INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE matches ADD COLUMN rated INTEGER NOT NULL DEFAULT 0;
+    CREATE TABLE schema_version (version INTEGER NOT NULL);
+    INSERT INTO schema_version (version) VALUES (2);
+    INSERT INTO matches (room, game, p0, p1, score0, score1, winner, ended_at, format, sets, practice, rated)
+      VALUES ('V2RM', 'tennis', 't-a', 't-b', 1, 0, 0, 2000, 'oneSet', '[[6,3]]', 0, 1);
+  `);
+  db.close();
+}
+
+describe("schema v3 (task 4: unlimited)", () => {
+  it("opens a v2 database, keeps every row and its rating, and then takes a match with no winner", () => {
+    const path = freshFile();
+    makeV2(path);
+    const db = new DatabaseSync(path);
+    migrate(db);
+    expect(schemaVersion(db)).toBe(3);
+    const rows = db.prepare("SELECT room, winner, format, rated, best_rally FROM matches ORDER BY id").all();
+    expect(rows).toEqual([
+      { room: "ABCD", winner: 0, format: "points5", rated: 0, best_rally: null },
+      { room: "V2RM", winner: 0, format: "oneSet", rated: 1, best_rally: null },
+    ]);
+    insertMatch(db, match({ room: "UNLM", format: "unlimited", winner: null, score: [14, 9], sets: [], bestRally: 11 }));
+    expect(db.prepare("SELECT winner, score0, score1, rated, best_rally FROM matches WHERE room = 'UNLM'").get()).toEqual({
+      winner: null,
+      score0: 14,
+      score1: 9,
+      rated: 0,
+      best_rally: 11,
+    });
+    db.close();
+  });
+});
+
+describe("who is rated (task 4)", () => {
+  it("unlimited is never rated, even between two people with a points lead", () => {
+    expect(isRated(match({ format: "unlimited", winner: null, score: [20, 3], sets: [] }))).toBe(false);
+    // even if something claimed a winner for it
+    expect(isRated(match({ format: "unlimited", winner: 0 }))).toBe(false);
+  });
+
+  it("one person on both seats (one token, two tabs) is never rated", () => {
+    expect(isRated(match({ tokens: ["t-a", "t-a"] }))).toBe(false);
+  });
+
+  it("ratings read only rated = 1 rows", () => {
+    const db = new DatabaseSync(freshFile());
+    migrate(db);
+    insertMatch(db, match({ room: "REAL" }));
+    insertMatch(db, match({ room: "UNLM", format: "unlimited", winner: null, sets: [] }));
+    insertMatch(db, match({ room: "SELF", tokens: ["t-a", "t-a"] }));
+    insertMatch(db, match({ room: "PRAC", practice: true, tokens: ["t-a", null] }));
+    expect(db.prepare("SELECT room FROM matches WHERE rated = 1").all()).toEqual([{ room: "REAL" }]);
+    db.close();
+  });
+});
+
 describe("match rows", () => {
   it("store sets won, each set's games and the format", () => {
     const db = new DatabaseSync(freshFile());
