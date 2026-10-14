@@ -846,6 +846,103 @@ a:focus-visible {
   font-weight: 400;
 }
 
+/* FOREHAND / BACKHAND on every stroke. Wide screens: in the stands left of
+   the court, half way down (the camera dock is on the right). Narrow ones:
+   bottom left, between the near baseline and the stroke line. Never on the
+   court (e2e/stroke.e2e.ts). */
+.shot-label {
+  position: absolute;
+  left: max(0.75rem, env(safe-area-inset-left));
+  bottom: calc(max(1rem, env(safe-area-inset-bottom)) + 120px);
+  display: grid;
+  gap: 0.1rem;
+  max-width: calc(100vw - 1.5rem);
+  padding: 0.35rem 0.8rem;
+  border-radius: 10px;
+  background: #0f1720cc;
+  pointer-events: none;
+  transform-origin: left center;
+}
+
+@media (min-width: 900px) and (min-aspect-ratio: 4/3) {
+  .shot-label {
+    left: max(1rem, 3vw);
+    top: 46%;
+    bottom: auto;
+  }
+}
+
+.shot-label[hidden] {
+  display: none;
+}
+
+.shot-label b {
+  font-size: clamp(1.4rem, 2.6vw, 2.4rem);
+  letter-spacing: 0.08em;
+  line-height: 1.1;
+}
+
+/* forehand warm, backhand cool, so the two read apart at a glance */
+.shot-label[data-kind="forehand"] b {
+  color: #ffd426;
+}
+
+.shot-label[data-kind="backhand"] b {
+  color: #7cc4ff;
+}
+
+.shot-label span {
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+.shot-label span:empty {
+  display: none;
+}
+
+/* the stroke that didn't fit, struck out, with what the ball needed */
+.shot-label[data-wrong-side="true"] {
+  background: #5a1d1dcc;
+  outline: 2px solid #ff6b5a;
+}
+
+.shot-label[data-wrong-side="true"] b {
+  text-decoration: line-through 3px #ff6b5a;
+}
+
+.shot-label[data-wrong-side="true"] span {
+  color: #ffd2cc;
+  font-weight: 700;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .shot-label {
+    animation: shot-pop 220ms ease-out;
+  }
+
+  .shot-label[data-wrong-side="true"] {
+    animation: shot-shake 360ms ease-in-out;
+  }
+}
+
+@keyframes shot-pop {
+  from {
+    opacity: 0;
+    transform: translateX(-12px) scale(0.85);
+  }
+}
+
+@keyframes shot-shake {
+  20%,
+  60% {
+    transform: translateX(-6px);
+  }
+  40%,
+  80% {
+    transform: translateX(6px);
+  }
+}
+
 /* grip label and lean gauge under the camera preview */
 .cam-hud {
   display: grid;

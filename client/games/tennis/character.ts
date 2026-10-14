@@ -16,6 +16,7 @@ import {
   Vector3,
 } from "three";
 import type { ArmPose } from "../../input/camera/pose.ts";
+import { strokePose } from "./stroke.ts";
 
 // A Mii-style player built from primitives: big round head with a drawn face,
 // tapered torso and limbs, bright top, dark trousers, oval racket. Local
@@ -126,6 +127,11 @@ export interface Player {
    * from the forearm; `backhand` turns its face over.
    */
   follow(arm: ArmPose, backhand: boolean, side: 1 | -1): void;
+  /**
+   * Where the middle of the strings is now, in the player's own frame: x to
+   * their right, y up, z toward the net (metres from their feet).
+   */
+  racketHead(): { x: number; y: number; z: number };
 }
 
 const DOWN = new Vector3(0, -1, 0);
@@ -184,6 +190,7 @@ export function makePlayer(shirt: number, hair: number, racketColor: number): Pl
   const offHand = new Mesh(new SphereGeometry(0.065, 8, 6), smooth(SKIN));
   offHand.position.y = -0.56;
   offArm.add(offSleeve, offHand);
+  offArm.rotation.order = "YXZ";
   offArm.rotation.z = -0.12;
   body.add(offArm);
 
@@ -217,12 +224,18 @@ export function makePlayer(shirt: number, hair: number, racketColor: number): Pl
   const upperTarget = new Quaternion();
   const foreTarget = new Quaternion();
   const toLocal = (v: { out: number; up: number; fwd: number }) => new Vector3(v.out, v.up, -v.fwd).normalize();
+  // the middle of the strings, for racketHead()
+  const headMarker = new Group();
+  headMarker.position.y = 0.48;
+  roll.add(headMarker);
+  const headPos = new Vector3();
 
   return {
     group,
     follow(pose, backhand, side) {
       body.scale.x = side;
       body.rotation.y = 0;
+      offArm.rotation.set(0, 0, -0.12);
       upperTarget.setFromUnitVectors(DOWN, toLocal(pose.upper));
       // the forearm's direction relative to the upper arm
       foreTarget.setFromUnitVectors(DOWN, toLocal(pose.fore)).premultiply(upperTarget.clone().invert());
@@ -243,22 +256,29 @@ export function makePlayer(shirt: number, hair: number, racketColor: number): Pl
         // racket head up, tipped slightly forward
         wrist.rotation.x = Math.PI + 2.1;
         roll.rotation.y = 0;
-        body.rotation.y = backhand ? 0.3 : -0.1;
+        // the body group is mirrored for a left-hander but its turn is not,
+        // so the turn takes the side's sign
+        body.rotation.y = (backhand ? 0.3 : -0.1) * side;
+        offArm.rotation.set(0, 0, -0.12);
         return;
       }
-      const e = Math.sin((swing * Math.PI) / 2);
-      // the arm sweeps level with the shoulder, racket carried out in front
-      wrist.rotation.x = Math.PI + 0.35;
-      roll.rotation.y = Math.PI / 2;
-      if (!backhand) {
-        // from back on the racket side, across the front to the other side
-        arm.rotation.set(1.35, -2.1 + 3.0 * e, 0);
-        body.rotation.y = -0.45 + 0.8 * e;
-      } else {
-        // from back across the body, out in front to the racket side
-        arm.rotation.set(1.35, 2.0 - 2.9 * e, 0);
-        body.rotation.y = 0.55 - 0.9 * e;
-      }
+      // Each stroke has its own path (stroke.ts): the forehand low on the
+      // racket side up to high over the other shoulder, the backhand from the
+      // far hip out to the racket side with the shoulders turning the other way.
+      const p = strokePose(swing, backhand);
+      arm.rotation.set(p.armX, p.armY, 0);
+      elbow.rotation.set(p.elbow, 0, 0);
+      wrist.rotation.x = p.wristX;
+      roll.rotation.y = p.roll;
+      body.rotation.y = p.bodyY * side;
+      offArm.rotation.set(p.offX, p.offY, -0.12);
+    },
+    racketHead() {
+      group.updateMatrixWorld(true);
+      headMarker.getWorldPosition(headPos);
+      group.worldToLocal(headPos);
+      // the player's forward is local -z
+      return { x: headPos.x, y: headPos.y, z: -headPos.z };
     },
   };
 }
