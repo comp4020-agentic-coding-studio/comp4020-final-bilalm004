@@ -65,7 +65,20 @@ lazily and only when a player enters a game. Video never leaves the browser.
   `PROCESS.md` 900-1100 words, rewritten each crit.
 - `logs/devlog.md` is append-only. When a design decision, milestone, notable
   bug or config change happens, add an entry (date/time from `date`, type,
-  situation, outcome, why) in the format of the existing entries.
+  situation, outcome, why) in the format of the existing entries. Write it
+  when it happens, not in a batch later. Also log: each playtest finding, each
+  merge of agent work with the checks run on the merged tree, and anything
+  found to be wrong or left unresolved.
+- Every decision entry has a **Decided by:** line: `user` (they said it or
+  picked it in their own words), `Claude` (the main session chose it without
+  being asked) or `agent` (a subagent chose it while building). Never record
+  something as the user's unless they said or picked it; a "sure" to a summary
+  covers that action, not the numbers inside it. Tuning values (depths, speeds,
+  thresholds, offsets) are Claude's or an agent's guesses until the user
+  playtests them. Anything chosen by Claude or an agent that changes what the
+  user sees or plays is also told to the user at the time, so they can overrule
+  it. Agent briefs must ask for this line and for those choices to be flagged
+  in the report.
 
 ## Rules
 

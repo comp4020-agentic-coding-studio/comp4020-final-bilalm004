@@ -732,3 +732,20 @@ the format of the entries below (see CLAUDE.md, Docs).
   (this log, merges, task files) is Sonnet 5.5.
 - **Why:** The user wanted Opus for the building; recording it so the process
   evidence doesn't have to guess.
+
+## 2026-10-15 04:03 AEDT | decision | Devlog rule: log as it happens, and say who decided
+
+- **Decided by:** user (asked for the rule and for the user/Claude split to be
+  visible); wording by Claude.
+- **Situation:** The user checked whether things were being logged. Several
+  decisions, the merge checks and the dev-server problem had not been written
+  up until asked, and the log didn't say who made each call.
+- **Outcome:** CLAUDE.md's Docs section now requires entries when things
+  happen, entries for playtest findings, merges (with the checks run) and
+  unresolved problems, and a Decided by line (user, Claude or agent). Tuning
+  numbers count as Claude or agent guesses until the user playtests them, and
+  any visible choice by Claude or an agent is told to the user at the time.
+  Older entries have no Decided by line; the log is append-only, so they are
+  not rewritten.
+- **Why:** The process mark rests on an honest account of who decided what, and
+  the user needs to know which choices are theirs to overrule.
