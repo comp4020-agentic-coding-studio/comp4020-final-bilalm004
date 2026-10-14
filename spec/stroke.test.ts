@@ -104,4 +104,9 @@ describe("shot label", () => {
     expect(shotLabel("forehand", "wrong side")).toEqual({ text: "FOREHAND", note: "Wrong side: ball was on your backhand", wrongSide: true });
     expect(shotLabel("backhand", "wrong side").note).toMatch(/forehand/);
   });
+
+  it("a swing at a dead ball says it had already landed out, or bounced twice (task 12)", () => {
+    expect(shotLabel("forehand", "out")).toEqual({ text: "FOREHAND", note: "Too late: the ball had already landed out", wrongSide: false });
+    expect(shotLabel("backhand", "two bounces").note).toMatch(/bounced twice/);
+  });
 });

@@ -168,12 +168,16 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
   let strokeTimer = 0;
   const MISS_WORDS: Record<Miss, string> = {
     "no ball": "no ball to hit",
+    out: "it had landed out",
+    "two bounces": "it had bounced twice",
     early: "too early",
     late: "too late",
     reach: "out of reach",
     high: "too high",
     "wrong side": "wrong side",
   };
+  // server rulings the shot label explains, when the screen didn't predict them
+  const DEAD_OR_WRONG = new Set<string>(["wrong side", "out", "two bounces"] satisfies Miss[]);
   const showStroke = (kind: SwingKind, level: Level, note: string, miss: Miss | null = null) => {
     const why = miss ? ` · ${MISS_WORDS[miss]}` : "";
     strokeEl.textContent = `${kind === "forehand" ? "Forehand" : "Backhand"} · ${LEVEL_NAMES[level]}${note}${why}`;
@@ -347,9 +351,9 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
     } else if (msg.t === "presence") {
       names = msg.names;
       updateHud();
-    } else if (msg.t === "swing" && msg.outcome === "wrong side" && ownShot && performance.now() - ownShot.at < LABEL_MS && info.seat !== null) {
-      // the server's ruling: a wrong-side miss the screen didn't predict
-      showShot(info.seat, ownShot.kind, "wrong side");
+    } else if (msg.t === "swing" && DEAD_OR_WRONG.has(msg.outcome) && ownShot && performance.now() - ownShot.at < LABEL_MS && info.seat !== null) {
+      // the server's ruling: a wrong-side or dead-ball miss the screen didn't predict
+      showShot(info.seat, ownShot.kind, msg.outcome);
       ownShot = null;
     }
   });
