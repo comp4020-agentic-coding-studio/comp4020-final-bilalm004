@@ -635,3 +635,19 @@ the format of the entries below (see CLAUDE.md, Docs).
 - **Why:** The out call should follow the shot, not whether the receiver
   happened to swing. Deciding at launch is deterministic and keeps rewind
   (ADR 001) safe because the ball's own history decides.
+
+## 2026-10-15 03:34 AEDT | decision | Correction: a ball going out can be hit or left (not dead from launch)
+
+- **Situation:** I had written "a shot that will land out is dead from the
+  moment it is hit" into task 12 and told the user it was what they described.
+  The user replied that they want to be able to hit something going out, or
+  choose not to. My rule was an overreach on their report, which was about the
+  bot hitting an out ball and it not being counted as out.
+- **Decision:** the ball stays live in the air, for people and the bot alike.
+  The bot decides not to swing at a ball it predicts will land out; a person may
+  hit it or leave it, and if left it is out when it lands (their point). A ball
+  that has landed out is dead, which closes the 80 ms window after the bounce.
+- **Why:** it matches real tennis, keeps the choice with the player, and still
+  fixes both reports: the bot no longer rescues out balls, and a swing can't
+  cancel an out call after the bounce. Written into tasks/12; the agent building
+  it was told to drop the dead-from-launch design.

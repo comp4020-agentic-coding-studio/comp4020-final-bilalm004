@@ -1,6 +1,6 @@
 # 12 Rally fixes: out balls, dead ball, hit window
 
-Status: in progress (auto-move is merged); out-ball rule widened after a second playtest report
+Status: in progress (auto-move is merged); out-ball rule revised after the user's ruling that a ball going out can be hit or left
 Model: Opus
 Waits on: 2 (auto-move changes who can reach what, and the same rallies)
 
@@ -23,17 +23,18 @@ quickly". Probes against the real sim and bot (devlog, 2026-10-15) found:
 ## Decisions (agreed with the user, numbers to tune)
 - Bot lets balls go that will land out, and still plays balls that land in.
   Keep bot-vs-bot mean rally length in the 3.8-3.9 band.
-- **A shot that will land out is dead from the moment it is hit** (user report,
-  second playtest: "the trajectory pointed out, I hit it, it went out, but the
-  bot hit the out ball and it wasn't counted as out"). At launch the sim runs
-  the shot forward with the same `moveBall` to its first touchdown; if that is
-  out of bounds (or into the net, or on the hitter's own side) the ball is
-  dead: the receiver's swing at it is a miss, the bot doesn't swing at it, and
-  the point goes to the receiver when it lands, as the umpire's "out". This
-  also closes the 80 ms window after an out ball lands. A ball that will land
-  in can still be volleyed. Check against ADR 001: the flag belongs to the
-  ball since launch, so rewind from an earlier tick stays deterministic and a
-  lagged swing at a ball that was in is unaffected; add a note to the ADR.
+- **A ball that is going out can still be hit, or left alone (user ruling,
+  overriding the first draft of this task).** Volleying a ball that is going
+  out is legal tennis, so a player may hit it or let it go; if they let it go
+  and it lands out, the point is theirs (the umpire's "out"). Only the bot
+  changes: it forward-simulates the ball with the same `moveBall` (as
+  `predictLanding` does), and when the ball will land out it does not swing,
+  while it still returns balls that will land in.
+- **Once a ball has landed out it is dead:** no swing can hit it, which closes
+  the 80 ms window where a swing after an out ball landed was accepted and
+  cancelled the pending "out" (the user's "I hit it out and still got the
+  point"). ADR 001 still holds: a lagged swing at a ball that was still in the
+  air is rewound and counts; only a swing judged after the bounce is refused.
 - Widen the hit window to about 0.32 s (each third about 0.21 s). Check the
   cost: hitting gets easier and early/late aim changes more gradually; keep the
   aim spread per strength sensible.
@@ -41,9 +42,9 @@ quickly". Probes against the real sim and bot (devlog, 2026-10-15) found:
 ## Done when
 - [ ] Test: the bot lets a ball go that lands out, and returns one that lands in
       (fails on current code).
-- [ ] Test: a swing at a shot that will land out is a miss, in the air and after
-      it lands; a volley of a ball that will land in still works; a rewound
-      swing at a ball that was in still counts.
+- [ ] Test: a swing at a ball in the air that will land out is still a hit (the
+      player's choice); a swing after it has landed out is a miss; a rewound
+      swing at a ball that was still in the air counts.
 - [ ] Test: the hit window is the new value and each third of it is the length
       stated here.
 - [ ] Rally length band and strength balance re-measured and written in the
