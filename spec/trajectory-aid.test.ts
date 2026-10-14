@@ -29,6 +29,12 @@ function incoming(seat: Seat): TennisState {
   return s;
 }
 
+/** A moment of the aid that must exist (a ball that stays live has all three). */
+function present<T>(x: T | null): T {
+  expect(x).not.toBeNull();
+  return x as T;
+}
+
 const SEATS = [0, 1] as const;
 const HANDS: Hand[] = ["right", "left"];
 const KINDS: SwingKind[] = ["forehand", "backhand"];
@@ -44,7 +50,7 @@ describe("trajectory aid: three timing arcs", () => {
           expect(aid!.kind).toBe(kind);
 
           TIMINGS.forEach((timing, i) => {
-            const arc = aid!.arcs[i];
+            const arc = present(aid!.arcs[i]);
             expect(arc.farSide, `${timing} lands on the opponent's half`).toBe(true);
             const predicted = arc.x - arc.path[0].x;
 
@@ -69,7 +75,9 @@ describe("trajectory aid: three timing arcs", () => {
             }
           });
           // early and late are mirror images either side of straight
-          expect(Math.sign(aid!.arcs[0].x - aid!.arcs[0].path[0].x)).toBe(-Math.sign(aid!.arcs[2].x - aid!.arcs[2].path[0].x));
+          const early = present(aid!.arcs[0]);
+          const late = present(aid!.arcs[2]);
+          expect(Math.sign(early.x - early.path[0].x)).toBe(-Math.sign(late.x - late.path[0].x));
         });
       }
     }
@@ -79,7 +87,10 @@ describe("trajectory aid: three timing arcs", () => {
     const s = incoming(0);
     const fore = timingArcs(s, 0, 1, "right", "forehand")!;
     const back = timingArcs(s, 0, 1, "right", "backhand")!;
-    const side = (a: typeof fore, i: number) => Math.sign(a.arcs[i].x - a.arcs[i].path[0].x);
+    const side = (a: typeof fore, i: number) => {
+      const arc = present(a.arcs[i]);
+      return Math.sign(arc.x - arc.path[0].x);
+    };
     expect(side(fore, 0)).toBe(-side(back, 0));
     expect(side(fore, 2)).toBe(-side(back, 2));
   });
@@ -95,13 +106,14 @@ describe("trajectory aid: three timing arcs", () => {
     const s = incoming(0);
     for (const level of [0, 1, 2] as const) {
       const aid = timingArcs(s, 0, level, "right", "forehand")!;
-      aid.ticks.forEach((row, i) => {
+      aid.ticks.forEach((maybe, i) => {
+        const row = present(maybe);
         const depth = row.map((t) => -t.z);
         expect(depth[0]).toBeLessThan(depth[1]);
         expect(depth[1]).toBeLessThan(depth[2]);
         expect(row.every((t) => t.farSide)).toBe(true);
-        expect(row[level].x).toBe(aid.arcs[i].x);
-        expect(row[level].z).toBe(aid.arcs[i].z);
+        expect(row[level].x).toBe(present(aid.arcs[i]).x);
+        expect(row[level].z).toBe(present(aid.arcs[i]).z);
       });
     }
   });
@@ -133,7 +145,8 @@ describe("trajectory aid: the lit arc and the meter follow the ball", () => {
             // past the baseline the arcs come from the ball where it is now
             if (arcs) {
               const i = TIMINGS.indexOf(lit);
-              expect(Math.sign(arcs.arcs[i].x - arcs.arcs[i].path[0].x)).toBe(Math.sign(aim));
+              const arc = present(arcs.arcs[i]);
+              expect(Math.sign(arc.x - arc.path[0].x)).toBe(Math.sign(aim));
             }
             expect(Math.abs(aim)).toBeGreaterThan(1 / 3 - 1e-9);
           }
@@ -207,5 +220,45 @@ describe("trajectory aid: the real arc after the hit", () => {
     expect(end.x).toBeCloseTo(s.lastBounce!.x, 5);
     expect(end.z).toBeCloseTo(s.lastBounce!.z, 5);
     expect(end.y).toBe(0);
+  });
+});
+
+describe("a ball that will land out can still be volleyed, so its early arc shows", () => {
+  /** A hard, wide shot from seat 1 at seat 0: it lands out beside the court, going dead at the bounce. */
+  function wideHard(): TennisState {
+    const s = createState(2, { endless: true });
+    s.phase = "rally";
+    s.lastHitter = 0;
+    s.shots = 3;
+    s.ball = { x: 0, y: 1, z: seatZ(1), vx: 0, vy: 0, vz: -5 };
+    s.players[0] = { x: 0, targetX: 0 };
+    s.players[1] = { x: 0, targetX: 0 };
+    step(s, [{ t: "swing", seat: 1, kind: "forehand", level: 2 as Level, dirX: 1 }]);
+    return s;
+  }
+
+  it("keeps the arcs for moments the ball is still in the air and drops the ones after it goes dead", () => {
+    const s = wideHard();
+    // run until the window opens (the ball is still live then)
+    for (let i = 0; i < 400 && (windowPosition(s, 0) ?? -2) < -0.95; i++) step(s, []);
+    const aid = timingArcs(s, 0, 1, "right", "forehand");
+    expect(aid, "an out ball that can still be hit gets an aid").not.toBeNull();
+    expect(aid!.arcs[0], "early is hit before the bounce").not.toBeNull();
+    expect(aid!.arcs[2], "late is after it has gone dead").toBeNull();
+    expect(aid!.ticks[2]).toBeNull();
+  });
+
+  it("a ball that lands in still gets all three", () => {
+    const s = incoming(0);
+    const aid = timingArcs(s, 0, 1, "right", "forehand")!;
+    expect(aid.arcs.every((a) => a !== null)).toBe(true);
+    expect(aid.ticks.every((t) => t !== null)).toBe(true);
+  });
+
+  it("no arcs once the ball has gone dead", () => {
+    const s = wideHard();
+    for (let i = 0; i < 400 && !s.pending?.dead; i++) step(s, []);
+    expect(s.pending?.dead).toBe(true);
+    expect(timingArcs(s, 0, 1, "right", "forehand")).toBeNull();
   });
 });

@@ -256,11 +256,13 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
     ownShot = { kind, at: performance.now() };
   };
   // Keys and buttons have no forehand/backhand, so they use the one that suits the ball.
-  const swing = (level: Level, dirX: number) => {
+  const swing = (level: Level, dirX: number, manual = false) => {
     if (info.seat === null) return;
     const me = snap?.players[info.seat].x ?? 0;
     aid.swung(level, "keys");
-    send(level, dirX, naturalKind(info.seat, me, snap?.ball.x ?? me));
+    // Option C: timing aims the shot (the lit arc is what you get) unless an
+    // arrow key is held, which aims by hand
+    send(level, dirX, naturalKind(info.seat, me, snap?.ball.x ?? me), undefined, undefined, !manual);
   };
   // Hold: walk toward the sideline. Release: stop where the server last had us.
   const move = (dir: -1 | 0 | 1) => {
@@ -361,7 +363,7 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
   const controls = view.querySelector(".controls") as HTMLElement;
   controls.hidden = info.seat === null;
   for (const button of controls.querySelectorAll<HTMLButtonElement>("[data-level]")) {
-    button.addEventListener("click", () => swing(Number(button.dataset.level) as Level, currentAim()));
+    button.addEventListener("click", () => swing(Number(button.dataset.level) as Level, 0));
   }
   for (const button of controls.querySelectorAll<HTMLButtonElement>("[data-move]")) {
     const dir = Number(button.dataset.move) as -1 | 1;
@@ -420,7 +422,9 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
               seat: info.seat,
               hand: cameraInput.hand(),
               grip: cameraInput.grip(),
-              timingAim: cameraInput.on() && cameraInput.aimMode() === "timing",
+              // timing decides the shot: camera in timing mode, or keys and touch
+              // with no arrow key held (an arrow aims by hand)
+              timingAim: cameraInput.on() ? cameraInput.aimMode() === "timing" : !input.manualAim(),
               aim: currentAim(),
               peak: cameraInput.peak(),
               thresholds: cameraInput.thresholds(),

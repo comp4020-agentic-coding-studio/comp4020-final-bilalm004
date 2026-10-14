@@ -138,22 +138,25 @@ test("the reticle is always on the opponent's half and follows the aim", async (
     const [x, z, , source] = ((await canvas.getAttribute("data-reticle")) ?? "").split(",");
     return { x: Number(x), z: Number(z), source };
   };
-  // showing straight away, during the serve, from aim alone
-  await expect.poll(async () => (await reticle()).source).toBe("aim");
+  // timing decides the shot by default (the three arcs, task 3), so the single
+  // reticle appears when you aim by hand: hold an arrow key
   // seat 0 views from +z: the opponent's half is z < 0, and aiming right is +x
   await page.keyboard.down("ArrowRight");
+  await expect.poll(async () => (await reticle()).source).toBe("aim");
   await expect.poll(async () => (await reticle()).x).toBeGreaterThan(1);
   await page.keyboard.up("ArrowRight");
   await page.keyboard.down("ArrowLeft");
   await expect.poll(async () => (await reticle()).x).toBeLessThan(-1);
   await page.keyboard.up("ArrowLeft");
 
-  // through serves and returns, it never comes onto your side
+  // through serves and returns, it never comes onto your side (hold an arrow so it shows)
+  await page.keyboard.down("ArrowRight");
   for (let i = 0; i < 40; i++) {
     const r = await reticle();
-    expect(r.z).toBeLessThan(0);
+    if (Number.isFinite(r.z)) expect(r.z).toBeLessThan(0);
     await page.waitForTimeout(150);
   }
+  await page.keyboard.up("ArrowRight");
 });
 
 test("shots leave a trail and a bounce mark, and the incoming ball shows your shot's arc", async ({ page }) => {
@@ -164,10 +167,13 @@ test("shots leave a trail and a bounce mark, and the incoming ball shows your sh
   // the serve itself is a hit, so the trail and its bounce show without any input
   await expect.poll(() => n("data-trail"), { timeout: 15_000 }).toBeGreaterThan(3);
   await expect.poll(() => n("data-bounces"), { timeout: 15_000 }).toBeGreaterThan(0);
-  // the bot serves to you on alternate points: the arc shows then
+  // the bot serves to you on alternate points: aiming by hand (an arrow held)
+  // shows the single arc; by timing it is the three arcs, covered in aid.e2e.ts
+  await page.keyboard.down("ArrowRight");
   await expect.poll(() => n("data-arc"), { timeout: 30_000 }).toBeGreaterThan(5);
   // with the arc comes whether you can reach where you'll meet the ball
   await expect.poll(() => canvas.getAttribute("data-reach"), { timeout: 30_000 }).toMatch(/^(yes|no)$/);
+  await page.keyboard.up("ArrowRight");
 });
 
 test("safety notice: 'don't show again' skips it next time", async ({ page }) => {

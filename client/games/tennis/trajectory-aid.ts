@@ -39,9 +39,12 @@ export type Ticks = [AidLanding, AidLanding, AidLanding];
 
 export interface TimingAid {
   kind: SwingKind;
-  arcs: [AidArc, AidArc, AidArc];
+  // by timing (early, on time, late). A moment is null once the ball can no
+  // longer be hit then: a ball that lands out goes dead at the bounce, so only
+  // the moments before it have an arc (task 12 rule: it can be volleyed until then)
+  arcs: [AidArc | null, AidArc | null, AidArc | null];
   // by timing (early, on time, late), where light, medium and hard land
-  ticks: [Ticks, Ticks, Ticks];
+  ticks: [Ticks | null, Ticks | null, Ticks | null];
 }
 
 const PATH_EVERY_TICKS = 3;
@@ -137,18 +140,23 @@ export function timingArcs(s: TennisState, seat: Seat, level: Level, hand: Hand,
   if (windowPosition(s, seat) === null) return null;
   const contact = predictContact(s, seat);
   const k = kind ?? naturalKind(seat, s.players[seat].x, contact ? contact.ball.x : s.ball.x, hand);
-  const arcs: AidArc[] = [];
-  const ticks: AidLanding[][] = [];
+  const arcs: (AidArc | null)[] = [];
+  const ticks: (AidLanding[] | null)[] = [];
   for (let i = 0; i < 3; i++) {
     const row: AidLanding[] = [];
+    let arc: AidArc | null = null;
     for (const l of [0, 1, 2] as const) {
       const shot = shoot(s, seat, TIMING_U[i], k, l, hand);
-      if (!shot) return null;
+      if (!shot) break;
       row.push(shot.landing);
-      if (l === level) arcs.push({ timing: TIMINGS[i], path: shot.path, ...shot.landing });
+      if (l === level) arc = { timing: TIMINGS[i], path: shot.path, ...shot.landing };
     }
-    ticks.push(row);
+    // a moment the ball can't be hit at (it has gone dead) has no arc and no ticks
+    arcs.push(row.length === 3 ? arc : null);
+    ticks.push(row.length === 3 ? row : null);
   }
+  // nothing to show only if no moment can be hit at all
+  if (arcs.every((a) => a === null)) return null;
   return { kind: k, arcs: arcs as TimingAid["arcs"], ticks: ticks as TimingAid["ticks"] };
 }
 

@@ -15,7 +15,7 @@ const REAL_COLOR = new Color(0xffd23f);
 
 export interface AidFx {
   /** Show the three timing arcs with `lit` bright and the others greyed, or hide them (null). Returns arcs drawn. */
-  arcs(arcs: readonly AidArc[] | null, lit: Timing | null): number;
+  arcs(arcs: readonly (AidArc | null)[] | null, lit: Timing | null): number;
   /** Light, medium and hard landings with the shown strength picked, or hide them (null). */
   ticks(ticks: readonly AidLanding[] | null, strength: ShownStrength): void;
   /** Show the real arc of the shot just hit, or hide it (null). Returns points drawn. */
