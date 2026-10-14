@@ -403,3 +403,15 @@ the format of the entries below (see CLAUDE.md, Docs).
 - **Open:** I can't tell from here what resolution or field of view the
   browser really gave the user's camera. Needs a real-webcam check, including
   whether a backhand now holds without the elbow in frame.
+
+## 2026-10-15 00:23 AEDT | decision | Dropped the camera zoom-out
+
+- **Situation:** The last change set the webcam's zoom to its minimum when the
+  camera exposes one. User asked what happens if it zooms out a lot.
+- **Outcome:** Removed it; the 16:9 request stays. A far zoom-out makes the
+  player small, so the wrist and fingers get fewer pixels and the model tracks
+  the hand worse; wide lenses also stretch the arm and skew the shoulder tilt;
+  and on some cameras the setting can persist outside the game.
+- **Why:** It couldn't be tested here, and the user's "seems better" can't be
+  attributed to the zoom or to the 16:9 request. If the backhand gets worse
+  after this, the zoom was helping and a capped version is the next try.
