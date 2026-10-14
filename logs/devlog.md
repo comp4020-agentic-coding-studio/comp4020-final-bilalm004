@@ -375,3 +375,31 @@ the format of the entries below (see CLAUDE.md, Docs).
   webcam; the longer cooldown and the settle rule from task 18 are still
   parked. Whether a camera is really cropping needs checking on the user's
   device (the browser may still pick 4:3).
+
+## 2026-10-15 00:15 AEDT | bug | Backhand still needed the elbow; camera view too narrow
+
+- **Situation:** After the elbow fallback, the user said the backhand still
+  needs their elbow to be seen, and that the webcam's width matters more than
+  its height; asked for a better preview position and more width.
+- **Cause (hypothesis, not confirmed on the user's camera):** a backhand takes
+  the racket hand across the body and out to the side. At close range a narrow
+  view cuts the arm off, and the pose model's confidence in the wrist and hand
+  drops below the 0.5 cutoff that every landmark shared, so the hand was
+  dropped along with the elbow. My earlier fallback only helped when the wrist
+  and hand still cleared 0.5.
+- **Fix:**
+  - Wrist, thumb and pinky are trusted at 0.3 (shoulders stay at 0.5), a guess
+    to playtest.
+  - The stream asks for a 16:9 1280x720 view, and when the camera has a zoom
+    control it is set to its widest (best effort; unsupported cameras keep
+    their own view).
+  - The preview, grip badge and lean gauge now sit in one dock whose height
+    follows the real video, so the preview shows the whole frame, never a
+    cropped one (it was a fixed 16:9 box with object-fit cover, which crops
+    any other shape).
+- **Test written:** a hand at 0.35-0.4 confidence still gives a wrist, a
+  backhand grip and "seen" in the setup check; at 0.15 it is dropped. Fails at
+  the old 0.5 cutoff (checked).
+- **Open:** I can't tell from here what resolution or field of view the
+  browser really gave the user's camera. Needs a real-webcam check, including
+  whether a backhand now holds without the elbow in frame.

@@ -45,6 +45,17 @@ function withTimeout<T>(p: Promise<T>, ms: number, message: string): Promise<T> 
   });
 }
 
+/** Some webcams can zoom out to their full field of view; take the widest. Best effort. */
+async function zoomOut(stream: MediaStream): Promise<void> {
+  try {
+    const track = stream.getVideoTracks()[0];
+    const zoom = (track?.getCapabilities?.() as { zoom?: { min: number } } | undefined)?.zoom;
+    if (zoom) await track.applyConstraints({ advanced: [{ zoom: zoom.min } as MediaTrackConstraintSet] });
+  } catch {
+    // not supported: the camera's own view it is
+  }
+}
+
 /** Asks for the camera. Rejects with a CameraError the player can read. */
 export async function openCamera(video: HTMLVideoElement): Promise<MediaStream> {
   if (!navigator.mediaDevices?.getUserMedia) {
@@ -53,12 +64,14 @@ export async function openCamera(video: HTMLVideoElement): Promise<MediaStream> 
   let stream: MediaStream;
   try {
     stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
+      // wide: a backhand swings the arm out to the side, and a narrow view loses the wrist
+      video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 }, aspectRatio: { ideal: 16 / 9 } },
       audio: false,
     });
   } catch (err) {
     throw explain(err);
   }
+  await zoomOut(stream);
   video.srcObject = stream;
   video.muted = true;
   video.playsInline = true;

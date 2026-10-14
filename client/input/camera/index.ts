@@ -101,7 +101,11 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
     <div class="tilt-gauge" role="img" aria-label="Lean gauge: the middle band is no movement, the ends are the sidelines">
       <span class="tilt-dz"></span><span class="tilt-edge" data-side="l"></span><span class="tilt-edge" data-side="r"></span><span class="tilt-mark"></span>
     </div>`;
-  view.append(video, hud, panel);
+  // the preview and its labels stack in one dock, so the preview can be any shape
+  const dock = document.createElement("div");
+  dock.className = "cam-dock";
+  dock.append(video, hud);
+  view.append(dock, panel);
   const gripBadge = hud.querySelector(".grip-badge") as HTMLElement;
   const tiltMark = hud.querySelector(".tilt-mark") as HTMLElement;
   // gauge spans this many degrees either side of neutral; the dead zone and edges are drawn to scale
@@ -426,7 +430,7 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
       button.removeEventListener("click", onButton);
       window.removeEventListener("keydown", onKey);
       stop();
-      video.remove();
+      dock.remove();
       panel.remove();
     },
   };

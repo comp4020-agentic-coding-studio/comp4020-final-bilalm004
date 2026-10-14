@@ -374,6 +374,23 @@ describe("grip: forehand or backhand", () => {
     expect(shots).toHaveLength(1);
   });
 
+  it("keeps tracking a hand the model is only fairly sure of (a backhand hides it), but not a guess", () => {
+    const withHand = (v: number) => {
+      const lm = pose({ grip: "backhand", across: 0.5 });
+      for (const id of [LM.rightWrist, LM.rightThumb, LM.rightPinky, LM.rightElbow]) lm[id] = { ...lm[id], visibility: v };
+      return lm;
+    };
+    for (const v of [0.35, 0.4]) {
+      const lm = withHand(v);
+      expect(wrist(lm, bodyFrame(lm, ASPECT)!, "right", ASPECT)).not.toBeNull();
+      expect(palmFacing(lm, bodyFrame(lm, ASPECT)!, "right", ASPECT)!).toBeLessThan(-0.5);
+      expect(bodyVisibility(lm, "right")).toEqual({ shoulders: true, arm: true, hand: true });
+    }
+    const lm = withHand(0.15);
+    expect(wrist(lm, bodyFrame(lm, ASPECT)!, "right", ASPECT)).toBeNull();
+    expect(palmFacing(lm, bodyFrame(lm, ASPECT)!, "right", ASPECT)).toBeNull();
+  });
+
   it("reports what the camera can see for the setup check", () => {
     expect(bodyVisibility(pose(), "right")).toEqual({ shoulders: true, arm: true, hand: true });
     expect(bodyVisibility(pose({ grip: "hidden" }), "right")).toEqual({ shoulders: true, arm: true, hand: false });

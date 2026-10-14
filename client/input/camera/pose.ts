@@ -29,6 +29,10 @@ export const LM = {
 } as const;
 
 const MIN_VISIBILITY = 0.5;
+// The racket hand crossing the body for a backhand is partly hidden and the
+// model's confidence in it drops, so it is trusted at a lower level than the
+// shoulders (a GUESS to be playtested).
+const MIN_HAND_VISIBILITY = 0.3;
 
 export interface Vec {
   x: number;
@@ -55,6 +59,7 @@ export interface Wrist {
 }
 
 const visible = (p: Point | undefined): p is Point => p !== undefined && (p.visibility ?? 1) >= MIN_VISIBILITY;
+const seenHand = (p: Point | undefined): p is Point => p !== undefined && (p.visibility ?? 1) >= MIN_HAND_VISIBILITY;
 // landmarks are normalised separately in x and y; scale x so both are in image heights
 const scaled = (p: Point, aspect: number): Vec => ({ x: p.x * aspect, y: p.y });
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
@@ -79,7 +84,7 @@ export function bodyFrame(lm: readonly Point[], aspect: number): BodyFrame | nul
 
 export function wrist(lm: readonly Point[], frame: BodyFrame, hand: Hand, aspect: number): Wrist | null {
   const w = lm[hand === "right" ? LM.rightWrist : LM.leftWrist];
-  if (!visible(w)) return null;
+  if (!seenHand(w)) return null;
   const p = scaled(w, aspect);
   const pos = { x: (p.x - frame.mid.x) / frame.width, y: (p.y - frame.mid.y) / frame.width };
   const d = downAxis(frame);
@@ -172,7 +177,7 @@ export function palmFacing(lm: readonly Point[], frame: BodyFrame, hand: Hand, a
   const wristP = lm[right ? LM.rightWrist : LM.leftWrist];
   const thumb = lm[right ? LM.rightThumb : LM.leftThumb];
   const pinky = lm[right ? LM.rightPinky : LM.leftPinky];
-  if (!visible(wristP) || !visible(thumb) || !visible(pinky)) return null;
+  if (!seenHand(wristP) || !seenHand(thumb) || !seenHand(pinky)) return null;
   // The forearm (elbow to wrist) is the steadier reference. With the elbow out
   // of frame or hidden, the hand's own direction (wrist to the pinky/thumb
   // midpoint) stands in, so the player doesn't need to show their elbow.
@@ -256,11 +261,11 @@ export interface Visibility {
 export function bodyVisibility(lm: readonly Point[] | null, hand: Hand): Visibility {
   if (!lm) return { shoulders: false, arm: false, hand: false };
   const right = hand === "right";
-  const all = (...ids: number[]) => ids.every((i) => visible(lm[i]));
+  const all = (see: (p: Point | undefined) => boolean, ...ids: number[]) => ids.every((i) => see(lm[i]));
   return {
-    shoulders: all(LM.leftShoulder, LM.rightShoulder),
-    arm: all(right ? LM.rightWrist : LM.leftWrist),
-    hand: all(right ? LM.rightPinky : LM.leftPinky, right ? LM.rightThumb : LM.leftThumb),
+    shoulders: all(visible, LM.leftShoulder, LM.rightShoulder),
+    arm: all(seenHand, right ? LM.rightWrist : LM.leftWrist),
+    hand: all(seenHand, right ? LM.rightPinky : LM.leftPinky, right ? LM.rightThumb : LM.leftThumb),
   };
 }
 
