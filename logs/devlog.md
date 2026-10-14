@@ -542,3 +542,30 @@ the format of the entries below (see CLAUDE.md, Docs).
   frame-rate-sensitive trail e2e failed 2 of 3 runs on desktop (with another
   agent's browsers also running); computed only for an incoming ball and
   cached, it passed 6 of 6.
+
+## 2026-10-15 01:22 AEDT | milestone | Forehand and backhand get their own arcs and a shot label (task 6)
+
+- **Situation:** User said the backhand doesn't read on screen. In
+  `character.ts` it was the forehand's sweep run backwards: same arm height,
+  same racket face, straight arm, a mirrored body turn. The opponent's and
+  bot's strokes started at 45% of the swing, where both arcs point the arm
+  straight ahead, so a viewer saw nearly the same thing for either.
+- **Outcome:** `client/games/tennis/stroke.ts` keyframes each stroke (wind-up,
+  contact, finish) for arm, elbow, wrist, racket face, shoulder turn and off
+  arm. Forehand: back low on the racket side, finish high over the other
+  shoulder. Backhand: back by the far hip with the face turned over, finish out
+  on the racket side with the off arm flung back. Measured on the rig, contact
+  is +0.63 m vs -0.51 m from the player's middle. A `.shot-label` shows FOREHAND
+  (yellow) or BACKHAND (blue) on every stroke, both seats and the bot, in the
+  side stands on desktop and bottom left on a phone. A wrong-side miss turns it
+  red, strikes the stroke through and says which side the ball was on. The
+  pop-in and shake are off under reduced motion. Tests: `spec/stroke.test.ts`
+  (rig measurements, label text), `e2e/stroke.e2e.ts` (both viewports: arcs
+  projected through the game camera, label clear of the court's corners, the
+  controls and `.cam-dock`, reduced motion).
+- **Why:** A measured difference can't quietly go back to "only the side
+  changes". The label sits beside the court rather than on it, because the
+  score bar (task 1) takes the top and the timing meter (task 3) the bottom.
+  The layout e2e "invite link" frame-count check fails on and off on this
+  branch and on a clean build of main alike while other agents' browsers keep
+  the load average at 15-22; it isn't caused by this change.

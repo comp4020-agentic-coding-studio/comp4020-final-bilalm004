@@ -31,6 +31,7 @@ lazily and only when a player enters a game. Video never leaves the browser.
   `games/tennis/score-bar.ts` (top score bar and the umpire's call),
   `games/tennis/stadium.ts` (arena from primitives, instanced crowd/trees),
   `games/tennis/character.ts` (Mii-style player and racket),
+  `games/tennis/stroke.ts` (forehand/backhand keyframes, shot label text),
   `games/tennis/shot-fx.ts` (ball trail, bounce marks, shot arc),
   `games/tennis/trajectory-aid.ts` (pure: timing arcs, meter, strength ticks)
   with `aid.ts`/`aid-fx.ts`/`aid.css` drawing it (task 3), `input/`

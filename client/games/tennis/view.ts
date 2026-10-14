@@ -7,6 +7,7 @@ import {
   RingGeometry,
   Scene,
   SphereGeometry,
+  Vector3,
   WebGLRenderer,
 } from "three";
 import { COURT, DT, LEVEL_NAMES, PLAYER, missReason, naturalKind, predictLanding, seatZ, step, swingTiming } from "../../../shared/games/tennis/sim.ts";
@@ -21,12 +22,13 @@ import { createScoreBar } from "./score-bar.ts";
 import { createTrajectoryAid } from "./aid.ts";
 import { createShotFx } from "./shot-fx.ts";
 import { buildStadium } from "./stadium.ts";
+import { CONTACT, STROKE_MS as SWING_MS, shotLabel } from "./stroke.ts";
 
 // where the reticle sits for a shot that won't clear the net
 const NET_MARK_Z = 0.8;
 
-// how long a stroke animation lasts
-const SWING_MS = 320;
+// how long the FOREHAND / BACKHAND label stays up
+const LABEL_MS = 1100;
 
 // Between server states the screen runs the shared sim ahead on its own, at
 // most this far: past it, something is wrong with the connection and the
@@ -71,6 +73,7 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
       <div class="status" role="status"></div>
     </div>
     <div class="stroke" aria-live="polite"></div>
+    <div class="shot-label" hidden><b></b><span></span></div>
     <div class="controls" hidden>
       <button class="move" data-move="-1" aria-label="Move left (A)">◀</button>
       <button class="primary" data-level="0" aria-label="Light swing (1)">Light</button>
@@ -129,6 +132,13 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
     camera.aspect = w / h;
     camera.fov = camera.aspect < 1 ? 72 : 50;
     camera.updateProjectionMatrix();
+    // the court's lines on screen, in CSS pixels, so a test can check the
+    // HUD keeps off it: left, top, right, bottom
+    const r = canvas.getBoundingClientRect();
+    const corners = [-1, 1].flatMap((sx) => [-1, 1].map((sz) => new Vector3(sx * COURT.halfW, 0, sz * COURT.halfL).project(camera)));
+    const xs = corners.map((c) => r.left + ((c.x + 1) / 2) * r.width);
+    const ys = corners.map((c) => r.top + ((1 - c.y) / 2) * r.height);
+    canvas.dataset.court = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)].map(Math.round).join(",");
   };
   const observer = new ResizeObserver(resize);
   observer.observe(view);
@@ -172,10 +182,56 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
     clearTimeout(strokeTimer);
     strokeTimer = window.setTimeout(() => (strokeEl.textContent = ""), 1200);
   };
+  // The big FOREHAND / BACKHAND label on every stroke, both seats. It sits at
+  // the side of the court (style.css), clear of the court, the camera dock and
+  // the bars at the top and bottom.
+  const shotEl = view.querySelector(".shot-label") as HTMLElement;
+  const shotText = shotEl.querySelector("b") as HTMLElement;
+  const shotNote = shotEl.querySelector("span") as HTMLElement;
+  let shotTimer = 0;
+  // what the label last said for your own swing, so the server's ruling can correct it
+  let ownShot: { kind: SwingKind; at: number } | null = null;
+  const showShot = (seat: 0 | 1, kind: SwingKind, miss: string | null) => {
+    const l = shotLabel(kind, miss, seat === info.seat ? "" : label(seat));
+    shotText.textContent = l.text;
+    shotNote.textContent = l.note;
+    shotEl.dataset.kind = kind;
+    shotEl.dataset.seat = String(seat);
+    shotEl.dataset.wrongSide = String(l.wrongSide);
+    // restart the pop-in (none under reduced motion)
+    shotEl.hidden = true;
+    void shotEl.offsetWidth;
+    shotEl.hidden = false;
+    clearTimeout(shotTimer);
+    shotTimer = window.setTimeout(() => (shotEl.hidden = true), LABEL_MS);
+  };
+  // Where the racket head is on screen, relative to the player, at the start,
+  // contact and end of a stroke: measured from the posed character in this
+  // scene and camera, so a test can see the two strokes differ at any size.
+  const headOnScreen = (seat: 0 | 1): [number, number] => {
+    const p = players[seat];
+    const h = p.racketHead();
+    // back from the player's own frame (z toward the net) to world space
+    const v = new Vector3(h.x, h.y, -h.z).applyMatrix4(p.group.matrixWorld).project(camera);
+    const o = p.group.position.clone().project(camera);
+    const r = canvas.getBoundingClientRect();
+    return [Math.round(((v.x - o.x) * r.width) / 2), Math.round(((o.y - v.y) * r.height) / 2)];
+  };
+  // Both strokes are measured on every swing (the frame loop re-poses the
+  // player before the next render), so one swing shows how far apart they are.
+  const measureStroke = (seat: 0 | 1, played: SwingKind, side: 1 | -1) => {
+    const path = (backhand: boolean) =>
+      [0, CONTACT, 1].map((t) => {
+        players[seat].pose(t, backhand, side);
+        return headOnScreen(seat);
+      });
+    canvas.dataset[`stroke${seat}`] = JSON.stringify({ played, forehand: path(false), backhand: path(true) });
+  };
   const animate = (kind: SwingKind, hand: Hand = "right") => {
     if (info.seat === null) return;
     strokeAnim[info.seat] = { side: hand === "right" ? 1 : -1, backhand: kind === "backhand" };
     swingAnim[info.seat] = performance.now();
+    measureStroke(info.seat, kind, strokeAnim[info.seat].side);
   };
   const worldSign = behindSeat1 ? -1 : 1;
   let reticleLevel: Level = 1;
@@ -190,7 +246,10 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
     // in follow mode the character is already copying the real swing
     if (cameraInput.arm() === null) animate(kind, hand);
     // a hint from the latest state: the server decides, a frame or two later
-    showStroke(kind, level, "", snap ? missReason({ ...snap, rng: 0 }, info.seat, kind, hand) : null);
+    const miss = snap ? missReason({ ...snap, rng: 0 }, info.seat, kind, hand) : null;
+    showStroke(kind, level, "", miss);
+    showShot(info.seat, kind, miss);
+    ownShot = { kind, at: performance.now() };
   };
   // Keys and buttons have no forehand/backhand, so they use the one that suits the ball.
   const swing = (level: Level, dirX: number) => {
@@ -222,6 +281,7 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
       if (timing === "ready") return send(level, aim * worldSign, kind, hand, lift, timingAim);
       if (cameraInput.arm() === null) animate(kind, hand);
       showStroke(kind, level, timing === "early" ? " · too early, not sent" : " · no ball to hit");
+      showShot(info.seat, kind, null);
     },
     pause: (p) => {
       if (!info.practice) return;
@@ -251,8 +311,13 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
       const hitter = next.lastHitter;
       if (snap && hitter !== null && hitter !== snap.lastHitter && hitter !== info.seat) {
         const x = next.players[hitter].x;
-        strokeAnim[hitter] = { side: 1, backhand: naturalKind(hitter, x, next.ball.x) === "backhand" };
-        swingAnim[hitter] = performance.now() - SWING_MS * 0.45;
+        const kind = naturalKind(hitter, x, next.ball.x);
+        strokeAnim[hitter] = { side: 1, backhand: kind === "backhand" };
+        // picked up at contact, so the wind-up is skipped and the follow-through shows
+        swingAnim[hitter] = performance.now() - SWING_MS * CONTACT;
+        measureStroke(hitter, kind, 1);
+        // a serve is neither stroke
+        if (next.shots > 1) showShot(hitter, kind, null);
       }
       // the server recorded a touchdown (in or out): mark it
       const lb = next.lastBounce;
@@ -267,6 +332,10 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
     } else if (msg.t === "presence") {
       names = msg.names;
       updateHud();
+    } else if (msg.t === "swing" && msg.outcome === "wrong side" && ownShot && performance.now() - ownShot.at < LABEL_MS && info.seat !== null) {
+      // the server's ruling: a wrong-side miss the screen didn't predict
+      showShot(info.seat, ownShot.kind, "wrong side");
+      ownShot = null;
     }
   });
 
@@ -372,6 +441,7 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
     cancelAnimationFrame(raf);
     clearTimeout(strokeTimer);
     scoreBar.dispose();
+    clearTimeout(shotTimer);
     unsubscribe();
     input.dispose();
     cameraInput.dispose();
