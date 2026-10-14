@@ -1,6 +1,6 @@
 # 1 Scoring in the game (with the storage half of the old leaderboard task)
 
-Status: in progress (pure module and unit tests done; not yet wired into the sim, protocol or HUD)
+Status: done (2026-10-15). Wired into the sim, snapshot, rooms, `matches` (schema v2) and the score bar. No format chooser yet (task 4 sends `format` on create); no leaderboard (task 7)
 Model: Sonnet (well specified, table-driven tests)
 
 ## Goal
@@ -20,10 +20,29 @@ Scoring follows real tennis for everyone, guests included. A pure module in
 ## Done when
 - [x] `shared/games/tennis/scoring.ts`: pure state + `pointWon`, with table-driven
       tests for deuce, advantage, tiebreak, set and match end, serve rotation.
-- [ ] The sim hands point results to scoring; double-fault test.
-- [ ] Protocol, HUD and `matches` carry the new score; README and spec agree.
-- [ ] Score bar at the top of the game screen (see Score display), both viewports.
-- [ ] `pnpm check` green.
+- [x] The sim hands point results to scoring; double-fault test
+      (`spec/sim-scoring.test.ts`).
+- [x] Protocol, HUD and `matches` carry the new score; README and spec agree
+      (`spec/rooms.test.ts`, `spec/db.test.ts`; README made no first-to-5 claim).
+- [x] Score bar at the top of the game screen (see Score display), both viewports
+      (`e2e/score-bar.e2e.ts`).
+- [x] `pnpm check` green.
+
+## As built
+- A serve the receiver never touched that the server loses (net, out, own
+  side) is a fault. Once the receiver has hit, everything is a rally point.
+- `TennisState.rally` counts serves that ended (point or fault); rewind
+  refuses to cross a change in it, since a fault leaves the points unchanged.
+- `lastCall` in the snapshot (point or fault, who, why, tick) drives the bar's
+  announcement; the bar diffs two server snapshots, never local state.
+- Practice (`endless`) starts a new match when one is won instead of ending.
+- `matches` (schema v2, `server/schema.ts`): `score0/1` are sets won, plus
+  `format`, `sets` (JSON games per set), `practice`, `rated`. v1 rows are kept
+  with `format = 'points5'`, unrated. **Decided:** practice against the bot is
+  stored but never rated, and a match needs two players' tokens to be rated,
+  so a rating can't be farmed off the bot.
+- `create` takes an optional `format` (`oneSet` default, `bestOfThree`);
+  anything else gets one set. Task 4 adds the chooser.
 
 ## Module API (built)
 `createScore(format, firstServer)`, `pointWon(state, winner)`, `fault(state)`,

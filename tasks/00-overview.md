@@ -13,7 +13,7 @@ One flat list. Start at the top; a task only waits on the ones named.
 
 | # | Task | Waits on | Model |
 |---|------|----------|-------|
-| 1 | [Scoring in the game](01-scoring-in-game.md): wire real tennis scoring into the sim, the top score bar with point announcements, games and sets stored | - | Opus |
+| 1 | [Scoring in the game](01-scoring-in-game.md): wire real tennis scoring into the sim, the top score bar with point announcements, games and sets stored (done) | - | Opus |
 | 2 | [Auto-move](02-auto-move.md): the server moves you to the ball | - | Opus then Sonnet |
 | 3 | [Trajectory aid](03-trajectory-aid.md): three arcs, timing meter, detected-strength readout | - | Opus then Sonnet |
 | 4 | [Room rules, ready-up and formats](04-room-rules-ready-formats.md): seats, reconnect, ready check, one set / best of three / unlimited | 1, and your rule decisions | Opus then Sonnet |

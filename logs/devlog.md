@@ -461,3 +461,23 @@ the format of the entries below (see CLAUDE.md, Docs).
   append-only, so it is not rewritten).
 - **Why:** One numbering, with "waits on" per task, is easier to plan from than
   groups of groups. Files were moved with git mv to keep their history.
+
+## 2026-10-15 01:23 AEDT | milestone | Real tennis scoring in the game (task 1)
+
+- **Situation:** The scoring module was built and unit-tested but the sim
+  still played first to 5 points, and the HUD showed "You 2 – 1 Bot".
+- **Outcome:** The sim keeps a `ScoreState` in the snapshot: the server serves
+  from `score.server`, a serve the receiver never touched that goes in the net,
+  out or on the server's side is a fault (second serve, then double fault), a
+  rally end calls `pointWon`, and `score.winner` ends the match. One set by
+  default, best of three via an optional `format` on create (no chooser yet,
+  task 4). Practice starts a new match instead of ending. `matches` moved to
+  schema v2 (version table, migration step, test that opens a v1 database):
+  sets won, games per set, format, practice and a `rated` flag. A two-row
+  score bar replaces the old score text and announces each call for 2 s.
+- **Why:** Rewind used "points changed" to refuse crossing a point, but a
+  fault doesn't change points, so the sim now counts ended serves (`rally`)
+  and rewind checks that. Practice-vs-bot is stored but never rated, so a
+  rating can't be farmed off the bot. The bar first had a third row for the
+  format and call; on a phone that pushed the HUD 9 px into the camera
+  preview's spot, so those moved into a right-hand column.

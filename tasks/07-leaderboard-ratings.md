@@ -1,6 +1,6 @@
 # 7 Leaderboard and ratings
 
-Status: partial (players and match results are stored; nothing reads them yet). Wait for task 1: results will store games and sets, and unlimited matches are unrated
+Status: partial (players and match results are stored with sets, games, format and a `rated` flag, schema v2 from task 1; nothing reads them yet). Unlimited matches (task 4) must be stored unrated
 Model: Sonnet
 
 ## Goal
@@ -21,5 +21,8 @@ and redeploys.
       (spec test that restarts the app, or documented manual check plus a
       DB-level test).
 - [ ] Leaderboard updates in a second session within about a second.
-- [ ] Migration test: open a DB made by the previous schema version.
-- [ ] Practice-vs-bot matches don't affect ratings (decide and test).
+- [x] Migration test: open a DB made by the previous schema version
+      (`spec/db.test.ts`, done in task 1 with the schema version table).
+- [x] Practice-vs-bot matches don't affect ratings (decide and test): decided
+      in task 1, stored with `rated = 0` (`spec/db.test.ts`). The rating
+      code itself must read only `rated = 1` rows.

@@ -20,11 +20,15 @@ lazily and only when a player enters a game. Video never leaves the browser.
 
 - `shared/` pure, deterministic game sim and the WebSocket protocol, used by
   server and client. Each game lives in `shared/games/<name>/` (sim, bot,
-  adapter) and registers in `shared/games/registry.ts`.
+  adapter) and registers in `shared/games/registry.ts`. Tennis scoring
+  (points, games, sets, tiebreak, faults) is `shared/games/tennis/scoring.ts`;
+  the sim keeps its `ScoreState` in the snapshot.
 - `server/` `index.ts` (http + ws + `/readme/`), `rooms.ts` (60 Hz tick loop,
-  seats, spectators), `db.ts` (SQLite on `/data`), `log.ts` (JSON log lines).
+  seats, spectators), `db.ts` (SQLite on `/data`), `schema.ts` (versioned
+  schema, migrations, match rows, who is rated), `log.ts` (JSON log lines).
   Rooms get their sim from the registry, so networking is game-agnostic.
 - `client/` Vite app: `games/<name>/view.ts` (scene, HUD, input wiring),
+  `games/tennis/score-bar.ts` (top score bar and the umpire's call),
   `games/tennis/stadium.ts` (arena from primitives, instanced crowd/trees),
   `games/tennis/character.ts` (Mii-style player and racket),
   `games/tennis/shot-fx.ts` (ball trail, bounce marks, shot arc), `input/`
@@ -61,6 +65,13 @@ lazily and only when a player enters a game. Video never leaves the browser.
 
 - The server never trusts a client's claim of a hit or a score; it resolves
   hits from swing timestamps against its own sim.
+- Scoring is real tennis for everyone (`spec/sim-scoring.test.ts`): one set by
+  default or best of three, tiebreak at 6-6, two serves per point, no lets.
+  The score bar only renders the server's `ScoreState`. Practice never ends
+  (a won match starts a new one) and practice-vs-bot is never rated
+  (`spec/db.test.ts`).
+- A schema change is a new step in `server/schema.ts` plus a test that opens
+  a database made by the previous version; never edit an old step.
 - Game logic stays deterministic (seed + input stream) so it can be tested.
 - Tennis is the only game until the core is solid (rooms, reconnect, logging).
   Don't add a second game unless I ask; keep the registry so one can slot in.
