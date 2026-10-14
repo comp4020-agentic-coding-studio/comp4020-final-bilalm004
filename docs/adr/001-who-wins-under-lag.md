@@ -1,6 +1,6 @@
 # ADR 001: Who wins when lag makes the players' screens disagree
 
-Status: accepted, 2026-10-14. Implementation: `tasks/04-netcode-feel.md`.
+Status: accepted, 2026-10-14. Implementation: `tasks/done/netcode-feel.md`.
 
 ## In plain terms
 

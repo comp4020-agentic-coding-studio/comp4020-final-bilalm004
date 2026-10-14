@@ -446,3 +446,18 @@ the format of the entries below (see CLAUDE.md, Docs).
   deliverables; agents leave `PROCESS.md` and the reflections alone and only
   append devlog entries. README (01) stays a deliverable.
 - **Why:** The process mark rests on the user's own account of how they worked.
+
+## 2026-10-15 00:31 AEDT | decision | Renumbered tasks into one flat build-order list
+
+- **Situation:** Task numbers had stacked up (original 01-10, new 11-18, then
+  "deliverables" like 11 + half of 06), which the user found confusing.
+- **Outcome:** `tasks/` now has one list, numbered 1-11 in build order, for
+  open work only: scoring in the game, auto-move, trajectory aid, room rules +
+  ready-up + formats (the old 05 and 13 merged), training mode, stroke
+  animation, leaderboard, stats, menu and accessibility, README, ship. Finished
+  work is in `tasks/done/`, unnumbered; parked work and the user's own process
+  evidence are unnumbered files. The overview has an old-to-new table, because
+  this log and the done/ files still use the old numbers (the log is
+  append-only, so it is not rewritten).
+- **Why:** One numbering, with "waits on" per task, is easier to plan from than
+  groups of groups. Files were moved with git mv to keep their history.

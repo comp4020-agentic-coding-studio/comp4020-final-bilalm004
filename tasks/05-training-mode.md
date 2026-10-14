@@ -1,9 +1,9 @@
-# 17 Training mode (camera onboarding)
+# 5 Training mode (camera onboarding)
 
 Status: planned
 Model: Opus for the lesson design, Sonnet for the build
 
-Depends on: 12, 14, 15, 16
+Depends on: 2, 3 (shot rules and camera setup are done)
 
 ## Goal
 The camera's default way in. After the safety notice and hand choice, the
@@ -17,7 +17,7 @@ backhand, timing and strength, then goes to the lobby. This replaces the old
 - Auto-move on by default, so the first lesson is only swinging; tilt movement
   is a later step.
 - After each swing: "early, cross-court, medium, landed here", with the landing
-  spot marked on the court (task 16's arcs and meter are on).
+  spot marked on the court (task 3's arcs and meter are on).
 - Guided steps, each completing when you do it: movement, forehand, backhand,
   timing to landing position, strength, camera check. Optional target zones.
 - Also reachable from the lobby, and playable with keyboard and mouse.

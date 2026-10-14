@@ -1,6 +1,6 @@
-# 06 Persistence and leaderboard
+# 7 Leaderboard and ratings
 
-Status: partial (players and match results are stored; nothing reads them yet). Wait for task 11: results will store games and sets, and unlimited matches are unrated
+Status: partial (players and match results are stored; nothing reads them yet). Wait for task 1: results will store games and sets, and unlimited matches are unrated
 Model: Sonnet
 
 ## Goal

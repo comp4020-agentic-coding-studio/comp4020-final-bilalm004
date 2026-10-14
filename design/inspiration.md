@@ -33,4 +33,4 @@ text, or Mii likenesses.
 - Stay low-poly and cheap: no post-processing, no heavy textures, small draw
   call count (mobile at 390x844 runs the camera model and the renderer).
 - Everything built from primitives in code, so there are no asset files to ship.
-- Visual work belongs to task 09, not task 03.
+- Visual work belongs to task 9 (menu and polish), not the webcam work.

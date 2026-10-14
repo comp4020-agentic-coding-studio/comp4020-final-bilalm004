@@ -33,7 +33,7 @@ lazily and only when a player enters a game. Video never leaves the browser.
   panel), `net/socket.ts`, `ui/menu.ts`. Camera swings have two modes,
   "classic" (default) and "follow" (character copies the arm, hit at the
   hitting line), and two aim modes, "timing" (default) and "point"; see
-  task 03.
+  the camera setup notes in `tasks/done/`.
 - `spec/*.test.ts` vitest against the running app, plus the sim unit tests.
 - `e2e/*.e2e.ts` Playwright at both viewports, fake webcam.
 
@@ -49,7 +49,7 @@ lazily and only when a player enters a game. Video never leaves the browser.
 
 ## Docs
 
-- `tasks/` is the work breakdown (start at `00-overview.md`); update a task's
+- `tasks/` is the work breakdown (start at `00-overview.md`, one numbered list in build order); update a task's
   status line when it changes.
 - `README.md` 400-600 words on what "good" means here (served at `/readme/`).
   `PROCESS.md` 900-1100 words, rewritten each crit.

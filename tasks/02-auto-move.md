@@ -1,9 +1,9 @@
-# 15 Auto-move
+# 2 Auto-move
 
 Status: planned
 Model: Opus for the rule, Sonnet for wiring
 
-Depends on: 12
+Depends on: shot rules (done)
 
 ## Goal
 A movement mode, the default, where the server moves you to the ball so you

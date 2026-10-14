@@ -1,9 +1,9 @@
-# 16 Trajectory aid
+# 3 Trajectory aid
 
 Status: planned
 Model: Opus for the design, Sonnet for the rendering
 
-Depends on: 12 (height-compensated `launch()`)
+Depends on: shot rules (done; height-compensated `launch()`)
 
 ## Goal
 Players can see where timing sends the ball and learn the early/on-time/late

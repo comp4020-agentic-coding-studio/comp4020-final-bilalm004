@@ -1,4 +1,4 @@
-# 08 Server logging and stats
+# 8 Server logging and stats
 
 Status: partial (JSON log lines for room and match events, tick drift warning)
 Model: Sonnet

@@ -1,4 +1,4 @@
-# 10 Process evidence
+# Process evidence (yours, not assigned to agents)
 
 Status: owned by the user, not assigned to agents. Ongoing (CLAUDE.md written; crit 9 reflection and PROCESS.md written but 594 words against the 900-1100 target; rewrite each crit)
 Model: Opus
@@ -20,7 +20,7 @@ so the account must point at real commits.
 ## Done when (per crit)
 - [ ] `pnpm check:evidence` passes (template comment gone, linked commits exist).
 - [ ] At least one linked example of a correction absorbed into the harness.
-- [ ] README, CLAUDE.md and spec still agree (task 07's table).
+- [ ] README, CLAUDE.md and spec still agree (the spec-coverage table in done/spec-coverage.md).
 - [ ] Reflection for that crit written and committed.
 
 ## Habit

@@ -1,4 +1,4 @@
-# 02 First deploy and ship
+# 11 Ship: push, public, CI green, tag
 
 Status: deployed and verified by hand on 2026-10-06 (image builds, live spec 13/13,
 data survives a machine restart). Still open: push, repo public, CI green, tag.

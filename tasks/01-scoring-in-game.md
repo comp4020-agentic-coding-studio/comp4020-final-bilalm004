@@ -1,4 +1,4 @@
-# 11 Proper tennis scoring
+# 1 Scoring in the game (with the storage half of the old leaderboard task)
 
 Status: in progress (pure module and unit tests done; not yet wired into the sim, protocol or HUD)
 Model: Sonnet (well specified, table-driven tests)
@@ -13,7 +13,7 @@ Scoring follows real tennis for everyone, guests included. A pure module in
 - Serve alternates every game. Two serves per point; a second fault is a double
   fault and loses the point. No lets: a serve that clips the net and lands in is
   in play, one that lands out is a fault.
-- Formats: one set (default) or best of three. Unlimited is task 13.
+- Formats: one set (default) or best of three. Unlimited is task 4.
 - The server owns the score. Protocol and HUD show points as tennis calls them.
 - Ratings and the `matches` table store games/sets, not the old first-to-5.
 

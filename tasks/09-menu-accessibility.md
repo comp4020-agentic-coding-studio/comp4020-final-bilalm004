@@ -1,4 +1,4 @@
-# 09 UI, accessibility and polish
+# 9 Menu, accessibility and polish
 
 Status: arena visuals done (stadium, striped court, net, Mii-style players and racket, raised camera, per design/inspiration.md); menu and accessibility polish not started
 Model: Sonnet
@@ -8,7 +8,7 @@ A newly invited member can use the app for ten minutes at either viewport,
 with the keyboard, and not get lost.
 
 ## Scope
-- Lobby: open rooms (if task 05 says public), invite link flow, clear room
+- Lobby: open rooms (if task 4 says public), invite link flow, clear room
   states (waiting, in progress, finished, rematch).
 - Game view: readable score and status, spectator cheer, rematch button,
   sound (off by default, toggle).

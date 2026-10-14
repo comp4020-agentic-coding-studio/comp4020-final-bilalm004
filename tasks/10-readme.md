@@ -1,4 +1,4 @@
-# 01 README: what "good" means
+# 10 README: what "good" means
 
 Status: first draft written for crit 9 (569 words: inspiration, how it works, lag, controls, why it is 'good'); not yet checked claim by claim against CLAUDE.md and spec/; no screenshots in docs/ yet; rewrite for crit 10 must cover scoring, ready-up and the multi-user rules
 Model: Opus
@@ -24,4 +24,4 @@ app and the markers check it against `CLAUDE.md` and `spec/`.
 - [ ] Doesn't promise anything the app doesn't do yet at that crit.
 
 ## Notes
-Do this after 05's decisions are made; the rules are the content.
+Do this after task 4's decisions are made; the rules are the content.

@@ -1,4 +1,4 @@
-# 18 Potentially later
+# Parked: potentially later
 
 Status: parked, nothing here is committed to
 Model: Opus when picked up
@@ -22,4 +22,4 @@ if profiles make "send a code to a friend" useful.
 One swing sometimes counts as two (wind-up then forward swing, or the return
 stroke). Fix when picked up: count only motion in the hitting direction, a
 longer cooldown (about 500-600 ms), and require the wrist to settle before a
-new swing. Training mode may show it; note instances in the devlog.
+new swing. Training mode (task 5) may show it; note instances in the devlog.

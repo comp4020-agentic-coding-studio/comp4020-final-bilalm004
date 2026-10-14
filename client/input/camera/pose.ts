@@ -105,7 +105,7 @@ export interface TiltConfig {
   curve: number;
 }
 
-// A GUESS to be playtested (task 14): 9 degrees for the whole court was too
+// A GUESS to be playtested (see tasks/done/camera-setup.md): 9 degrees for the whole court was too
 // twitchy and 16 too much leaning, so 11 with a gentle curve: small leans make
 // small moves, the edge is still reachable.
 export const DEFAULT_TILT: TiltConfig = { deadZone: 3, fullTilt: 11, curve: 1.4 };
