@@ -22,6 +22,7 @@ Scoring follows real tennis for everyone, guests included. A pure module in
       tests for deuce, advantage, tiebreak, set and match end, serve rotation.
 - [ ] The sim hands point results to scoring; double-fault test.
 - [ ] Protocol, HUD and `matches` carry the new score; README and spec agree.
+- [ ] Score bar at the top of the game screen (see Score display), both viewports.
 - [ ] `pnpm check` green.
 
 ## Module API (built)
@@ -37,3 +38,13 @@ Scoring follows real tennis for everyone, guests included. A pure module in
 - Rally ends: `score = pointWon(score, winnerSide)` (resets `faults`).
 - After either call, `score.winner !== null` ends the match; otherwise serve
   from `score.server`. Never mutate `score`; reassign from the return value.
+
+## Score display
+- A score bar stays at the top of the screen: both names, points as tennis calls
+  them (0/15/30/40/Ad), games and sets, who is serving, and the format.
+- When a point is scored, the bar announces it for about 2 s ("15-0", "Deuce",
+  "Advantage", "Game", "Set", "Double fault") and the changed number pulses.
+- It is driven by the server's `ScoreState` in the snapshot, never computed
+  from a client claim. Respects reduced-motion (no pulse), is readable to a
+  screen reader (live region), and fits 390x844 without covering the court or
+  the camera dock.

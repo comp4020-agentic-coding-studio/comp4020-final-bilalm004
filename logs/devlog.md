@@ -415,3 +415,13 @@ the format of the entries below (see CLAUDE.md, Docs).
 - **Why:** It couldn't be tested here, and the user's "seems better" can't be
   attributed to the zoom or to the 16:9 request. If the backhand gets worse
   after this, the zoom was helping and a capped version is the next try.
+
+## 2026-10-15 00:24 AEDT | decision | Score bar and point announcement added to task 11
+
+- **Situation:** User wants the score shown at the top of the screen, and a
+  visible announcement when a point is scored.
+- **Outcome:** Added a "Score display" section and a done-when item to
+  tasks/11: a top score bar (points, games, sets, server) driven by the
+  server's score state, with a short announcement and pulse on each point.
+- **Why:** The server owns the score, so the bar only renders the snapshot.
+  Reduced-motion and screen-reader behaviour are in the spec up front.
