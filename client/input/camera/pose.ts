@@ -172,7 +172,14 @@ export function palmFacing(lm: readonly Point[], frame: BodyFrame, hand: Hand, a
   const wristP = lm[right ? LM.rightWrist : LM.leftWrist];
   const thumb = lm[right ? LM.rightThumb : LM.leftThumb];
   const pinky = lm[right ? LM.rightPinky : LM.leftPinky];
-  if (!visible(elbow) || !visible(wristP) || !visible(thumb) || !visible(pinky)) return null;
+  if (!visible(wristP) || !visible(thumb) || !visible(pinky)) return null;
+  // The forearm (elbow to wrist) is the steadier reference. With the elbow out
+  // of frame or hidden, the hand's own direction (wrist to the pinky/thumb
+  // midpoint) stands in, so the player doesn't need to show their elbow.
+  const knuckles = { x: (thumb.x + pinky.x) / 2, y: (thumb.y + pinky.y) / 2 };
+  const from = visible(elbow) ? elbow : wristP;
+  const to = visible(elbow) ? wristP : knuckles;
+  const minLen = visible(elbow) ? 0.15 : 0.08;
   const u = frame.across;
   const d = downAxis(frame);
   const inBody = (a: Point, b: Point): Vec => {
@@ -181,11 +188,11 @@ export function palmFacing(lm: readonly Point[], frame: BodyFrame, hand: Hand, a
     const v = { x: (B.x - A.x) / frame.width, y: (B.y - A.y) / frame.width };
     return { x: v.x * u.x + v.y * u.y, y: v.x * d.x + v.y * d.y };
   };
-  const fore = inBody(elbow, wristP);
+  const fore = inBody(from, to);
   const tp = inBody(pinky, thumb);
   const lf = Math.hypot(fore.x, fore.y);
   const lt = Math.hypot(tp.x, tp.y);
-  if (lf < 0.15 || lt < 0.03) return null;
+  if (lf < minLen || lt < 0.03) return null;
   const sin = (fore.x * tp.y - fore.y * tp.x) / (lf * lt);
   return right ? sin : -sin;
 }
@@ -240,7 +247,7 @@ export class GripTracker {
 /** What the camera can see of the player, for the setup check. */
 export interface Visibility {
   shoulders: boolean;
-  /** elbow and wrist of the racket arm */
+  /** the racket wrist; the elbow isn't needed to play */
   arm: boolean;
   /** pinky and thumb, needed to read the grip */
   hand: boolean;
@@ -252,7 +259,7 @@ export function bodyVisibility(lm: readonly Point[] | null, hand: Hand): Visibil
   const all = (...ids: number[]) => ids.every((i) => visible(lm[i]));
   return {
     shoulders: all(LM.leftShoulder, LM.rightShoulder),
-    arm: all(right ? LM.rightElbow : LM.leftElbow, right ? LM.rightWrist : LM.leftWrist),
+    arm: all(right ? LM.rightWrist : LM.leftWrist),
     hand: all(right ? LM.rightPinky : LM.leftPinky, right ? LM.rightThumb : LM.leftThumb),
   };
 }
@@ -344,11 +351,13 @@ export interface SwingEvent {
   peak: number;
   startedAt: number;
   at: number;
+  /** how far the wrist moved along the shoulder line over the swing, shoulder-widths, positive toward the player's left */
+  across: number;
 }
 
 export class SwingDetector {
   private prev: { t: number; pos: Vec; across: number } | null = null;
-  private active: { startedAt: number; peak: number } | null = null;
+  private active: { startedAt: number; peak: number; across: number } | null = null;
   private lastEnd = -Infinity;
   private lastLevel: Level | null = null;
   cfg: SwingConfig;
@@ -370,7 +379,7 @@ export class SwingDetector {
 
     if (!this.active) {
       if (speed < this.cfg.start || t - this.lastEnd < this.cfg.cooldownMs) return { started: false, swing: null };
-      this.active = { startedAt: prev.t, peak: speed };
+      this.active = { startedAt: prev.t, peak: speed, across: prev.across };
       return { started: true, swing: null };
     }
 
@@ -382,7 +391,7 @@ export class SwingDetector {
       this.lastEnd = t;
       const level = levelFromSpeed(a.peak, this.cfg.thresholds, this.lastLevel, this.cfg.hysteresis);
       this.lastLevel = level;
-      return { started: false, swing: { level, peak: a.peak, startedAt: a.startedAt, at: t } };
+      return { started: false, swing: { level, peak: a.peak, startedAt: a.startedAt, at: t, across: w.across - a.across } };
     }
     return { started: false, swing: null };
   }
@@ -602,6 +611,15 @@ export interface CameraOutput {
 // as a swing, so the frozen values come from this long before the start.
 const FREEZE_LOOKBACK_MS = 100;
 
+/** Smallest sideways sweep (shoulder-widths) that counts as a swing in the hitting direction. */
+const MIN_SWEEP = 0.15;
+
+/** Whether a swing's sideways sweep goes the way this grip hits: forehand toward the off-hand side, backhand toward the racket side. */
+export function swingMatchesGrip(across: number, grip: SwingKind, hand: Hand): boolean {
+  const a = hand === "right" ? across : -across;
+  return grip === "forehand" ? a >= MIN_SWEEP : a <= -MIN_SWEEP;
+}
+
 /**
  * Tilt, grip, aim and swings from a stream of pose frames. From the start of
  * a swing to contact, the movement target, grip and aim stay as they were just
@@ -672,7 +690,11 @@ export class CameraController {
     const arm = armPose(f.landmarks as readonly Point[], frame, this.calib.hand, f.aspect);
     let swing: CameraOutput["swing"] = null;
     if (this.calib.mode === "classic") {
-      if (classic.swing) swing = { level: classic.swing.level, kind: shown.grip, aim: shown.aim, at: classic.swing.at };
+      // A forehand sweeps toward the off-hand side and a backhand back toward the
+      // racket side; the opposite sweep is the wind-up or the recovery, not a shot.
+      if (classic.swing && swingMatchesGrip(classic.swing.across, shown.grip, this.calib.hand)) {
+        swing = { level: classic.swing.level, kind: shown.grip, aim: shown.aim, at: classic.swing.at };
+      }
     } else {
       const hit = this.zone.update(f.t, w, shown.grip, this.calib.hand);
       if (hit) swing = { level: hit.level, kind: shown.grip, aim: shown.aim, lift: hit.lift, at: hit.at };

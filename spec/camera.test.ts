@@ -20,6 +20,7 @@ import {
   levelFromSpeed,
   neutralFrom,
   palmFacing,
+  swingMatchesGrip,
   shownAim,
   thresholdsFrom,
   tiltToTarget,
@@ -332,11 +333,52 @@ describe("grip: forehand or backhand", () => {
     for (let i = 0; i < 10; i++) expect(t.update(0.02)).toBe("forehand");
   });
 
+  it("reads the grip with the elbow out of frame, and doesn't ask for the elbow in the setup check", () => {
+    for (const grip of ["forehand", "backhand"] as const) {
+      const lm = pose({ grip, across: grip === "forehand" ? -0.5 : 0.5 });
+      lm[LM.rightElbow] = { ...lm[LM.rightElbow], visibility: 0.05 };
+      const f = palmFacing(lm, bodyFrame(lm, ASPECT)!, "right", ASPECT);
+      expect(f).not.toBeNull();
+      expect(grip === "forehand" ? f! : -f!).toBeGreaterThan(0.5);
+      expect(bodyVisibility(lm, "right").arm).toBe(true);
+    }
+  });
+
+  it("only a sweep in the hitting direction is a shot for the grip held", () => {
+    // right hand: positive across is toward the off-hand side
+    expect(swingMatchesGrip(1.2, "forehand", "right")).toBe(true);
+    expect(swingMatchesGrip(-1.2, "forehand", "right")).toBe(false);
+    expect(swingMatchesGrip(-1.2, "backhand", "right")).toBe(true);
+    expect(swingMatchesGrip(1.2, "backhand", "right")).toBe(false);
+    expect(swingMatchesGrip(-1.2, "forehand", "left")).toBe(true);
+    expect(swingMatchesGrip(1.2, "backhand", "left")).toBe(true);
+    expect(swingMatchesGrip(0.05, "forehand", "right")).toBe(false);
+  });
+
+  it("a backhand's wind-up toward the off-hand side is not a second shot", () => {
+    const c = new CameraController(DEFAULT_CALIBRATION);
+    let t = 0;
+    for (; t < 600; t += 33) c.update({ t, landmarks: pose({ across: 0.5, grip: "backhand" }), aspect: ASPECT });
+    const shots: number[] = [];
+    const sweep = (from: number, distance: number) => {
+      const t0 = t;
+      for (let i = 0; i <= 9; i++, t += 33) {
+        const p = i / 9;
+        const out = c.update({ t, landmarks: pose({ across: from + p * p * (3 - 2 * p) * distance, grip: "backhand" }), aspect: ASPECT });
+        if (out.swing) shots.push(t - t0);
+      }
+      for (let i = 0; i < 12; i++, t += 33) c.update({ t, landmarks: pose({ across: from + distance, grip: "backhand" }), aspect: ASPECT });
+    };
+    sweep(0.5, 1.2); // wind-up across the body
+    sweep(1.7, -1.2); // the backhand back toward the racket side
+    expect(shots).toHaveLength(1);
+  });
+
   it("reports what the camera can see for the setup check", () => {
     expect(bodyVisibility(pose(), "right")).toEqual({ shoulders: true, arm: true, hand: true });
     expect(bodyVisibility(pose({ grip: "hidden" }), "right")).toEqual({ shoulders: true, arm: true, hand: false });
     const lm = pose();
-    lm[LM.rightElbow] = { ...lm[LM.rightElbow], visibility: 0.1 };
+    lm[LM.rightWrist] = { ...lm[LM.rightWrist], visibility: 0.1 };
     expect(bodyVisibility(lm, "right").arm).toBe(false);
     expect(bodyVisibility(lm, "left").arm).toBe(true);
     expect(bodyVisibility(null, "right").shoulders).toBe(false);

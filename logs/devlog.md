@@ -345,3 +345,33 @@ the format of the entries below (see CLAUDE.md, Docs).
   untouched.
 - **Why:** A pure module with no I/O or randomness keeps the server
   authoritative and the logic testable. Wiring comes after the sim change lands.
+
+## 2026-10-14 23:38 AEDT | bug | Playtest: backhand shows NO GRIP or swings repeatedly; distance, elbow and preview size
+
+- **Situation:** First real-webcam playtest of task 14. User reported: the
+  backhand sometimes reads as NO GRIP; a backhand keeps swinging; 1.5-2 m is too
+  far; the setup asks for the elbow, which is uncomfortable; the camera preview
+  looks small, as if cropped.
+- **Cause (from the code):**
+  - NO GRIP: `palmFacing` returned null unless the elbow was visible, and a
+    close player's elbow is usually out of frame, so the badge fell to NO GRIP.
+  - Repeated backhand swings: the classic detector ignored direction, so the
+    wind-up (toward the off-hand side) and the recovery both counted as swings
+    along with the real stroke. This is the double-count parked in task 18,
+    now showing on the backhand, so the direction part is pulled forward.
+  - Preview: the stream was requested at 640x480 (4:3), so many webcams crop a
+    4:3 window out of a wide sensor, and the preview box was 240 px 4:3.
+- **Fix:** grip falls back to the hand's own direction (wrist to the
+  pinky/thumb midpoint) when the elbow isn't visible, and the setup check needs
+  only shoulders and the racket wrist. A classic swing only fires when its
+  sideways sweep matches the grip (forehand toward the off-hand side, backhand
+  toward the racket side, at least 0.15 shoulder-widths). The stream is asked
+  for 1280x720 and the preview is 16:9, 300 px wide. Safety text now says
+  about 1 m.
+- **Tests written:** grip reads with the elbow hidden; `swingMatchesGrip`
+  table; a backhand wind-up then stroke gives exactly one shot (fails without
+  the direction check, checked).
+- **Open:** the 0.15 sweep and the elbow-free fallback are untested with a real
+  webcam; the longer cooldown and the settle rule from task 18 are still
+  parked. Whether a camera is really cropping needs checking on the user's
+  device (the browser may still pick 4:3).

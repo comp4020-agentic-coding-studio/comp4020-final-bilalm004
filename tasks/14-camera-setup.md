@@ -16,7 +16,7 @@ movement are easier to control.
   shoulders and arm" check. Neutral capture and level tuning may live in an
   optional Advanced section.
 - **Safety notice** before "Start camera" (and in training): clear the space,
-  1.5-2 m from the screen, no loose jewellery or watches, hair and sleeves
+  about 1 m from the screen, no loose jewellery or watches, hair and sleeves
   clear, hold nothing, don't swing at full force, take breaks. A "got it"
   button; "don't show again" is a per-viewer convenience only.
 - **Grip stays the forehand/backhand signal** (palm to camera is forehand, back

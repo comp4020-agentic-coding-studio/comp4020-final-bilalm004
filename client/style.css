@@ -745,8 +745,8 @@ a:focus-visible {
   right: 0.75rem;
   /* below the HUD, which wraps to four rows on a phone with the camera on */
   top: 12.5rem;
-  width: min(240px, 40vw);
-  aspect-ratio: 4 / 3;
+  width: min(300px, 46vw);
+  aspect-ratio: 16 / 9;
   object-fit: cover;
   border-radius: 8px;
   border: 3px solid var(--accent);
@@ -765,7 +765,7 @@ a:focus-visible {
 }
 
 .game.calibrating .selfview {
-  width: min(320px, 60vw);
+  width: min(400px, 70vw);
 }
 
 .camera-panel {
@@ -842,8 +842,8 @@ a:focus-visible {
 .cam-hud {
   position: absolute;
   right: 0.75rem;
-  top: calc(12.5rem + min(240px, 40vw) * 0.75 + 0.5rem);
-  width: min(240px, 40vw);
+  top: calc(12.5rem + min(300px, 46vw) * 0.5625 + 0.5rem);
+  width: min(300px, 46vw);
   display: grid;
   gap: 0.4rem;
   pointer-events: none;
@@ -854,8 +854,8 @@ a:focus-visible {
 }
 
 .game.calibrating .cam-hud {
-  top: calc(12.5rem + min(320px, 60vw) * 0.75 + 0.5rem);
-  width: min(320px, 60vw);
+  top: calc(12.5rem + min(400px, 70vw) * 0.5625 + 0.5rem);
+  width: min(400px, 70vw);
 }
 
 .grip-badge {

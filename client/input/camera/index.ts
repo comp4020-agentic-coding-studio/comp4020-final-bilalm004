@@ -216,7 +216,7 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
       `<h2>Before you start</h2>
        <ul class="safety">
          <li>Clear the space around you.</li>
-         <li>Stand about 1.5 to 2 m from the screen.</li>
+         <li>Stand about an arm's length and a swing back, roughly 1 m from the screen.</li>
          <li>Remove loose jewellery and watches, tie back long hair, keep sleeves clear.</li>
          <li>Hold nothing in your hand.</li>
          <li>Don't swing at full force. Take breaks, and stop if anything hurts.</li>
@@ -307,10 +307,10 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
   const check = () => {
     show(
       `<h2>Can we see you?</h2>
-       <p>Step back until your shoulders and racket arm are in the preview. Lean to move and it follows you; there is nothing to calibrate.</p>
+       <p>Move until both shoulders and your racket hand are in the preview. Lean to move and it follows you; there is nothing to calibrate.</p>
        <ul class="vis" role="status">
          <li data-v="shoulders">Shoulders <b></b></li>
-         <li data-v="arm">Elbow and wrist <b></b></li>
+         <li data-v="arm">Racket wrist <b></b></li>
          <li data-v="hand">Hand (for forehand and backhand) <b></b></li>
        </ul>
        <div class="row">
