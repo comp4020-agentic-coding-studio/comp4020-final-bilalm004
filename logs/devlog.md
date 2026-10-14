@@ -809,3 +809,16 @@ the format of the entries below (see CLAUDE.md, Docs).
   stays deterministic and ADR 001's promise holds for balls still in the
   air. The latency and rewind tests had been using balls that landed about
   3 m long; they now use balls that land in, which is what they meant.
+
+## 2026-10-15 04:24 AEDT | milestone | Merged tasks 12 and 13 into main (9e63f48)
+
+- **Decided by:** Claude (merge and resolution); agents (the choices listed under Open); user (the out-ball rule, the home screen layout).
+- **Situation:** The rally-fixes agent (task 12) and the home-screen agent (task 13) both finished; each had passed its own checks.
+- **Outcome:** Merged both on a fresh integration branch. Conflicts were only in logs/devlog.md and the task overview table (both sides marked their own row done), resolved by keeping both. Verified on the combined tree: typecheck exit 0, pnpm check 258/258 exit 0, pnpm e2e --workers=1 64/64 exit 0, machine load 2.7 before and 6.4 after. Fast-forwarded main, restarted dev server and Vite by PID (a pattern kill took my shell down the first time) and confirmed both serve the new code. Both agents ran on claude-opus-5-5 (transcripts); PROCESS.md untouched.
+- **Open:**
+  - The three timing arcs are not shown for a ball that lands out before it reaches the player (no valid timing moment).
+  - The bot's let-go rule never fires in bot-vs-bot play (every point ends wide), so only a targeted test proves it; needs the user's playtest, as does the 0.32 s window.
+  - Agent choice, not yet confirmed: four disabled placeholder sports (Baseball, Bowling, Golf, Boxing) on the home screen.
+  - Agent choice, not yet confirmed: keyboard and touch players start in auto-move.
+  - The user's browser still reportedly shows old code on 5173 (see the dev-server entry); unresolved.
+- **Why:** Each branch was green alone; only the merged tree shows cross-branch breaks, as the task 1 and 3 merge did.
