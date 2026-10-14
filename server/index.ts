@@ -185,6 +185,14 @@ wss.on("connection", (ws: WebSocket) => {
         }
         break;
       }
+      case "ready":
+        client.room?.ready(client, msg.ready);
+        break;
+      case "format": {
+        const refused = client.room?.format(client, msg.format) ?? "not in a room";
+        if (refused) send(client, { t: "error", message: refused });
+        break;
+      }
       case "swing":
         client.room?.swing(client, msg);
         break;
@@ -205,7 +213,8 @@ wss.on("connection", (ws: WebSocket) => {
 
   ws.on("close", () => {
     clearInterval(pinger);
-    leaveRoom(client);
+    // a dropped connection mid-match holds the seat for 30 s (task 4)
+    leaveRoom(client, true);
   });
   ws.on("error", () => ws.terminate());
 });

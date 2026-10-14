@@ -47,6 +47,180 @@ class Peer {
   }
 }
 
+/** Ready both seats of a two-player room and wait out the 3 s countdown. */
+async function readyBoth(a: Peer, b: Peer): Promise<void> {
+  a.send({ t: "ready", ready: true });
+  b.send({ t: "ready", ready: true });
+  const deadline = Date.now() + 6000;
+  for (;;) {
+    const l = await a.next("lobby");
+    if (l.phase === "playing") return;
+    if (Date.now() > deadline) throw new Error(`room never started playing (phase ${l.phase})`);
+  }
+}
+
+/** The latest lobby message a peer has, waiting for one that matches. */
+async function lobbyWhere(p: Peer, ok: (l: Extract<ServerMsg, { t: "lobby" }>) => boolean, timeoutMs = 5000): Promise<Extract<ServerMsg, { t: "lobby" }>> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const l = await p.next("lobby", Math.max(1, deadline - Date.now()));
+    if (ok(l)) return l;
+  }
+}
+
+describe("room rules over WebSocket (task 4)", () => {
+  it("a two-player room waits for both to ready, counts down, then plays", async () => {
+    const a = await Peer.connect();
+    a.peer.send({ t: "create", game: "tennis", practice: false });
+    const room = await a.peer.next("room");
+    expect((await a.peer.next("lobby")).phase).toBe("waiting");
+    const b = await Peer.connect();
+    b.peer.send({ t: "join", room: room.room });
+    await b.peer.next("room");
+    const check = await lobbyWhere(b.peer, (l) => l.phase === "ready-check");
+    expect(check.host).toBe(0);
+    expect(check.format).toBe("oneSet");
+    expect(check.seats.map((s) => s?.ready)).toEqual([false, false]);
+    // the game doesn't move during the ready check
+    await new Promise((r) => setTimeout(r, 300));
+    b.peer.seen.length = 0;
+    expect(((await b.peer.next("state")).state as TennisSnapshot).tick).toBe(0);
+
+    a.peer.send({ t: "ready", ready: true });
+    b.peer.send({ t: "ready", ready: true });
+    const counting = await lobbyWhere(b.peer, (l) => l.phase === "countdown");
+    expect(counting.countdown).toBe(3);
+    await lobbyWhere(b.peer, (l) => l.phase === "playing", 6000);
+    await new Promise((r) => setTimeout(r, 300));
+    b.peer.seen.length = 0;
+    expect(((await b.peer.next("state")).state as TennisSnapshot).tick).toBeGreaterThan(5);
+  });
+
+  it("un-readying cancels the countdown; the host's format change clears both ready flags", async () => {
+    const a = await Peer.connect();
+    a.peer.send({ t: "create", game: "tennis", practice: false });
+    const room = await a.peer.next("room");
+    const b = await Peer.connect();
+    b.peer.send({ t: "join", room: room.room });
+    await b.peer.next("room");
+    a.peer.send({ t: "ready", ready: true });
+    b.peer.send({ t: "ready", ready: true });
+    await lobbyWhere(a.peer, (l) => l.phase === "countdown");
+    b.peer.send({ t: "ready", ready: false });
+    await lobbyWhere(a.peer, (l) => l.phase === "ready-check" && l.countdown === null);
+
+    b.peer.send({ t: "ready", ready: true });
+    await lobbyWhere(a.peer, (l) => l.phase === "countdown");
+    a.peer.send({ t: "format", format: "bestOfThree" });
+    const changed = await lobbyWhere(b.peer, (l) => l.format === "bestOfThree");
+    expect(changed.phase).toBe("ready-check");
+    expect(changed.seats.map((s) => s?.ready)).toEqual([false, false]);
+    // the game's own score follows (older states may still be queued)
+    b.peer.seen = b.peer.seen.filter((m) => m.t !== "state");
+    expect(((await b.peer.next("state")).state as TennisSnapshot).score.format).toBe("bestOfThree");
+    // only the host may change it
+    b.peer.send({ t: "format", format: "unlimited" });
+    expect((await b.peer.next("error")).message).toMatch(/host/);
+  });
+
+  it("a disconnect before the match frees and un-readies the seat", async () => {
+    const a = await Peer.connect();
+    a.peer.send({ t: "create", game: "tennis", practice: false });
+    const room = await a.peer.next("room");
+    const b = await Peer.connect();
+    b.peer.send({ t: "join", room: room.room });
+    await b.peer.next("room");
+    b.peer.send({ t: "ready", ready: true });
+    await lobbyWhere(a.peer, (l) => l.seats[1]?.ready === true);
+    b.peer.ws.close();
+    const after = await lobbyWhere(a.peer, (l) => l.seats[1] === null);
+    expect(after.phase).toBe("waiting");
+    const again = await Peer.connect(b.token);
+    again.peer.send({ t: "join", room: room.room });
+    expect((await again.peer.next("room")).seat).toBe(1);
+    expect((await lobbyWhere(a.peer, (l) => l.seats[1] !== null)).seats[1]!.ready).toBe(false);
+  });
+
+  it("a mid-match drop pauses and shows who and how long; the same token reclaims the seat and play resumes", async () => {
+    const a = await Peer.connect();
+    a.peer.send({ t: "create", game: "tennis", practice: false });
+    const room = await a.peer.next("room");
+    const b = await Peer.connect();
+    b.peer.send({ t: "join", room: room.room });
+    await b.peer.next("room");
+    await readyBoth(a.peer, b.peer);
+    b.peer.ws.close();
+    const held = await lobbyWhere(a.peer, (l) => l.phase === "paused");
+    expect(held.hold).toEqual({ seat: 1, name: b.name, seconds: expect.any(Number) });
+    expect(held.hold!.seconds).toBeGreaterThan(25);
+    expect(held.hold!.seconds).toBeLessThanOrEqual(30);
+
+    const back = await Peer.connect(b.token);
+    back.peer.send({ t: "join", room: room.room });
+    expect((await back.peer.next("room")).seat).toBe(1);
+    await lobbyWhere(a.peer, (l) => l.phase === "countdown" && l.hold === null);
+    await lobbyWhere(a.peer, (l) => l.phase === "playing", 6000);
+  }, 20_000);
+
+  it("one player on two tabs (same token) may take both seats, for testing", async () => {
+    const first = await Peer.connect();
+    first.peer.send({ t: "create", game: "tennis", practice: false });
+    const room = await first.peer.next("room");
+    const second = await Peer.connect(first.token);
+    expect(second.token).toBe(first.token);
+    second.peer.send({ t: "join", room: room.room });
+    expect((await second.peer.next("room")).seat).toBe(1);
+    const l = await lobbyWhere(first.peer, (v) => v.seats[1] !== null);
+    expect(l.seats.map((s) => s!.name)).toEqual([first.name, `${first.name} (2)`]);
+    await readyBoth(first.peer, second.peer);
+  });
+
+  it("the invite code still joins (any case) and the joiner gets the room's state", async () => {
+    const a = await Peer.connect();
+    a.peer.send({ t: "create", game: "tennis", practice: false, format: "unlimited" });
+    const room = await a.peer.next("room");
+    const b = await Peer.connect();
+    b.peer.send({ t: "join", room: room.room.toLowerCase() });
+    expect((await b.peer.next("room")).room).toBe(room.room);
+    const l = await b.peer.next("lobby");
+    expect(l.format).toBe("unlimited");
+    expect(l.tally).toEqual({ points: [0, 0], bestRally: 0 });
+  });
+
+  it("practice vs bot stays instant: playing at once, the bot always ready", async () => {
+    const { peer } = await Peer.connect();
+    peer.send({ t: "create", game: "tennis", practice: true });
+    await peer.next("room");
+    const l = await peer.next("lobby");
+    expect(l.phase).toBe("playing");
+    expect(l.seats[1]).toMatchObject({ name: "Bot", ready: true, bot: true });
+    peer.send({ t: "ready", ready: false });
+    peer.send({ t: "format", format: "unlimited" });
+    expect((await peer.next("error")).message).toMatch(/host/);
+  });
+
+  it("rejects malformed or hostile ready and format messages", async () => {
+    const { peer } = await Peer.connect();
+    for (const bad of [
+      { t: "ready" },
+      { t: "ready", ready: "yes" },
+      { t: "ready", ready: 1 },
+      { t: "format" },
+      { t: "format", format: "firstToAMillion" },
+      { t: "format", format: "__proto__" },
+      { t: "format", format: ["oneSet"] },
+      { t: "lobby", phase: "playing" },
+      { t: "closed", room: "ABCD" },
+    ]) {
+      peer.ws.send(JSON.stringify(bad));
+      expect((await peer.next("error")).message, JSON.stringify(bad)).toMatch(/bad message/);
+    }
+    // valid, but not in a room
+    peer.send({ t: "format", format: "bestOfThree" });
+    expect((await peer.next("error")).message).toMatch(/room/);
+  });
+});
+
 describe("rooms over WebSocket", () => {
   it("remembers a player by token across connections", async () => {
     const first = await Peer.connect();
@@ -318,6 +492,7 @@ describe("rooms over WebSocket", () => {
     const b = await Peer.connect();
     b.peer.send({ t: "join", room: room.room });
     await b.peer.next("room");
+    await readyBoth(a.peer, b.peer);
     a.peer.send({ t: "pause", paused: true });
     await new Promise((r) => setTimeout(r, 150));
     a.peer.seen.length = 0;
@@ -365,6 +540,8 @@ describe("movement mode (task 2: auto-move)", () => {
     const b = await Peer.connect();
     b.peer.send({ t: "join", room: room.room });
     await b.peer.next("room");
+    // modes reach the game once it steps, which is after the ready check
+    await readyBoth(a.peer, b.peer);
     await new Promise((r) => setTimeout(r, 150));
     b.peer.seen.length = 0;
     expect(((await b.peer.next("state")).state as TennisSnapshot).movement.map((m) => m.mode)).toEqual(["auto", "auto"]);
