@@ -471,3 +471,16 @@ the format of the entries below (see CLAUDE.md, Docs).
   with the same token, and whether open rooms are listed.
 - **Why:** The queue needs the ready-up room state machine first; spectating
   already works and is tested.
+
+## 2026-10-15 00:37 AEDT | decision | Two tabs, one player is allowed (for testing)
+
+- **Situation:** Task 4 asked what happens when the same token opens a second
+  tab. User wants two tabs able to join one room for testing, flagged for later.
+- **Outcome:** Allowed. Checked the code: `join()` in server/rooms.ts has no
+  token comparison, and the client keeps its token in localStorage, so two tabs
+  of one browser share it; demo accounts (demo-1, demo-2) give two identities.
+  Added to tasks/04 as decided, with a spec test requested so it isn't removed
+  by accident, and flagged in parked.md: ratings should ignore a match whose
+  two seats share a token, and reconnect needs a rule for which tab wins.
+- **Why:** Cheapest option, matches current behaviour, and the user needs it
+  while testing alone.

@@ -19,8 +19,15 @@ camera, agree the rules, ready up, then play.
 - Disconnect mid-match: grace period (suggested 15-30 s), then pause, forfeit
   or bot takeover?
 - Reconnect: same token reclaims the same seat and the match resumes?
-- Two tabs, one player (same token): second connection allowed? Replaces the
-  first?
+- Two tabs, one player (same token): **decided: allowed, for testing.** Both
+  tabs may join the same room and take both seats. It works today (`join()` in
+  `server/rooms.ts` never compares tokens), so don't break it. Keep it covered
+  by a spec test so a later change can't remove it by accident. Flagged risks
+  for when this stops being a test aid (see parked.md): one person on both
+  seats could feed themselves wins, so ratings should ignore a match where both
+  seats share a token (practice vs bot is already unrated). Reconnect: a token
+  reclaims its seat, but with two tabs that must pick the right tab; decide when
+  building reconnect.
 - Who can see what: room code only, or a public list of open rooms?
 - Identity: pseudonym per token, renameable? Anything stopping impersonation?
 
