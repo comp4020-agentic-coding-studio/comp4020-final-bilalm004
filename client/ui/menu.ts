@@ -26,17 +26,14 @@ const ICONS = {
   tennis: icon(
     `<circle cx="12" cy="12" r="10" fill="#d8f03c" stroke="#8fa61a" stroke-width="1.2"/><path d="M4.5 5.5c4 3 4 10 0 13M19.5 5.5c-4 3-4 10 0 13" fill="none" stroke="#fff" stroke-width="1.8"/>`,
   ),
-  baseball: icon(
-    `<circle cx="12" cy="12" r="10" fill="#fff" stroke="#9aa5b1" stroke-width="1.2"/><path d="M6 4.5c2.5 4 2.5 11 0 15M18 4.5c-2.5 4-2.5 11 0 15" fill="none" stroke="#e03131" stroke-width="1.4" stroke-dasharray="1.6 1.4"/>`,
+  archery: icon(
+    `<circle cx="12" cy="12" r="10" fill="#fff" stroke="#9aa5b1" stroke-width="1.2"/><circle cx="12" cy="12" r="7" fill="#4dabf7"/><circle cx="12" cy="12" r="4.4" fill="#e03131"/><circle cx="12" cy="12" r="1.8" fill="#ffd23f"/>`,
   ),
   bowling: icon(
     `<path d="M12 2c2 0 2.6 2 2 4.5-.4 1.6 3 5 3 9.5 0 3.5-2 6-5 6s-5-2.5-5-6c0-4.5 3.4-7.9 3-9.5C9.4 4 10 2 12 2z" fill="#fff" stroke="#9aa5b1" stroke-width="1.2"/><path d="M9.6 7.6h4.8" stroke="#e03131" stroke-width="1.6"/>`,
   ),
-  golf: icon(
-    `<path d="M7 22V3" stroke="#495057" stroke-width="1.6"/><path d="M7.8 3.5l10 3.8-10 3.8z" fill="#ff4d4d"/><ellipse cx="11" cy="21.5" rx="7" ry="1.6" fill="#69bb55"/>`,
-  ),
-  boxing: icon(
-    `<path d="M6 10c0-4 2.8-7 6.5-7S19 5.5 19 9.5c0 3-1.2 5-3 6v3H8v-3.5C6.8 14 6 12.4 6 10z" fill="#e03131" stroke="#a61e1e" stroke-width="1.1"/><rect x="7.5" y="18" width="9" height="3.5" rx="1" fill="#f8f9fa" stroke="#9aa5b1"/>`,
+  mystery: icon(
+    `<circle cx="12" cy="12" r="10" fill="#e7ecf2" stroke="#9aa5b1" stroke-width="1.2"/><text x="12" y="16.5" text-anchor="middle" font-size="12" font-weight="800" font-family="system-ui, sans-serif" fill="#6b7a8a">?</text>`,
   ),
 };
 
@@ -139,18 +136,17 @@ function tennisThumb(): string {
     </div>`;
 }
 
-function baseballThumb(): string {
+function archeryThumb(): string {
   return `<div class="thumb-art">${svg(`
     ${sky("#5fb0ee", "#d6eefc")}
-    ${crowd(30, 4, 0, 320)}
-    <rect y="58" width="320" height="122" fill="#4f9e3d"/>
-    <path d="M160 176 L60 96 Q160 52 260 96 Z" fill="#c98b52"/>
-    <polygon points="160,160 206,124 160,96 114,124" fill="#5aa847" stroke="#fff" stroke-width="1.6"/>
-    <g fill="#fff"><rect x="156" y="156" width="8" height="8" transform="rotate(45 160 160)"/>
-    <rect x="202" y="120" width="7" height="7" transform="rotate(45 206 124)"/>
-    <rect x="156" y="92" width="7" height="7" transform="rotate(45 160 96)"/>
-    <rect x="110" y="120" width="7" height="7" transform="rotate(45 114 124)"/></g>
-    <circle cx="160" cy="128" r="7" fill="#c98b52"/>
+    <path d="M0 104 Q90 84 180 100 T320 96 V180 H0 Z" fill="#6fbf5a"/>
+    <rect y="120" width="320" height="60" fill="#4f9e3d"/>
+    <line x1="150" y1="118" x2="140" y2="156" stroke="#8d6e4f" stroke-width="3"/><line x1="190" y1="118" x2="200" y2="156" stroke="#8d6e4f" stroke-width="3"/>
+    <circle cx="170" cy="92" r="40" fill="#fff" stroke="#adb5bd" stroke-width="1.4"/>
+    <circle cx="170" cy="92" r="32" fill="#2b2f4a"/><circle cx="170" cy="92" r="24" fill="#4dabf7"/>
+    <circle cx="170" cy="92" r="16" fill="#e03131"/><circle cx="170" cy="92" r="7" fill="#ffd23f"/>
+    <g stroke="#6b4f33" stroke-width="2.4" stroke-linecap="round"><line x1="176" y1="86" x2="246" y2="36"/><line x1="160" y1="98" x2="100" y2="140"/></g>
+    <g fill="#e03131"><polygon points="246,36 236,38 242,46"/></g>
   `)}</div>`;
 }
 
@@ -174,35 +170,11 @@ function bowlingThumb(): string {
   `)}</div>`;
 }
 
-function golfThumb(): string {
+function mysteryThumb(): string {
   return `<div class="thumb-art">${svg(`
-    ${sky("#56a8ec", "#dff2fd")}
-    <path d="M0 96 Q80 66 160 90 T320 82 V180 H0 Z" fill="#6fbf5a"/>
-    <path d="M0 126 Q100 100 200 120 T320 116 V180 H0 Z" fill="#5aa847"/>
-    <ellipse cx="200" cy="128" rx="58" ry="14" fill="#86d16e"/>
-    <ellipse cx="208" cy="128" rx="3.4" ry="1.4" fill="#1d2b36"/>
-    <line x1="208" y1="128" x2="208" y2="86" stroke="#f1f3f5" stroke-width="2"/>
-    <polygon points="208,86 232,92 208,98" fill="#ff4d4d"/>
-    <path d="M40 150 Q70 138 110 150 Q80 160 40 150 Z" fill="#f2d79b"/>
-    <circle cx="120" cy="160" r="3.4" fill="#fff" stroke="#ced4da" stroke-width=".6"/>
-  `)}</div>`;
-}
-
-function boxingThumb(): string {
-  return `<div class="thumb-art">${svg(`
-    <rect width="320" height="180" fill="#1f2340"/>
-    <polygon points="140,0 180,0 230,120 90,120" fill="#ffffff" opacity=".08"/>
-    ${crowd(18, 4, 0, 320)}
-    <polygon points="40,96 280,96 310,170 10,170" fill="#e7ecf2"/>
-    <polygon points="10,170 310,170 310,180 10,180" fill="#3b5bdb"/>
-    <g stroke-width="2.4">
-      <line x1="40" y1="66" x2="280" y2="66" stroke="#e03131"/><line x1="10" y1="140" x2="310" y2="140" stroke="#e03131"/>
-      <line x1="40" y1="78" x2="280" y2="78" stroke="#fff"/><line x1="10" y1="153" x2="310" y2="153" stroke="#fff"/>
-      <line x1="40" y1="88" x2="280" y2="88" stroke="#4dabf7"/><line x1="10" y1="164" x2="310" y2="164" stroke="#4dabf7"/>
-    </g>
-    <g fill="#ced4da"><rect x="37" y="60" width="6" height="38"/><rect x="277" y="60" width="6" height="38"/>
-    <rect x="6" y="132" width="8" height="42"/><rect x="306" y="132" width="8" height="42"/></g>
-    <circle cx="130" cy="116" r="11" fill="#e03131"/><circle cx="190" cy="112" r="11" fill="#1c7ed6"/>
+    <rect width="320" height="180" fill="#c9dcf0"/>
+    <rect width="320" height="180" fill="#ffffff" opacity=".25"/>
+    <text x="160" y="124" text-anchor="middle" font-size="110" font-weight="800" font-family="system-ui, sans-serif" fill="#7d93ab">??</text>
   `)}</div>`;
 }
 
@@ -214,10 +186,10 @@ function boxingThumb(): string {
  */
 export const SPORTS: Sport[] = [
   { id: "tennis", name: "Tennis", playable: true, icon: ICONS.tennis, blurb: "Rally against the bot or a friend. Swing with your camera or the keyboard.", thumbnail: tennisThumb },
-  { id: "baseball", name: "Baseball", playable: false, icon: ICONS.baseball, blurb: "Coming soon.", thumbnail: baseballThumb },
   { id: "bowling", name: "Bowling", playable: false, icon: ICONS.bowling, blurb: "Coming soon.", thumbnail: bowlingThumb },
-  { id: "golf", name: "Golf", playable: false, icon: ICONS.golf, blurb: "Coming soon.", thumbnail: golfThumb },
-  { id: "boxing", name: "Boxing", playable: false, icon: ICONS.boxing, blurb: "Coming soon.", thumbnail: boxingThumb },
+  { id: "archery", name: "Archery", playable: false, icon: ICONS.archery, blurb: "Coming soon.", thumbnail: archeryThumb },
+  { id: "mystery-1", name: "??", playable: false, icon: ICONS.mystery, blurb: "A secret sport. Who knows?", thumbnail: mysteryThumb },
+  { id: "mystery-2", name: "??", playable: false, icon: ICONS.mystery, blurb: "A secret sport. Who knows?", thumbnail: mysteryThumb },
 ];
 
 // A chunky pointer arrow, drawn here (not a Nintendo asset), that marks the
@@ -264,7 +236,7 @@ export function renderMenu(
             ${s.playable ? `aria-pressed="${s === selected}"` : `aria-disabled="true"`}
             tabindex="${s === selected ? 0 : -1}">
             ${s.icon}<span class="sport-name">${s.name}</span>
-            ${s.playable ? "" : `<span class="sport-soon">Coming soon</span>`}
+            ${s.playable || s.name === "??" ? "" : `<span class="sport-soon">Coming soon</span>`}
             ${POINTER}
           </button>`,
         ).join("")}

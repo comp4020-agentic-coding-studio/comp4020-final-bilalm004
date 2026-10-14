@@ -97,7 +97,9 @@ test("coming-soon sports can't be activated and never reach the server", async (
   const n = await placeholders.count();
   for (let i = 0; i < n; i++) {
     const b = placeholders.nth(i);
-    await expect(b).toContainText(/coming soon/i);
+    // named placeholders say so; the ?? tiles keep their secret
+    if ((await b.locator(".sport-name").textContent()) === "??") await expect(b).not.toContainText(/coming soon/i);
+    else await expect(b).toContainText(/coming soon/i);
     await expect(b).toHaveAttribute("tabindex", "-1");
     // screen readers and Playwright see it as disabled; force a real click anyway
     await expect(b).toBeDisabled();
@@ -112,6 +114,12 @@ test("coming-soon sports can't be activated and never reach the server", async (
   await expect(page.getByRole("button", { name: /practice vs bot/i })).toBeVisible();
   // only playable sports are pressable; the placeholders carry no pressed state
   await expect(page.locator('.sport[aria-pressed="true"]')).toHaveAttribute("data-sport", "tennis");
+});
+
+test("the sports are Tennis, Bowling, Archery and two ?? tiles, in that order", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByText(/playing as/i)).toBeVisible();
+  await expect(page.locator(".sport .sport-name")).toHaveText(["Tennis", "Bowling", "Archery", "??", "??"]);
 });
 
 test("every current action is still on the home screen", async ({ page }) => {
