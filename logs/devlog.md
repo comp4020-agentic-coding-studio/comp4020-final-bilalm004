@@ -462,6 +462,40 @@ the format of the entries below (see CLAUDE.md, Docs).
 - **Why:** One numbering, with "waits on" per task, is easier to plan from than
   groups of groups. Files were moved with git mv to keep their history.
 
+## 2026-10-15 00:36 AEDT | decision | Third arrival stays a spectator; winner-stays-on parked
+
+- **Situation:** Deciding the multi-user rules for task 4. User likes the
+  "winner stays on" idea but wants it later.
+- **Outcome:** A third person is a spectator, as today, with no queue. Winner
+  stays on is in parked.md. Still open for task 4: disconnect grace, second tab
+  with the same token, and whether open rooms are listed.
+- **Why:** The queue needs the ready-up room state machine first; spectating
+  already works and is tested.
+
+## 2026-10-15 00:37 AEDT | decision | Two tabs, one player is allowed (for testing)
+
+- **Situation:** Task 4 asked what happens when the same token opens a second
+  tab. User wants two tabs able to join one room for testing, flagged for later.
+- **Outcome:** Allowed. Checked the code: `join()` in server/rooms.ts has no
+  token comparison, and the client keeps its token in localStorage, so two tabs
+  of one browser share it; demo accounts (demo-1, demo-2) give two identities.
+  Added to tasks/04 as decided, with a spec test requested so it isn't removed
+  by accident, and flagged in parked.md: ratings should ignore a match whose
+  two seats share a token, and reconnect needs a rule for which tab wins.
+- **Why:** Cheapest option, matches current behaviour, and the user needs it
+  while testing alone.
+
+## 2026-10-15 00:40 AEDT | decision | Disconnect and open-room rules for task 4
+
+- **Decision:** On a mid-match disconnect the seat is held and the match pauses
+  for 30 s; the same token reclaims it and the match resumes, else the room
+  closes. No forfeit, no bot takeover. Rooms are reached by invite link or room
+  code only, with no public list.
+- **Why:** Smallest behaviour that is fair to both players and keeps strangers
+  out. Forfeit and bot takeover were the costlier alternatives.
+- **Left for task 4:** identity (pseudonym per token, renaming), and which tab
+  reclaims a seat when one token has two tabs.
+
 ## 2026-10-15 01:23 AEDT | milestone | Real tennis scoring in the game (task 1)
 
 - **Situation:** The scoring module was built and unit-tested but the sim
@@ -481,3 +515,4 @@ the format of the entries below (see CLAUDE.md, Docs).
   rating can't be farmed off the bot. The bar first had a third row for the
   format and call; on a phone that pushed the HUD 9 px into the camera
   preview's spot, so those moved into a right-hand column.
+

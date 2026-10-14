@@ -23,3 +23,16 @@ One swing sometimes counts as two (wind-up then forward swing, or the return
 stroke). Fix when picked up: count only motion in the hitting direction, a
 longer cooldown (about 500-600 ms), and require the wrist to settle before a
 new swing. Training mode (task 5) may show it; note instances in the devlog.
+
+## Winner stays on (spectator queue)
+A third arrival joins a queue; when a match ends the winner keeps the seat and
+the next in the queue takes the loser's. Liked, but built later: today a third
+person is a spectator and nothing more. Needs the room state machine from task 4
+first, then queue order, leave-the-queue and what a spectator sees.
+
+## One player on two tabs (flagged)
+Allowed for now so one person can test with two tabs (same browser token or the
+demo accounts). When it matters: a match where both seats share a token should
+not move ratings or the leaderboard (task 7), duplicate-token reconnect needs a
+rule for which tab gets the seat, and a "replace the old tab" or "reject the
+second tab" policy can come with accounts.
