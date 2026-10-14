@@ -237,3 +237,39 @@ the format of the entries below (see CLAUDE.md, Docs).
   pinned in `spec/sim.test.ts`.
 - **Verification:** `pnpm check` 124/124 five times in a row; the one test 6/6
   with four busy CPU loops running. Not reproduced on CI itself.
+
+## 2026-10-14 22:58 AEDT | decision | Gameplay rework planned: tennis rules, ready-up, Wii-style shots, training mode
+
+- **Situation:** User wanted several changes: a ready step before multiplayer,
+  proper tennis scoring, an unlimited mode, clearer forehand/backhand, a way to
+  see where a shot will land, a how-to-play flow, easier camera control, and
+  accounts. Discussed and planned only; no code changed.
+- **Findings (from reading `pose.ts`, `camera/index.ts`, `sim.ts`):**
+  - Camera setup's neutral capture only feeds point aim, and swing-level
+    calibration duplicates thresholds already in shoulder-widths/second. Neither
+    matters for classic swing with timing aim, so both leave the default flow.
+  - Swing double-count: the classic detector ignores direction and has a 300 ms
+    cooldown, so a wind-up plus forward swing can read as two. Not fixed now.
+  - Level (light/medium/hard) sets speed, loft and height sensitivity, not aim.
+    With `predictLanding` at hand-set contact heights, depth diverged by level
+    off 1.0 m (hard: net at 0.5 m, long at 1.5 m). I overstated how much a
+    player controls height; it comes from the incoming ball, and timing is the
+    only input. Real contact heights are still to be measured.
+  - I wrongly called the palm-to-camera grip unnatural; a backhand shows the back
+    of the hand to the camera, which matches the code. The weakness is
+    detection (0.3 threshold, previous grip kept on unclear reads).
+- **Decisions:** classic swing and timing aim only (Wii Tennis feel); timing
+  sets left-right, strength sets depth, height is automatic (`launch()` solves
+  the arc); a wrong-side swing becomes a miss; a default auto-move mode with
+  tilt kept as the alternative; grip is the single forehand/backhand signal
+  (two signals that disagree feel worse); no lets; format chosen by the host
+  before play, changing it clears ready flags; unlimited is unrated; guests get
+  full scoring. Training mode is the camera's onboarding, with three arcs (the
+  live one lit, the others greyed) and a timing meter.
+- **Parked:** accounts and profiles, room codes (invite links already exist),
+  quick-chat, and the double-swing fix.
+- **Why:** each control now does one thing, so the landing aid can be honest
+  and a new player can learn the mapping.
+- **Output:** tasks 11-18 and the "Gameplay rework" section in
+  `tasks/00-overview.md` (build order and which tasks can run as parallel
+  agents). Open: three or two strength levels; target depths need playtesting.
