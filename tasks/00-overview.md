@@ -26,6 +26,9 @@ One flat list. Start at the top; a task only waits on the ones named.
 | 11 | [Ship](11-ship.md): push, make the repo public, CI green, tag | - | Sonnet |
 | 12 | [Rally fixes](12-rally-fixes.md): out balls, dead ball, wider hit window (done) | 2 | Opus |
 | 13 | [Wii-style home screen](13-home-screen.md): title, sport thumbnail, themed sport buttons (done) | - | Opus |
+| 14 | [Weblympics colours and logo](14-brand-and-logo.md): Olympic colours, a fun logo | - | Opus |
+| 15 | [Game pages, recorded thumbnails, webcam by default](15-game-pages-and-thumbnails.md) | 4, 5 | Opus |
+| 16 | [Point-scored banner and reaction effects](16-point-scored-banner.md) | - | Opus |
 
 Not numbered:
 - [parked.md](parked.md): accounts and profiles, room codes, double-swing cooldown.
