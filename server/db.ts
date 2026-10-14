@@ -2,30 +2,17 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { insertMatch, migrate } from "./schema.ts";
+import type { MatchRecord } from "./schema.ts";
+
+export type { MatchRecord } from "./schema.ts";
 
 const dir = process.env.DATA_DIR ?? (existsSync("/data") ? "/data" : "./data");
 mkdirSync(dir, { recursive: true });
 
 const db = new DatabaseSync(join(dir, "app.db"));
-db.exec(`
-  PRAGMA journal_mode = WAL;
-  CREATE TABLE IF NOT EXISTS players (
-    token TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    created_at INTEGER NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS matches (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    room TEXT NOT NULL,
-    game TEXT NOT NULL,
-    p0 TEXT,
-    p1 TEXT,
-    score0 INTEGER NOT NULL,
-    score1 INTEGER NOT NULL,
-    winner INTEGER NOT NULL,
-    ended_at INTEGER NOT NULL
-  );
-`);
+db.exec("PRAGMA journal_mode = WAL;");
+migrate(db);
 
 const ADJECTIVES = ["Swift", "Lucky", "Quiet", "Brave", "Sunny", "Nimble", "Plucky", "Breezy"];
 const ANIMALS = ["Otter", "Heron", "Wombat", "Koala", "Magpie", "Quokka", "Gecko", "Dingo"];
@@ -63,18 +50,8 @@ export function getOrCreatePlayer(token: string | undefined): Player {
   return { token: fresh, name };
 }
 
-export interface MatchRecord {
-  room: string;
-  game: string;
-  tokens: [string | null, string | null];
-  score: [number, number];
-  winner: 0 | 1;
-}
-
 export function recordMatch(m: MatchRecord): void {
-  db.prepare(
-    "INSERT INTO matches (room, game, p0, p1, score0, score1, winner, ended_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-  ).run(m.room, m.game, m.tokens[0], m.tokens[1], m.score[0], m.score[1], m.winner, Date.now());
+  insertMatch(db, m);
 }
 
 export function matchCountFor(token: string): number {

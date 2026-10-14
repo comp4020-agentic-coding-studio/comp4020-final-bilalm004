@@ -668,9 +668,117 @@ a:focus-visible {
   min-height: 44px;
 }
 
+/* score bar: two rows (sets, games, points), the format and the umpire's call;
+   compact so the HUD stays above the camera dock on a phone */
 .hud .score {
-  font-size: 1.25rem;
+  display: grid;
+  grid-template-columns: 0.9rem minmax(0, 8rem) repeat(3, auto) minmax(0, 8.5rem);
+  grid-template-rows: auto auto;
+  column-gap: 0.4rem;
+  max-width: 100%;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 8px;
+  background: #0f1720d9;
+  font-size: 0.95rem;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+}
+
+.score .sb-row {
+  display: contents;
+}
+
+.score .sb-serve {
+  color: var(--accent);
+  font-size: 0.7rem;
+  text-align: center;
+}
+
+.score .sb-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.score [data-serving="true"] .sb-name,
+.score [data-won="true"] .sb-name {
   font-weight: 700;
+}
+
+.score .sb-num {
+  min-width: 1.2rem;
+  text-align: center;
+  color: var(--muted);
+}
+
+.score .sb-points {
+  min-width: 1.9rem;
+  padding: 0 0.2rem;
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--text);
+  font-weight: 700;
+}
+
+/* format on the first row, the call on the second, right of the numbers */
+.score .sb-foot {
+  display: contents;
+}
+
+.score .sb-format,
+.score .sb-call {
+  grid-column: 6;
+  padding-left: 0.2rem;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.score .sb-format {
+  grid-row: 1;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.score .sb-call {
+  grid-row: 2;
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.score .sb-pulse {
+  animation: sb-pulse 0.6s ease-out;
+}
+
+@keyframes sb-pulse {
+  0% {
+    transform: scale(1);
+    background: var(--accent);
+    color: var(--accent-text);
+  }
+  35% {
+    transform: scale(1.35);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .score .sb-pulse {
+    animation: none;
+  }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .hud .status {

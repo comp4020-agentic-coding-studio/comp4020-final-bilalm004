@@ -22,15 +22,22 @@ export interface GameInstance {
    */
   rewind?(input: SeatInput, ticksAgo: number): GameEvent[] | null;
   snapshot(): unknown;
-  finished(): { winner: 0 | 1; score: [number, number] } | null;
+  /**
+   * Set once the match is over. `score` is the headline result (sets won in
+   * tennis); `format` and `sets` (games per finished set) are optional detail.
+   */
+  finished(): { winner: 0 | 1; score: [number, number]; format?: string; sets?: Array<[number, number]> } | null;
   botInputs(seat: 0 | 1): unknown[];
 }
 
 export interface GameDef {
   id: string;
   name: string;
-  /** `endless`: no winner, play until everyone leaves (practice). */
-  create(seed: number, options?: { endless?: boolean }): GameInstance;
+  /**
+   * `endless`: no winner, play until everyone leaves (practice).
+   * `format`: the game's own match format id; unknown values get its default.
+   */
+  create(seed: number, options?: { endless?: boolean; format?: string }): GameInstance;
 }
 
 export const games: Record<string, GameDef> = { tennis };

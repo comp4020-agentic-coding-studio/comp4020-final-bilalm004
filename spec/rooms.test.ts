@@ -65,7 +65,7 @@ describe("rooms over WebSocket", () => {
     const state = await peer.next("state");
     expect(state.state).toHaveProperty("ball");
     // practice never ends, so the player can keep training
-    expect((state.state as TennisSnapshot).winScore).toBeNull();
+    expect((state.state as TennisSnapshot).endless).toBe(true);
   });
 
   it("seats a second player, then makes the third a spectator", async () => {
@@ -80,8 +80,61 @@ describe("rooms over WebSocket", () => {
     const c = await Peer.connect();
     c.peer.send({ t: "join", room: room.room.toLowerCase() });
     expect((await c.peer.next("room")).seat).toBeNull();
-    expect(((await c.peer.next("state")).state as TennisSnapshot).winScore).toBe(COURT.winScore);
+    const snap = (await c.peer.next("state")).state as TennisSnapshot;
+    expect(snap.endless).toBe(false);
   });
+
+  it("every state carries the server's tennis score: points, games, sets, server, format", async () => {
+    const { peer } = await Peer.connect();
+    peer.send({ t: "create", game: "tennis", practice: false });
+    await peer.next("room");
+    const snap = (await peer.next("state")).state as TennisSnapshot;
+    expect(snap.score).toEqual({
+      format: "oneSet",
+      server: 0,
+      points: [0, 0],
+      games: [0, 0],
+      sets: [0, 0],
+      setScores: [],
+      tiebreak: false,
+      tiebreakFirst: 0,
+      gameServer: 0,
+      faults: 0,
+      winner: null,
+    });
+    expect(snap.server).toBe(snap.score.server);
+    expect(snap.lastCall).toBeNull();
+    // the old first-to-5 field is gone
+    expect(snap).not.toHaveProperty("winScore");
+  });
+
+  it("a room can be made best of three; an unknown format gets one set", async () => {
+    const a = await Peer.connect();
+    a.peer.send({ t: "create", game: "tennis", practice: false, format: "bestOfThree" });
+    await a.peer.next("room");
+    expect(((await a.peer.next("state")).state as TennisSnapshot).score.format).toBe("bestOfThree");
+
+    const b = await Peer.connect();
+    b.peer.send({ t: "create", game: "tennis", practice: false, format: "firstToAMillion" });
+    await b.peer.next("room");
+    expect(((await b.peer.next("state")).state as TennisSnapshot).score.format).toBe("oneSet");
+  });
+
+  it("a point won against the bot shows up in the score the server sends", async () => {
+    const { peer } = await Peer.connect();
+    peer.send({ t: "create", game: "tennis", practice: true });
+    await peer.next("room");
+    // seat 0 serves and the bot returns or not; within a few points someone scores
+    const deadline = Date.now() + 15_000;
+    let snap: TennisSnapshot | null = null;
+    while (Date.now() < deadline) {
+      snap = (await peer.next("state")).state as TennisSnapshot;
+      if (snap.lastCall !== null) break;
+    }
+    expect(snap?.lastCall).not.toBeNull();
+    const { points, games, faults } = snap!.score;
+    expect(points[0] + points[1] + games[0] + games[1] + faults).toBeGreaterThan(0);
+  }, 20_000);
 
   it("rejects an unknown room and a message before hello", async () => {
     const { peer } = await Peer.connect();

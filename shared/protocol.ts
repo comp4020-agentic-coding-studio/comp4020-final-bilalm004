@@ -5,7 +5,9 @@ export type ClientMsg =
   // player identified by `token`; the server decides who that is, never
   // the client
   | { t: "hello"; token?: string; demo?: 1 | 2 }
-  | { t: "create"; game: string; practice: boolean }
+  // format: the game's match format ("oneSet" default, "bestOfThree" in
+  // tennis); the game validates it, so an unknown one gets the default
+  | { t: "create"; game: string; practice: boolean; format?: string }
   | { t: "join"; room: string }
   // lift: hand height at contact in camera follow mode, -1..1 (server clamps)
   // timingAim: aim from how early or late the ball is met instead of dirX
@@ -54,7 +56,8 @@ export function parseClientMsg(raw: string): ClientMsg | null {
         demo: m.demo === 1 || m.demo === 2 ? m.demo : undefined,
       };
     case "create":
-      return typeof m.game === "string" ? { t: "create", game: m.game, practice: m.practice === true } : null;
+      if (typeof m.game !== "string") return null;
+      return { t: "create", game: m.game, practice: m.practice === true, format: typeof m.format === "string" ? m.format : undefined };
     case "join":
       return typeof m.room === "string" ? { t: "join", room: m.room } : null;
     case "swing": {

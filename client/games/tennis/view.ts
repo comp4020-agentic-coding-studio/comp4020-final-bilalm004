@@ -17,6 +17,7 @@ import { shownAim } from "../../input/camera/pose.ts";
 import { createPlayInput } from "../../input/keyboard.ts";
 import type { Connection } from "../../net/socket.ts";
 import { makePlayer } from "./character.ts";
+import { createScoreBar } from "./score-bar.ts";
 import { createShotFx } from "./shot-fx.ts";
 import { buildStadium } from "./stadium.ts";
 
@@ -58,7 +59,7 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
   view.innerHTML = `
     <canvas aria-label="Tennis court"></canvas>
     <div class="hud">
-      <div class="score" aria-live="polite"></div>
+      <div class="score"></div>
       <div>
         <span class="muted code"></span>
         <span class="tracking" role="status" hidden></span>
@@ -80,7 +81,7 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
   root.replaceChildren(view);
 
   const canvas = view.querySelector("canvas") as HTMLCanvasElement;
-  const scoreEl = view.querySelector(".score") as HTMLElement;
+  const scoreBar = createScoreBar(view.querySelector(".score") as HTMLElement);
   const statusEl = view.querySelector(".status") as HTMLElement;
   const codeEl = view.querySelector(".code") as HTMLElement;
   codeEl.textContent = `Room ${info.room}`;
@@ -232,7 +233,7 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
 
   const updateHud = () => {
     if (!snap) return;
-    scoreEl.textContent = `${label(0)} ${snap.score[0]} – ${snap.score[1]} ${label(1)}`;
+    scoreBar.update(snap, label);
     if (snap.phase === "over") statusEl.textContent = snap.winner === info.seat ? "You win!" : `${label(snap.winner as 0 | 1)} wins`;
     else if (!info.practice && (names[0] === null || names[1] === null)) statusEl.textContent = `Waiting for an opponent. Share code ${info.room}`;
     else if (paused) statusEl.textContent = "Paused while you set up the camera";
@@ -351,6 +352,7 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
   return () => {
     cancelAnimationFrame(raf);
     clearTimeout(strokeTimer);
+    scoreBar.dispose();
     unsubscribe();
     input.dispose();
     cameraInput.dispose();

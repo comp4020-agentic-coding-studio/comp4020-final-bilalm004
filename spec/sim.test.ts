@@ -87,7 +87,7 @@ describe("tennis sim", () => {
     const s = createState(7);
     untilRally(s);
     run(s, 200, chaser(1));
-    expect(s.lastHitter === 1 || s.score[1] > 0).toBe(true);
+    expect(s.lastHitter === 1 || s.score.points[1] > 0).toBe(true);
   });
 
   it("ignores a swing from the player who just hit", () => {
@@ -102,12 +102,13 @@ describe("tennis sim", () => {
   it("awards the point to the server when the receiver never swings", () => {
     const s = createState(5);
     run(s, 600);
-    expect(s.score[0]).toBeGreaterThanOrEqual(1);
+    expect(s.score.points[0]).toBeGreaterThanOrEqual(1);
   });
 
-  it("ends the match at the win score and stops stepping the ball", () => {
+  it("ends the match when the score has a winner and stops stepping the ball", () => {
     const s = createState(9);
-    run(s, 60 * 600);
+    // seat 0 returns everything, seat 1 never swings: seat 0 takes the set
+    run(s, 60 * 600, chaser(0));
     expect(s.phase).toBe("over");
     expect(s.winner).not.toBeNull();
     const frozen = snapshot(s).ball;
@@ -161,7 +162,7 @@ describe("movement and reach", () => {
         return play(st);
       });
       expect(touched).toBe(false);
-      expect(s.score).toEqual([1, 0]);
+      expect(s.score.points).toEqual([1, 0]);
     }
   });
 
@@ -387,19 +388,30 @@ describe("serve", () => {
 });
 
 describe("endless practice", () => {
-  it("never ends when there is no win score, and keeps counting points", () => {
-    const s = createState(9, null);
-    run(s, 60 * 600);
+  it("never ends: a finished match starts a fresh one, and points keep counting", () => {
+    const s = createState(9, { endless: true });
+    let points = 0;
+    let restarts = 0;
+    const play = chaser(0);
+    for (let i = 0; i < 60 * 600; i++) {
+      const before = s.score.sets[0] + s.score.sets[1] + s.score.games[0] + s.score.games[1];
+      for (const e of step(s, play(s))) if (e.type === "point") points++;
+      const after = s.score.sets[0] + s.score.sets[1] + s.score.games[0] + s.score.games[1];
+      if (after < before) restarts++;
+    }
     expect(s.phase).not.toBe("over");
-    expect(s.score[0] + s.score[1]).toBeGreaterThan(COURT.winScore * 2);
+    expect(s.winner).toBeNull();
+    expect(points).toBeGreaterThan(24);
+    expect(restarts).toBeGreaterThan(0);
   });
 
   it("the adapter makes an endless game only when asked", () => {
     const endless = tennis.create(9, { endless: true });
     const match = tennis.create(9);
+    // the bot plays seat 0 and seat 1 never swings, so seat 0 wins every point
     for (let i = 0; i < 60 * 600; i++) {
-      endless.step([]);
-      match.step([]);
+      endless.step(endless.botInputs(0).map((input) => ({ seat: 0 as const, input })));
+      match.step(match.botInputs(0).map((input) => ({ seat: 0 as const, input })));
     }
     expect(endless.finished()).toBeNull();
     expect(match.finished()).not.toBeNull();
@@ -488,7 +500,7 @@ describe("last bounce", () => {
     const s = receiving({ ...atBaseline(1), x: 3.5 }, 3.5);
     // seat 1's +dirX is world +x: away out over the sideline
     step(s, [swing(1, 1, naturalKind(1, 3.5, 3.5), 1)]);
-    while (s.score[0] === 0) step(s, []);
+    while (s.rally === 0) step(s, []);
     expect(s.lastBounce!.in).toBe(false);
     expect(Math.abs(s.lastBounce!.x)).toBeGreaterThan(COURT.halfW);
   });
@@ -658,11 +670,11 @@ describe("rewind (ADR 001)", () => {
     const { g } = served(0);
     // let the ball run on until seat 0 wins the point
     let ticks = 0;
-    while ((g.snapshot() as TennisSnapshot).score[0] === 0 && ticks < 600) {
+    while ((g.snapshot() as TennisSnapshot).rally === 0 && ticks < 600) {
       g.step([]);
       ticks++;
     }
-    expect((g.snapshot() as TennisSnapshot).score[0]).toBe(1);
+    expect((g.snapshot() as TennisSnapshot).score.points[0]).toBe(1);
     // reaching back to before the point is refused, however short the gap
     expect(g.rewind!(swing1, 9)).toBeNull();
   });
@@ -723,7 +735,8 @@ describe("pending point (ADR 001: points are final once confirmed)", () => {
     const s = createState(3);
     s.phase = "rally";
     s.lastHitter = 0;
-    s.shots = 1;
+    // a rally shot: a serve landing out would be a fault, not a point
+    s.shots = 2;
     s.ball = { x: 0, y: 1.1, z: -COURT.halfL + 8, vx: 0, vy: 2.5, vz: -14 };
     s.players[1] = { x: 0, targetX: 0 };
     return s;
@@ -741,7 +754,7 @@ describe("pending point (ADR 001: points are final once confirmed)", () => {
     expect(decidedAt).toBeGreaterThan(0);
     expect(scoredAt - decidedAt).toBe(CONFIRM_TICKS);
     // seat 0's shot landed out: seat 1 wins it
-    expect(s.score).toEqual([0, 1]);
+    expect(s.score.points).toEqual([0, 1]);
   });
 
   it("a long ball bouncing out behind the receiver waits, as the receiver could have played it", () => {
@@ -749,7 +762,7 @@ describe("pending point (ADR 001: points are final once confirmed)", () => {
     for (let t = 0; t < 200 && !s.lastBounce; t++) step(s, []);
     expect(s.lastBounce?.in).toBe(false);
     expect(s.pending).toMatchObject({ winner: 1, reason: "out" });
-    expect(s.score).toEqual([0, 0]);
+    expect(s.score.points).toEqual([0, 0]);
   });
 
   it("a ball into the net or on the hitter's own side still scores at once", () => {
@@ -765,10 +778,10 @@ describe("pending point (ADR 001: points are final once confirmed)", () => {
     const s = longBall();
     for (let t = 0; t < 200 && !s.pending; t++) step(s, []);
     const pending = { ...s.pending! };
-    const before = [s.score[0], s.score[1]];
+    const before = [s.score.points[0], s.score.points[1]];
     while (s.tick < pending.atTick - 1) {
       expect(step(s, []).some((e) => e.type === "point")).toBe(false);
     }
-    expect([s.score[0], s.score[1]]).toEqual(before);
+    expect([s.score.points[0], s.score.points[1]]).toEqual(before);
   });
 });

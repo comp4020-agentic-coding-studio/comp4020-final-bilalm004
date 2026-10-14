@@ -1,3 +1,8 @@
+import { createScore, fault, other as otherSide, pointWon } from "./scoring.ts";
+import type { MatchFormat, ScoreState } from "./scoring.ts";
+
+export type { MatchFormat, ScoreState } from "./scoring.ts";
+
 export const DT = 1 / 60;
 
 export const COURT = {
@@ -8,7 +13,6 @@ export const COURT = {
   restitution: 0.72,
   hitWindow: 1.6,
   endMargin: 3,
-  winScore: 5,
   serveDelayTicks: 75,
 } as const;
 
@@ -112,9 +116,15 @@ export interface TennisState {
   pending: { winner: Seat; reason: PointReason; atTick: number } | null;
   // where the ball last touched down, including a bounce that ends the point
   lastBounce: { x: number; z: number; in: boolean; tick: number } | null;
-  score: [number, number];
-  // first to this many points wins; null plays forever (practice)
-  winScore: number | null;
+  // real tennis scoring (scoring.ts); `server` above always equals score.server
+  score: ScoreState;
+  // practice: a finished match starts a fresh one instead of ending the game
+  endless: boolean;
+  // serves that have ended, by a point or a fault: rewind never crosses one
+  rally: number;
+  // the latest point or fault, for the score bar's announcement; seat is the
+  // point's winner, or the server for a fault
+  lastCall: { call: "point" | "fault"; seat: Seat; reason: PointReason; tick: number } | null;
   winner: Seat | null;
   rng: number;
 }
@@ -143,12 +153,15 @@ export interface Move {
 
 export type TennisInput = Swing | Move;
 
-export type PointReason = "out" | "net" | "own side" | "unreturned";
+// "double fault" ends a point; the others end a rally (or, on a serve the
+// receiver never touched, make a fault)
+export type PointReason = "out" | "net" | "own side" | "unreturned" | "double fault";
 
 /** What a step did, for logs and replies; never needed to replay the game. */
 export type TennisEvent =
   | { type: "swing"; seat: Seat; outcome: "hit" | Miss }
-  | { type: "point"; winner: Seat; shots: number; reason: PointReason };
+  | { type: "point"; winner: Seat; shots: number; reason: PointReason }
+  | { type: "fault"; server: Seat; reason: PointReason };
 
 export const seatZ = (seat: Seat): number => (seat === 0 ? COURT.halfL : -COURT.halfL);
 export const other = (seat: Seat): Seat => (seat === 0 ? 1 : 0);
@@ -171,6 +184,7 @@ export function naturalKind(seat: Seat, playerX: number, ballX: number, hand: Ha
 }
 
 function resetServe(s: TennisState): void {
+  s.server = s.score.server;
   s.phase = "serve";
   s.phaseTick = 0;
   s.lastHitter = null;
@@ -180,7 +194,12 @@ function resetServe(s: TennisState): void {
   s.ball = { x: 0, y: 1, z: seatZ(s.server), vx: 0, vy: 0, vz: 0 };
 }
 
-export function createState(seed: number, winScore: number | null = COURT.winScore): TennisState {
+export interface StateOptions {
+  format?: MatchFormat;
+  endless?: boolean;
+}
+
+export function createState(seed: number, options: StateOptions = {}): TennisState {
   const s: TennisState = {
     tick: 0,
     phase: "serve",
@@ -196,13 +215,25 @@ export function createState(seed: number, winScore: number | null = COURT.winSco
     shots: 0,
     pending: null,
     lastBounce: null,
-    score: [0, 0],
-    winScore,
+    score: createScore(options.format ?? "oneSet", 0),
+    endless: options.endless ?? false,
+    rally: 0,
+    lastCall: null,
     winner: null,
     rng: seed >>> 0,
   };
   resetServe(s);
   return s;
+}
+
+function copyScore(sc: ScoreState): ScoreState {
+  return {
+    ...sc,
+    points: [sc.points[0], sc.points[1]],
+    games: [sc.games[0], sc.games[1]],
+    sets: [sc.sets[0], sc.sets[1]],
+    setScores: sc.setScores.map(([a, b]) => [a, b]),
+  };
 }
 
 export function snapshot(s: TennisState): TennisSnapshot {
@@ -218,8 +249,10 @@ export function snapshot(s: TennisState): TennisSnapshot {
     shots: s.shots,
     pending: s.pending ? { ...s.pending } : null,
     lastBounce: s.lastBounce ? { ...s.lastBounce } : null,
-    score: [s.score[0], s.score[1]],
-    winScore: s.winScore,
+    score: copyScore(s.score),
+    endless: s.endless,
+    rally: s.rally,
+    lastCall: s.lastCall ? { ...s.lastCall } : null,
     winner: s.winner,
   };
 }
@@ -229,15 +262,40 @@ export function cloneState(s: TennisState): TennisState {
   return { ...snapshot(s), rng: s.rng };
 }
 
+/**
+ * The serve or rally is over and `winner` takes it. A serve the receiver never
+ * touched that the server loses (net, out, own side) is a fault instead: the
+ * first earns a second serve, the second is a double fault and loses the
+ * point. No lets: a serve that clips the net and lands in plays on, as it
+ * never ends here. The score module decides games, sets, who serves and the
+ * match; the sim never mutates the score, only replaces it.
+ */
 function awardPoint(s: TennisState, winner: Seat, reason: PointReason, ev: TennisEvent[]): void {
-  ev.push({ type: "point", winner, shots: s.shots, reason });
-  s.score[winner]++;
-  if (s.winScore !== null && s.score[winner] >= s.winScore) {
-    s.phase = "over";
-    s.winner = winner;
-    return;
+  const serving = s.score.server;
+  s.rally++;
+  if (s.shots === 1 && winner !== serving) {
+    s.score = fault(s.score);
+    if (s.score.faults === 1) {
+      ev.push({ type: "fault", server: serving, reason });
+      s.lastCall = { call: "fault", seat: serving, reason, tick: s.tick };
+      resetServe(s);
+      return;
+    }
+    reason = "double fault";
+  } else {
+    s.score = pointWon(s.score, winner);
   }
-  s.server = other(s.server);
+  ev.push({ type: "point", winner, shots: s.shots, reason });
+  s.lastCall = { call: "point", seat: winner, reason, tick: s.tick };
+  if (s.score.winner !== null) {
+    if (!s.endless) {
+      s.phase = "over";
+      s.winner = s.score.winner;
+      return;
+    }
+    // practice plays on: a new match, served by whoever would serve next
+    s.score = createScore(s.score.format, otherSide(s.score.gameServer));
+  }
   resetServe(s);
 }
 

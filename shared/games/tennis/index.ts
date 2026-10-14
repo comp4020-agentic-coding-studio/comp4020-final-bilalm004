@@ -1,7 +1,7 @@
 import type { GameDef, GameInstance } from "../registry.ts";
 import { botInputs } from "./bot.ts";
-import { COURT, cloneState, createState, snapshot, step } from "./sim.ts";
-import type { Hand, Seat, SwingKind, TennisInput, TennisState } from "./sim.ts";
+import { cloneState, createState, snapshot, step } from "./sim.ts";
+import type { Hand, MatchFormat, Seat, SwingKind, TennisEvent, TennisInput, TennisState } from "./sim.ts";
 
 // Past ticks kept for rewind. The room decides how far back a swing may go
 // (at most 9 ticks, 150 ms); this only has to be at least that.
@@ -39,6 +39,13 @@ export function asInput(seat: Seat, input: unknown): TennisInput | null {
   return null;
 }
 
+const FORMATS: readonly unknown[] = ["oneSet", "bestOfThree"] satisfies MatchFormat[];
+
+/** A known match format, or one set (the default) for anything else. */
+export function asFormat(format: unknown): MatchFormat {
+  return FORMATS.includes(format) ? (format as MatchFormat) : "oneSet";
+}
+
 /** A tennis game starting from `start` instead of a fresh serve; for tests. */
 export function tennisFrom(start: TennisState): GameInstance {
   return makeInstance(cloneState(start));
@@ -48,9 +55,11 @@ export const tennis: GameDef = {
   id: "tennis",
   name: "Tennis",
   create(seed, options) {
-    return makeInstance(createState(seed, options?.endless ? null : COURT.winScore));
+    return makeInstance(createState(seed, { endless: options?.endless === true, format: asFormat(options?.format) }));
   },
 };
+
+const isCall = (e: TennisEvent): boolean => e.type === "point" || e.type === "fault";
 
 function makeInstance(initial: TennisState): GameInstance {
   let s = initial;
@@ -76,26 +85,34 @@ function makeInstance(initial: TennisState): GameInstance {
       if (swing?.t !== "swing" || ticksAgo < 1 || ticksAgo > history.length) return null;
       const from = history.length - ticksAgo;
       const at = history[from];
-      // a point scored since then is final: never rewind across it
-      if (at.before.score[0] !== s.score[0] || at.before.score[1] !== s.score[1]) return null;
+      // a point or fault since then is final: never rewind across it
+      if (at.before.rally !== s.rally) return null;
       const trial = cloneState(at.before);
       const first = step(trial, [...at.inputs, swing]);
       const own = first.find((e) => e.type === "swing" && e.seat === swing.seat);
       if (own?.type !== "swing" || own.outcome !== "hit") return null;
       // replay the ticks since with the inputs they had; the result replaces
       // them. Their swings were already reported; only a point is news.
-      const events = [own, ...first.filter((e) => e.type === "point")];
+      const events = [own, ...first.filter(isCall)];
       const replayed = [{ before: at.before, inputs: [...at.inputs, swing] }];
       for (let i = from + 1; i < history.length; i++) {
         replayed.push({ before: cloneState(trial), inputs: history[i].inputs });
-        events.push(...step(trial, history[i].inputs).filter((e) => e.type === "point"));
+        events.push(...step(trial, history[i].inputs).filter(isCall));
       }
       history.splice(from, replayed.length, ...replayed);
       s = trial;
       return events;
     },
     snapshot: () => snapshot(s),
-    finished: () => (s.phase === "over" ? { winner: s.winner as Seat, score: [s.score[0], s.score[1]] } : null),
+    finished: () =>
+      s.phase === "over"
+        ? {
+            winner: s.winner as Seat,
+            score: [s.score.sets[0], s.score.sets[1]],
+            format: s.score.format,
+            sets: s.score.setScores.map(([a, b]) => [a, b]),
+          }
+        : null,
     botInputs: (seat) => botInputs(s, seat),
   };
 }

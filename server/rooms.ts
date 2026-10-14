@@ -81,12 +81,13 @@ class Room {
   private recorded = false;
   private timer: NodeJS.Timeout;
 
-  constructor(id: string, gameId: string, practice: boolean) {
+  constructor(id: string, gameId: string, practice: boolean, format?: string) {
     this.id = id;
     this.gameId = gameId;
     this.practice = practice;
-    // practice never ends, so a player can keep training against the bot
-    this.instance = games[gameId].create((Math.random() * 2 ** 32) >>> 0, { endless: practice });
+    // practice never ends, so a player can keep training against the bot;
+    // the game checks the format and falls back to its default
+    this.instance = games[gameId].create((Math.random() * 2 ** 32) >>> 0, { endless: practice, format });
     this.timer = setInterval(() => this.pump(), TICK_MS);
   }
 
@@ -200,6 +201,8 @@ class Room {
       if (c) send(c, { t: "swing", tick: this.simTick, outcome, rtt, allowed, rewind });
     } else if (e.type === "point") {
       log("rally", { room: this.id, winner: e.winner, shots: e.shots, reason: e.reason });
+    } else if (e.type === "fault") {
+      log("fault", { room: this.id, server: e.server, reason: e.reason });
     }
   }
 
@@ -237,20 +240,29 @@ class Room {
     const result = this.instance.finished();
     if (result && !this.recorded) {
       this.recorded = true;
-      recordMatch({ room: this.id, game: this.gameId, tokens: this.tokens, ...result });
-      log("match_end", { room: this.id, score: result.score, winner: result.winner });
+      recordMatch({
+        room: this.id,
+        game: this.gameId,
+        tokens: this.tokens,
+        score: result.score,
+        winner: result.winner,
+        format: result.format ?? "default",
+        sets: result.sets ?? [],
+        practice: this.practice,
+      });
+      log("match_end", { room: this.id, score: result.score, sets: result.sets, format: result.format, winner: result.winner });
       this.broadcast({ t: "state", state: this.instance.snapshot() });
     }
   }
 }
 
-export function createRoom(gameId: string, practice: boolean): Room | null {
+export function createRoom(gameId: string, practice: boolean, format?: string): Room | null {
   if (!(gameId in games)) return null;
   let id = "";
   do {
     id = Array.from({ length: 4 }, () => CODE_LETTERS[Math.floor(Math.random() * CODE_LETTERS.length)]).join("");
   } while (rooms.has(id));
-  const room = new Room(id, gameId, practice);
+  const room = new Room(id, gameId, practice, format);
   rooms.set(id, room);
   log("room_create", { room: id, game: gameId, practice });
   return room;

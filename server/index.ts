@@ -168,7 +168,7 @@ wss.on("connection", (ws: WebSocket) => {
     switch (msg.t) {
       case "create": {
         leaveRoom(client);
-        const room = createRoom(msg.game, msg.practice);
+        const room = createRoom(msg.game, msg.practice, msg.format);
         if (!room) send(client, { t: "error", message: "unknown game" });
         else room.join(client);
         break;
