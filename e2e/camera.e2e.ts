@@ -23,7 +23,7 @@ async function insideViewport(page: Page, locator: Locator): Promise<void> {
 
 const noHorizontalScroll = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
 
-test("camera path: starts the fake webcam, loads the model, calibrates by skipping, and sends no video", async ({ page }) => {
+test("camera path: starts the fake webcam, loads the model, skips the visibility check, and sends no video", async ({ page }) => {
   test.setTimeout(60_000);
   const finished: { method: string; host: string }[] = [];
   page.on("requestfinished", (r) => finished.push({ method: r.method(), host: new URL(r.url()).host }));
@@ -33,6 +33,10 @@ test("camera path: starts the fake webcam, loads the model, calibrates by skippi
   await practice(page);
   await page.getByRole("button", { name: "Camera", exact: true }).click();
   const panel = page.getByRole("dialog", { name: /camera setup/i });
+  // the safety notice comes first; "don't show again" is remembered
+  await expect(panel.getByRole("heading", { name: /before you start/i })).toBeVisible();
+  await insideViewport(page, panel);
+  await panel.getByRole("button", { name: "Got it" }).click();
   await expect(panel.getByRole("heading", { name: /play with your camera/i })).toBeVisible();
   await insideViewport(page, panel);
   await expect(page.locator(".hud .status")).toHaveText(/paused/i);
@@ -49,20 +53,21 @@ test("camera path: starts the fake webcam, loads the model, calibrates by skippi
 
   const video = page.locator("video.selfview");
   await expect.poll(() => video.evaluate((v: HTMLVideoElement) => v.videoWidth), { timeout: 10_000 }).toBeGreaterThan(0);
-  await expect(panel.getByRole("heading", { name: /stand neutral/i })).toBeVisible({ timeout: 40_000 });
+  await expect(panel.getByRole("heading", { name: /can we see you/i })).toBeVisible({ timeout: 40_000 });
   await expect(page.locator(".tracking")).toHaveText(/can't see you|tracking/i);
   await insideViewport(page, panel);
   await insideViewport(page, video);
+  await insideViewport(page, page.locator(".grip-badge"));
+  await insideViewport(page, page.locator(".tilt-gauge"));
+  await expect(page.locator(".grip-badge")).toHaveText(/no grip|forehand|backhand/i);
   expect(await noHorizontalScroll(page)).toBe(true);
 
-  // nobody in the fake video, so capturing the neutral can't succeed
-  await panel.getByRole("button", { name: "Capture" }).click();
-  await expect(panel.getByRole("status")).toHaveText(/couldn't see/i, { timeout: 5000 });
-  await panel.getByRole("button", { name: "Skip" }).click();
-  await expect(panel.getByRole("heading", { name: /swing light/i })).toBeVisible();
-  await panel.getByRole("button", { name: "Skip" }).click();
-  await panel.getByRole("button", { name: "Skip" }).click();
-  await panel.getByRole("button", { name: "Done" }).click();
+  // nobody in the fake video: "Looks good" stays disabled, the check can be skipped,
+  // and the old calibration steps are not in the default flow
+  await expect(panel.getByRole("button", { name: "Looks good" })).toBeDisabled();
+  await expect(panel.getByRole("heading", { name: /stand neutral|swing light/i })).toHaveCount(0);
+  await expect(panel.locator("details.advanced")).not.toHaveAttribute("open", "");
+  await panel.getByRole("button", { name: "Skip check" }).click();
   await expect(panel).toBeHidden();
   await expect(page.locator(".hud .status")).not.toHaveText(/paused/i);
   expect(sent.filter((m) => JSON.parse(m).t === "pause").map((m) => JSON.parse(m).paused)).toEqual([true, false]);
@@ -109,6 +114,7 @@ for (const [name, script, message] of [
 
     await page.getByRole("button", { name: "Camera", exact: true }).click();
     const panel = page.getByRole("dialog", { name: /camera setup/i });
+    await panel.getByRole("button", { name: "Got it" }).click();
     await panel.getByRole("button", { name: /start camera/i }).click();
     await expect(panel.getByRole("alert")).toHaveText(message);
     await insideViewport(page, panel);
@@ -162,4 +168,33 @@ test("shots leave a trail and a bounce mark, and the incoming ball shows your sh
   await expect.poll(() => n("data-arc"), { timeout: 30_000 }).toBeGreaterThan(5);
   // with the arc comes whether you can reach where you'll meet the ball
   await expect.poll(() => canvas.getAttribute("data-reach"), { timeout: 30_000 }).toMatch(/^(yes|no)$/);
+});
+
+test("safety notice: 'don't show again' skips it next time", async ({ page }) => {
+  await practice(page);
+  await page.getByRole("button", { name: "Camera", exact: true }).click();
+  const panel = page.getByRole("dialog", { name: /camera setup/i });
+  await panel.getByLabel(/don't show this again/i).check();
+  await panel.getByRole("button", { name: "Got it" }).click();
+  await expect(panel.getByRole("heading", { name: /play with your camera/i })).toBeVisible();
+  await panel.getByRole("button", { name: "Cancel" }).click();
+  await page.getByRole("button", { name: "Camera", exact: true }).click();
+  await expect(panel.getByRole("heading", { name: /play with your camera/i })).toBeVisible();
+  expect(await noHorizontalScroll(page)).toBe(true);
+});
+
+test("safety notice works when localStorage throws", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "localStorage", {
+      get() {
+        throw new DOMException("blocked", "SecurityError");
+      },
+    });
+  });
+  await practice(page);
+  await page.getByRole("button", { name: "Camera", exact: true }).click();
+  const panel = page.getByRole("dialog", { name: /camera setup/i });
+  await panel.getByLabel(/don't show this again/i).check();
+  await panel.getByRole("button", { name: "Got it" }).click();
+  await expect(panel.getByRole("heading", { name: /play with your camera/i })).toBeVisible();
 });
