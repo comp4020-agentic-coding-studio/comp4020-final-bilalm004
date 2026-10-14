@@ -484,3 +484,14 @@ the format of the entries below (see CLAUDE.md, Docs).
   two seats share a token, and reconnect needs a rule for which tab wins.
 - **Why:** Cheapest option, matches current behaviour, and the user needs it
   while testing alone.
+
+## 2026-10-15 00:40 AEDT | decision | Disconnect and open-room rules for task 4
+
+- **Decision:** On a mid-match disconnect the seat is held and the match pauses
+  for 30 s; the same token reclaims it and the match resumes, else the room
+  closes. No forfeit, no bot takeover. Rooms are reached by invite link or room
+  code only, with no public list.
+- **Why:** Smallest behaviour that is fair to both players and keeps strangers
+  out. Forfeit and bot takeover were the costlier alternatives.
+- **Left for task 4:** identity (pseudonym per token, renaming), and which tab
+  reclaims a seat when one token has two tabs.
