@@ -96,18 +96,56 @@ export interface TiltConfig {
   deadZone: number;
   /** Tilt beyond neutral, in degrees, that reaches the sideline. */
   fullTilt: number;
+  /** Response curve exponent: above 1 is gentler near the centre, same edge. */
+  curve: number;
 }
 
-// Wide enough that a natural sway doesn't move you (playtest: 9 degrees for
-// the whole court was too twitchy).
-export const DEFAULT_TILT: TiltConfig = { deadZone: 3, fullTilt: 16 };
+// A GUESS to be playtested (task 14): 9 degrees for the whole court was too
+// twitchy and 16 too much leaning, so 11 with a gentle curve: small leans make
+// small moves, the edge is still reachable.
+export const DEFAULT_TILT: TiltConfig = { deadZone: 3, fullTilt: 11, curve: 1.4 };
 
 /** Shoulder tilt to a movement target, -1 (far left on screen) to 1 (far right). */
 export function tiltToTarget(tilt: number, neutral: number, cfg: TiltConfig = DEFAULT_TILT): number {
   const d = tilt - neutral;
   const past = Math.max(0, Math.abs(d) - cfg.deadZone);
   if (past === 0) return 0;
-  return Math.sign(d) * clamp(past / (cfg.fullTilt - cfg.deadZone), 0, 1);
+  return Math.sign(d) * clamp(past / (cfg.fullTilt - cfg.deadZone), 0, 1) ** cfg.curve;
+}
+
+/**
+ * Neutral tilt from the first moments of tracking: the median of the tilts
+ * seen during `windowMs`, then fixed. No manual capture needed.
+ */
+export class AutoNeutral {
+  private samples: number[] = [];
+  private start: number | null = null;
+  private fixed: number | null = null;
+  private windowMs: number;
+
+  constructor(windowMs = 1000) {
+    this.windowMs = windowMs;
+  }
+
+  get value(): number | null {
+    return this.fixed;
+  }
+
+  /** Feed a tilt sample; returns the neutral once it is settled, else null. */
+  add(t: number, tilt: number): number | null {
+    if (this.fixed !== null) return this.fixed;
+    this.start ??= t;
+    this.samples.push(tilt);
+    if (t - this.start >= this.windowMs && this.samples.length >= 5) this.fixed = median(this.samples);
+    return this.fixed;
+  }
+
+  /** Tracking was lost before it settled: start the window again. */
+  restart(): void {
+    if (this.fixed !== null) return;
+    this.samples = [];
+    this.start = null;
+  }
 }
 
 /** Hand offset across the body that gives full aim, in shoulder-widths. */
@@ -153,9 +191,70 @@ export function palmFacing(lm: readonly Point[], frame: BodyFrame, hand: Hand, a
 }
 
 /** Forehand or backhand grip; an unclear reading keeps the previous grip. */
-export function gripFrom(facing: number | null, prev: SwingKind, threshold = 0.3): SwingKind {
+export function gripFrom(facing: number | null, prev: SwingKind, threshold = GRIP_THRESHOLD): SwingKind {
   if (facing === null || Math.abs(facing) < threshold) return prev;
   return facing > 0 ? "forehand" : "backhand";
+}
+
+// Lowered from 0.3: the reading is smoothed now, so a smaller dead band is safe
+// (a GUESS to be playtested with a real webcam).
+export const GRIP_THRESHOLD = 0.15;
+
+/**
+ * The grip over time: the palm-facing reading smoothed over a few frames, with
+ * the grip kept while the reading is unclear and locked while `locked` (a
+ * swing is under way). One signal for forehand/backhand, never swing direction.
+ */
+export class GripTracker {
+  grip: SwingKind;
+  private smooth = 0;
+  private seeded = false;
+  private alpha: number;
+  private threshold: number;
+
+  constructor(initial: SwingKind = "forehand", alpha = 0.4, threshold = GRIP_THRESHOLD) {
+    this.grip = initial;
+    this.alpha = alpha;
+    this.threshold = threshold;
+  }
+
+  /** The smoothed palm-facing reading, -1..1 (0 before any reading). */
+  get reading(): number {
+    return this.smooth;
+  }
+
+  update(facing: number | null, locked = false): SwingKind {
+    if (locked) {
+      // the hand rolls during a swing; start the reading afresh afterwards
+      this.seeded = false;
+      return this.grip;
+    }
+    if (facing === null) return this.grip;
+    this.smooth = this.seeded ? this.smooth + this.alpha * (facing - this.smooth) : facing;
+    this.seeded = true;
+    this.grip = gripFrom(this.smooth, this.grip, this.threshold);
+    return this.grip;
+  }
+}
+
+/** What the camera can see of the player, for the setup check. */
+export interface Visibility {
+  shoulders: boolean;
+  /** elbow and wrist of the racket arm */
+  arm: boolean;
+  /** pinky and thumb, needed to read the grip */
+  hand: boolean;
+}
+
+export function bodyVisibility(lm: readonly Point[] | null, hand: Hand): Visibility {
+  if (!lm) return { shoulders: false, arm: false, hand: false };
+  const right = hand === "right";
+  const all = (...ids: number[]) => ids.every((i) => visible(lm[i]));
+  return {
+    shoulders: all(LM.leftShoulder, LM.rightShoulder),
+    arm: all(right ? LM.rightElbow : LM.leftElbow, right ? LM.rightWrist : LM.leftWrist),
+    hand: all(right ? LM.rightPinky : LM.leftPinky, right ? LM.rightThumb : LM.leftThumb),
+  };
 }
 
 /**
@@ -315,6 +414,8 @@ export interface Calibration {
   hand: Hand;
   mode: SwingMode;
   aim: AimMode;
+  /** Tilt neutral is taken from the first second of tracking; false uses neutralTilt. */
+  autoNeutral: boolean;
   neutralTilt: number;
   neutralAcross: number;
   thresholds: [number, number];
@@ -325,6 +426,7 @@ export const DEFAULT_CALIBRATION: Calibration = {
   // user's choice after playtesting: classic swing, aim by timing
   mode: "classic",
   aim: "timing",
+  autoNeutral: true,
   neutralTilt: 0,
   // a relaxed racket hand hangs about half a shoulder-width out to its side
   neutralAcross: -0.5,
@@ -486,6 +588,8 @@ export interface CameraOutput {
   target: number | null;
   /** Aim on screen, -1..1. */
   aim: number;
+  /** Shoulder tilt beyond neutral in degrees (smoothed), for the gauge. */
+  tilt: number;
   /** The grip being held: palm to the camera is forehand, back of the hand backhand. */
   grip: SwingKind;
   /** The racket arm's direction while tracking, for the character to copy. */
@@ -511,6 +615,8 @@ export class CameraController {
   private zone: ZoneDetector;
   private target: number | null = null;
   private aim = 0;
+  private gripTracker = new GripTracker();
+  private autoNeutral = new AutoNeutral();
   private grip: SwingKind = "forehand";
   private frozen: { target: number | null; aim: number; grip: SwingKind } | null = null;
   private history: { t: number; target: number | null; aim: number; grip: SwingKind }[] = [];
@@ -536,7 +642,8 @@ export class CameraController {
       this.zone.lose();
       this.frozen = null;
       this.history = [];
-      return { tracking: false, swinging: false, target: null, aim: this.aim, grip: this.grip, arm: null, swing: null };
+      this.autoNeutral.restart();
+      return { tracking: false, swinging: false, target: null, tilt: 0, aim: this.aim, grip: this.grip, arm: null, swing: null };
     }
 
     // In both modes a fast hand starts the freeze. Classic: the swing is the
@@ -550,8 +657,12 @@ export class CameraController {
       this.frozen = this.history.findLast((h) => h.t <= before) ?? this.history[0] ?? null;
     }
 
-    this.target = tiltToTarget(this.tiltFilter.filter(frame.tilt, f.t), this.calib.neutralTilt);
-    this.grip = gripFrom(palmFacing(f.landmarks as readonly Point[], frame, this.calib.hand, f.aspect), this.grip);
+    const tilt = this.tiltFilter.filter(frame.tilt, f.t);
+    const neutral = this.calib.autoNeutral ? this.autoNeutral.add(f.t, frame.tilt) : this.calib.neutralTilt;
+    // until the neutral settles (about a second) there is no movement
+    this.target = neutral === null ? 0 : tiltToTarget(tilt, neutral);
+    const locked = this.detector.swinging || this.frozen !== null;
+    this.grip = this.gripTracker.update(palmFacing(f.landmarks as readonly Point[], frame, this.calib.hand, f.aspect), locked);
     this.aim = aimForGrip(this.aimFilter.filter(w.across, f.t), this.calib.neutralAcross, this.grip);
     this.history.push({ t: f.t, target: this.target, aim: this.aim, grip: this.grip });
     if (this.history.length > 12) this.history.shift();
@@ -567,7 +678,7 @@ export class CameraController {
       if (hit) swing = { level: hit.level, kind: shown.grip, aim: shown.aim, lift: hit.lift, at: hit.at };
     }
     if (swing || classic.swing) this.frozen = null;
-    return { tracking: true, swinging: !swing && f0 !== null, ...shown, arm, swing };
+    return { tracking: true, swinging: !swing && f0 !== null, ...shown, tilt: neutral === null ? 0 : tilt - neutral, arm, swing };
   }
 }
 
