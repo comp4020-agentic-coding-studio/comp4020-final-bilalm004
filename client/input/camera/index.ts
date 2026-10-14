@@ -6,13 +6,15 @@ import {
   DEFAULT_CALIBRATION,
   MoveThrottle,
   DEFAULT_SWING,
+  DEFAULT_TILT,
   SwingDetector,
   bodyFrame,
+  bodyVisibility,
   neutralFrom,
   thresholdsFrom,
   wrist,
 } from "./pose.ts";
-import type { AimMode, ArmPose, CameraFrame, Calibration, SwingMode } from "./pose.ts";
+import type { AimMode, ArmPose, CameraFrame, Calibration, SwingMode, Visibility } from "./pose.ts";
 
 // Camera setup panel and play. Every step can be skipped, and any failure
 // leaves the keyboard and buttons working with a message saying why.
@@ -42,6 +44,7 @@ export interface CameraInput {
 }
 
 const STORAGE_KEY = "camera-calibration";
+const SAFETY_KEY = "camera-safety-ack";
 const SWINGS_PER_LEVEL = 2;
 const LEVEL_WORDS = ["light", "medium", "hard"] as const;
 
@@ -63,6 +66,23 @@ function saveCalibration(c: Calibration): void {
   }
 }
 
+// Per-viewer conveniences only: the panel works with storage unavailable.
+function safetyAcknowledged(): boolean {
+  try {
+    return localStorage.getItem(SAFETY_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function rememberSafety(): void {
+  try {
+    localStorage.setItem(SAFETY_KEY, "1");
+  } catch {
+    // storage unavailable: the notice shows next time
+  }
+}
+
 export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, chip: HTMLElement, cb: CameraCallbacks): CameraInput {
   const video = document.createElement("video");
   video.className = "selfview";
@@ -73,7 +93,23 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
   panel.setAttribute("role", "dialog");
   panel.setAttribute("aria-label", "Camera setup");
   panel.hidden = true;
-  view.append(video, panel);
+  // always-visible grip label and tilt gauge, under the preview
+  const hud = document.createElement("div");
+  hud.className = "cam-hud";
+  hud.hidden = true;
+  hud.innerHTML = `<div class="grip-badge" data-grip="none" role="status" aria-live="polite" aria-label="Detected grip">NO GRIP</div>
+    <div class="tilt-gauge" role="img" aria-label="Lean gauge: the middle band is no movement, the ends are the sidelines">
+      <span class="tilt-dz"></span><span class="tilt-edge" data-side="l"></span><span class="tilt-edge" data-side="r"></span><span class="tilt-mark"></span>
+    </div>`;
+  view.append(video, hud, panel);
+  const gripBadge = hud.querySelector(".grip-badge") as HTMLElement;
+  const tiltMark = hud.querySelector(".tilt-mark") as HTMLElement;
+  // gauge spans this many degrees either side of neutral; the dead zone and edges are drawn to scale
+  const GAUGE_RANGE = DEFAULT_TILT.fullTilt * 1.4;
+  const pct = (deg: number) => `${50 + (Math.max(-GAUGE_RANGE, Math.min(GAUGE_RANGE, deg)) / GAUGE_RANGE) * 50}%`;
+  (hud.querySelector(".tilt-dz") as HTMLElement).style.cssText = `left:${pct(-DEFAULT_TILT.deadZone)};right:${100 - parseFloat(pct(DEFAULT_TILT.deadZone))}%`;
+  (hud.querySelector('[data-side="l"]') as HTMLElement).style.left = pct(-DEFAULT_TILT.fullTilt);
+  (hud.querySelector('[data-side="r"]') as HTMLElement).style.left = pct(DEFAULT_TILT.fullTilt);
 
   let calib = loadCalibration();
   let controller = new CameraController(calib);
@@ -88,6 +124,8 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
   const moves = new MoveThrottle();
   // set while a calibration step wants the raw frames
   let capture: ((f: CameraFrame) => void) | null = null;
+  // set while the visibility check is showing
+  let onVisibility: ((v: Visibility) => void) | null = null;
 
   const setChip = (text: string, state: "ok" | "warn" | "off") => {
     chip.hidden = false;
@@ -110,6 +148,11 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
       refreshChip();
     }
     capture?.(f);
+    onVisibility?.(bodyVisibility(f.landmarks, calib.hand));
+    gripBadge.dataset.grip = nextGrip ?? "none";
+    gripBadge.textContent = nextGrip ? nextGrip.toUpperCase() : "NO GRIP";
+    tiltMark.style.left = pct(out.tracking ? out.tilt : 0);
+    tiltMark.dataset.tracking = String(out.tracking);
     aim = out.tracking ? out.aim : null;
     arm = out.tracking && calib.mode === "follow" ? out.arm : null;
     // no gameplay while calibrating
@@ -124,6 +167,7 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
 
   const close = () => {
     capture = null;
+    onVisibility = null;
     panel.hidden = true;
     view.classList.remove("calibrating");
     cb.pause(false);
@@ -139,6 +183,7 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
     arm = null;
     grip = null;
     video.hidden = true;
+    hud.hidden = true;
     chip.hidden = true;
     button.textContent = "Camera";
   };
@@ -166,13 +211,38 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
     (panel.querySelector("[role=alert]") as HTMLElement).textContent = message;
   };
 
+  const safety = () => {
+    show(
+      `<h2>Before you start</h2>
+       <ul class="safety">
+         <li>Clear the space around you.</li>
+         <li>Stand about 1.5 to 2 m from the screen.</li>
+         <li>Remove loose jewellery and watches, tie back long hair, keep sleeves clear.</li>
+         <li>Hold nothing in your hand.</li>
+         <li>Don't swing at full force. Take breaks, and stop if anything hurts.</li>
+       </ul>
+       <label class="check"><input type="checkbox" data-remember /> Don't show this again</label>
+       <div class="row">
+         <button class="primary" data-step="ack">Got it</button>
+         <button data-step="close">Cancel</button>
+       </div>`,
+      {
+        ack: () => {
+          if ((panel.querySelector("[data-remember]") as HTMLInputElement).checked) rememberSafety();
+          intro();
+        },
+        close,
+      },
+    );
+  };
+
   const intro = () => {
     let hand: Hand = calib.hand;
     let mode: SwingMode = calib.mode;
     let aimMode: AimMode = calib.aim;
     show(
       `<h2>Play with your camera</h2>
-       <p>Keep your head, shoulders and racket arm in view. Lean to move, point your racket hand to aim, swing to hit. Palm to the screen is a forehand, the back of your hand a backhand. The video stays on this device.</p>
+       <p>Keep your head, shoulders and racket arm in view. Lean to move, swing to hit. Palm to the screen is a forehand, the back of your hand a backhand. The video stays on this device.</p>
        <div class="row" role="group" aria-label="Racket hand">
          <button data-hand="right">Right-handed</button>
          <button data-hand="left">Left-handed</button>
@@ -218,8 +288,9 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
       setChip("Loading…", "warn");
       session = await startPose(video, stream, onFrame, (s) => ((stats = s), refreshChip()));
       button.textContent = "Stop camera";
+      hud.hidden = false;
       refreshChip();
-      neutral();
+      check();
     } catch (err) {
       fail(err instanceof CameraError ? err.message : "The camera didn't start. Keep playing with keys and buttons.");
     } finally {
@@ -233,7 +304,40 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
     close();
   };
 
+  const check = () => {
+    show(
+      `<h2>Can we see you?</h2>
+       <p>Step back until your shoulders and racket arm are in the preview. Lean to move and it follows you; there is nothing to calibrate.</p>
+       <ul class="vis" role="status">
+         <li data-v="shoulders">Shoulders <b></b></li>
+         <li data-v="arm">Elbow and wrist <b></b></li>
+         <li data-v="hand">Hand (for forehand and backhand) <b></b></li>
+       </ul>
+       <div class="row">
+         <button class="primary" data-step="done" disabled>Looks good</button>
+         <button data-step="done-anyway">Skip check</button>
+       </div>
+       <details class="advanced">
+         <summary>Advanced</summary>
+         <p class="muted">Capture your neutral pose and tune light, medium and hard swings by hand.</p>
+         <div class="row"><button data-step="advanced">Calibrate manually</button></div>
+       </details>`,
+      { done: finish, "done-anyway": finish, advanced: neutral },
+    );
+    const ok = panel.querySelector("[data-step=done]") as HTMLButtonElement;
+    onVisibility = (v) => {
+      for (const key of ["shoulders", "arm", "hand"] as const) {
+        const li = panel.querySelector(`[data-v=${key}]`) as HTMLElement | null;
+        if (!li) continue;
+        li.dataset.ok = String(v[key]);
+        (li.querySelector("b") as HTMLElement).textContent = v[key] ? "✓ seen" : "not yet";
+      }
+      ok.disabled = !(v.shoulders && v.arm);
+    };
+  };
+
   const neutral = () => {
+    onVisibility = null;
     show(
       `<h2>Stand neutral</h2>
        <p>Shoulders level, racket hand pointing at the screen. Hold still, then press Capture.</p>
@@ -259,7 +363,7 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
               status.textContent = "Couldn't see your shoulders and racket hand. Try again or skip.";
               return;
             }
-            calib = { ...calib, ...n };
+            calib = { ...calib, ...n, autoNeutral: false };
             swings(0, { light: [], medium: [], hard: [] });
           };
         },
@@ -301,7 +405,8 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
 
   const onButton = () => {
     if (session) stop();
-    else intro();
+    else if (safetyAcknowledged()) intro();
+    else safety();
   };
   const onKey = (e: KeyboardEvent) => {
     if (e.key === "Escape" && !panel.hidden && !starting) close();

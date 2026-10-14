@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  AutoNeutral,
   CameraController,
+  GripTracker,
+  bodyVisibility,
   DEFAULT_CALIBRATION,
   DEFAULT_SWING,
   LM,
@@ -136,19 +139,65 @@ describe("body frame", () => {
 });
 
 describe("tilt to movement", () => {
-  // Playtest: 9 degrees for the whole court was too quick.
-  it("ignores a natural sway of up to 3 degrees, then takes about 16 degrees to cover the court", () => {
+  // A guess to be playtested: 9 degrees was too twitchy, 16 too much leaning.
+  it("ignores a natural sway of up to 3 degrees, then takes about 11 degrees to cover the court", () => {
     expect(tiltToTarget(3, 0)).toBe(0);
     expect(tiltToTarget(-3, 0)).toBe(0);
-    expect(tiltToTarget(6, 0)).toBeLessThan(0.3);
-    expect(tiltToTarget(9, 0)).toBeLessThan(0.5);
-    expect(tiltToTarget(16, 0)).toBe(1);
+    expect(tiltToTarget(5, 0)).toBeLessThan(0.2);
+    expect(tiltToTarget(7, 0)).toBeLessThan(0.4);
+    expect(tiltToTarget(11, 0)).toBe(1);
     expect(tiltToTarget(-30, 0)).toBe(-1);
   });
 
-  it("is measured from the calibrated neutral", () => {
+  it("has a gentle curve: slow near the middle, monotonic, symmetric, reaching 1 at the edge", () => {
+    let prev = 0;
+    for (let d = 3; d <= 11; d += 0.5) {
+      const v = tiltToTarget(d, 0);
+      expect(v).toBeGreaterThanOrEqual(prev);
+      expect(tiltToTarget(-d, 0)).toBeCloseTo(-v, 9);
+      prev = v;
+    }
+    // below the straight line between dead zone and edge
+    expect(tiltToTarget(7, 0)).toBeLessThan((7 - 3) / (11 - 3));
+  });
+
+  it("is measured from the given neutral", () => {
     expect(tiltToTarget(4, 4)).toBe(0);
     expect(tiltToTarget(20, 4)).toBe(1);
+  });
+});
+
+describe("auto neutral", () => {
+  it("settles on the median tilt of the first second, then stays fixed", () => {
+    const n = new AutoNeutral(1000);
+    let v: number | null = null;
+    for (let t = 0; t < 1000; t += 33) v = n.add(t, t === 330 ? 30 : 4 + (t % 2 ? 0.3 : -0.3));
+    expect(v).toBeNull();
+    expect(n.add(1023, 4.3)).toBeCloseTo(4, 0);
+    const fixed = n.value!;
+    expect(n.add(2000, 25)).toBe(fixed);
+  });
+
+  it("needs no manual capture: a player standing tilted 5 degrees gets no movement, and leaning from there does", () => {
+    const c = new CameraController(DEFAULT_CALIBRATION);
+    let out: CameraOutput | null = null;
+    for (let t = 0; t < 1500; t += 33) {
+      out = c.update({ t, landmarks: pose({ tilt: 5 }), aspect: ASPECT });
+      expect(out.target).toBe(0);
+    }
+    expect(out!.tilt).toBeCloseTo(0, 1);
+    for (let t = 1500; t < 3000; t += 33) out = c.update({ t, landmarks: pose({ tilt: 5 + 14 }), aspect: ASPECT });
+    expect(out!.target).toBeGreaterThan(0.9);
+    expect(out!.tilt).toBeGreaterThan(10);
+  });
+
+  it("starts the window again if tracking drops out before it settles", () => {
+    const c = new CameraController(DEFAULT_CALIBRATION);
+    for (let t = 0; t < 500; t += 33) c.update({ t, landmarks: pose({ tilt: 20 }), aspect: ASPECT });
+    c.update({ t: 530, landmarks: null, aspect: ASPECT });
+    let out: CameraOutput | null = null;
+    for (let t = 600; t < 2000; t += 33) out = c.update({ t, landmarks: pose({ tilt: 0 }), aspect: ASPECT });
+    expect(out!.tilt).toBeCloseTo(0, 1);
   });
 });
 
@@ -257,6 +306,40 @@ describe("grip: forehand or backhand", () => {
     expect(gripFrom(0.1, "backhand")).toBe("backhand");
     expect(gripFrom(0.8, "backhand")).toBe("forehand");
     expect(gripFrom(-0.8, "forehand")).toBe("backhand");
+  });
+
+  it("smooths noisy readings: no flicker around the threshold, but a real turn gets through", () => {
+    const t = new GripTracker("forehand");
+    const seen: string[] = [];
+    // palm reading jittering around zero, slightly forehand on average
+    t.update(0.5);
+    for (let i = 0; i < 60; i++) seen.push(t.update(0.05 + (i % 2 ? 0.4 : -0.4)));
+    expect(new Set(seen).size).toBe(1);
+    for (let i = 0; i < 6; i++) t.update(-0.9);
+    expect(t.grip).toBe("backhand");
+    // one stray frame doesn't flip it back
+    expect(t.update(0.9)).toBe("backhand");
+  });
+
+  it("locks the grip during a swing, and an unclear reading keeps the last grip", () => {
+    const t = new GripTracker("forehand");
+    for (let i = 0; i < 5; i++) t.update(-0.9);
+    expect(t.grip).toBe("backhand");
+    for (let i = 0; i < 10; i++) expect(t.update(0.9, true)).toBe("backhand");
+    // after the swing the reading is taken afresh
+    expect(t.update(0.9)).toBe("forehand");
+    expect(t.update(null)).toBe("forehand");
+    for (let i = 0; i < 10; i++) expect(t.update(0.02)).toBe("forehand");
+  });
+
+  it("reports what the camera can see for the setup check", () => {
+    expect(bodyVisibility(pose(), "right")).toEqual({ shoulders: true, arm: true, hand: true });
+    expect(bodyVisibility(pose({ grip: "hidden" }), "right")).toEqual({ shoulders: true, arm: true, hand: false });
+    const lm = pose();
+    lm[LM.rightElbow] = { ...lm[LM.rightElbow], visibility: 0.1 };
+    expect(bodyVisibility(lm, "right").arm).toBe(false);
+    expect(bodyVisibility(lm, "left").arm).toBe(true);
+    expect(bodyVisibility(null, "right").shoulders).toBe(false);
   });
 
   it("measures backhand aim from the neutral reflected across the body", () => {

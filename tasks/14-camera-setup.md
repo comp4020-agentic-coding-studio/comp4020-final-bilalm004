@@ -1,6 +1,6 @@
 # 14 Camera setup, grip and tilt
 
-Status: planned
+Status: implemented, awaiting real-webcam playtest
 Model: Sonnet, with Opus reviewing the grip and tilt tuning
 
 Supersedes parts of task 03 (calibration, point aim as default).
@@ -32,7 +32,14 @@ movement are easier to control.
   little), and an on-screen tilt gauge showing the dead zone and edges.
 
 ## Done when
-- [ ] Unit tests in `pose.ts` for grip smoothing/locking and tilt auto-neutral.
-- [ ] Camera panel: notice, hand choice, visibility check, both viewports.
-- [ ] Every camera action still has a keyboard/mouse equivalent.
+- [x] Unit tests in `pose.ts` for grip smoothing/locking and tilt auto-neutral.
+- [x] Camera panel: notice, hand choice, visibility check, both viewports.
+- [x] Every camera action still has a keyboard/mouse equivalent.
 - [ ] Real-webcam playtest notes in the devlog.
+
+## Tuning (guesses, to playtest)
+Tilt: dead zone 3 degrees, full at 11, response curve exponent 1.4 (replaces the
+16-degree range); neutral is the median of the first 1 s of tracking. Grip:
+reading smoothed with alpha 0.4, threshold 0.15 (was 0.3), locked during a
+swing. The forehand/backhand animation and shot label are not part of this
+change yet.

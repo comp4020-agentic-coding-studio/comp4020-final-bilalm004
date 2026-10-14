@@ -837,3 +837,102 @@ a:focus-visible {
   color: var(--muted);
   font-weight: 400;
 }
+
+/* grip label and lean gauge under the camera preview */
+.cam-hud {
+  position: absolute;
+  right: 0.75rem;
+  top: calc(12.5rem + min(240px, 40vw) * 0.75 + 0.5rem);
+  width: min(240px, 40vw);
+  display: grid;
+  gap: 0.4rem;
+  pointer-events: none;
+}
+
+.cam-hud[hidden] {
+  display: none;
+}
+
+.game.calibrating .cam-hud {
+  top: calc(12.5rem + min(320px, 60vw) * 0.75 + 0.5rem);
+  width: min(320px, 60vw);
+}
+
+.grip-badge {
+  padding: 0.3rem 0.5rem;
+  border-radius: 8px;
+  text-align: center;
+  font-weight: 800;
+  font-size: 1.25rem;
+  letter-spacing: 0.08em;
+  background: #0f1720d9;
+  border: 3px solid var(--muted);
+}
+
+.grip-badge[data-grip="forehand"] {
+  border-color: #4ade80;
+}
+
+.grip-badge[data-grip="backhand"] {
+  border-color: #60a5fa;
+}
+
+.tilt-gauge {
+  position: relative;
+  height: 14px;
+  border-radius: 7px;
+  background: #0f1720d9;
+  overflow: hidden;
+}
+
+.tilt-dz {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: #ffffff33;
+}
+
+.tilt-edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #ff8f8f;
+}
+
+.tilt-mark {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  width: 6px;
+  margin-left: -3px;
+  border-radius: 3px;
+  background: #4ade80;
+}
+
+.tilt-mark[data-tracking="false"] {
+  background: var(--muted);
+}
+
+.camera-panel ul {
+  margin: 0 0 0.75rem;
+  padding-left: 1.2rem;
+}
+
+.camera-panel .check {
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.camera-panel .vis {
+  list-style: none;
+  padding: 0;
+}
+
+.camera-panel .vis li[data-ok="true"] b {
+  color: #4ade80;
+}
+
+.camera-panel .advanced {
+  margin-top: 0.75rem;
+}

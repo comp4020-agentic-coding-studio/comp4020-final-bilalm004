@@ -274,6 +274,29 @@ the format of the entries below (see CLAUDE.md, Docs).
   `tasks/00-overview.md` (build order and which tasks can run as parallel
   agents). Open: three or two strength levels; target depths need playtesting.
 
+## 2026-10-14 23:07 AEDT | milestone | Task 14: camera setup, grip and tilt reworked (no real-webcam playtest yet)
+
+- **Situation:** Camera opening asked for a neutral capture and light/medium/hard
+  swings; grip flickered; tilt was either too twitchy (9 degrees) or too much (16).
+- **Change:** Default flow is now safety notice ("Got it", optional "don't show
+  again" in localStorage inside try/catch), hand/mode/aim choice, then a
+  "can we see you" check (shoulders, elbow and wrist required; hand shown).
+  Neutral capture and swing levels moved behind a collapsed Advanced section.
+  Defaults stay classic + timing. Grip is still the only forehand/backhand
+  signal: `GripTracker` smooths the palm reading (alpha 0.4), threshold lowered
+  0.3 to 0.15, locks during a swing, keeps the last grip on an unclear reading;
+  a large FOREHAND/BACKHAND badge sits under the preview. Tilt: `AutoNeutral`
+  takes the median of the first 1 s of tracking (no movement until then),
+  `fullTilt` 16 to 11 degrees with a 1.4 power curve, and a gauge shows dead
+  zone (3 degrees), edges and current lean.
+- **Why:** Fewer steps before play; one clear grip rule; easier lean.
+- **Guesses to playtest:** smoothing alpha 0.4, grip threshold 0.15, fullTilt 11,
+  curve 1.4, 1 s auto-neutral window. None verified on a real webcam; the fake
+  e2e webcam has no person in it.
+- **Verification:** `pnpm check` 131/131, `pnpm e2e --workers=1` 26/26 (port 8091).
+  New unit tests for smoothing, lock, unclear reading, auto-neutral, curve,
+  visibility; e2e for the notice, "don't show again" and blocked storage.
+
 ## 2026-10-14 23:17 AEDT | decision | Shot rules: strength sets depth, height solved, wrong side is a miss (task 12)
 
 - **Situation:** Depth depended on contact height (`loft + heightGain`), so a
