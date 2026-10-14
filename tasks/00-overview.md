@@ -61,6 +61,22 @@ Using separate agents:
 - Every task also updates README, CLAUDE.md layout and `spec/` so the three
   agree, and adds a devlog entry.
 
+## Deliverables (tasks merged so each is one branch and one agent)
+
+The task files stay as the detail; these are what actually gets built together.
+
+| Deliverable | Tasks | Why together |
+|---|---|---|
+| Scoring and results | 11 + the storage and rating half of 06 | Both change what a match is; the leaderboard is step 2 after the score is wired |
+| Room lifecycle | 05 + 13 | One state machine in `rooms.ts`: seats, reconnect, duplicate tab, ready-up, formats, unlimited |
+| Aim aids and training mode | 16 + 17 | The three-arc aid is what training mode teaches; one set of code |
+| Crit docs | 01 + 10 (07 as a standing rule) | README and PROCESS.md are rewritten together each crit; spec coverage is part of every task's done-when, not a separate job |
+
+Stay separate: 02 (ship), 08 (observability), 09 (menu and accessibility), 12
+(done bar the HUD level), 14 (done bar the stroke animation), 15 (auto-move;
+sim and protocol, needed by the training mode). 03 is folded into 12 and 14.
+04 is built.
+
 ## Rules for these files
 
 - A task is done when its "Done when" list is true and checked, not when the

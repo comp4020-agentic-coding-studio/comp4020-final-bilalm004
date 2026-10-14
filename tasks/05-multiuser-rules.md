@@ -1,7 +1,9 @@
 # 05 Multi-user rules and reconnect
 
-Status: not started (today: first two get seats, others spectate, a leaver's
-seat frees immediately)
+Status: not started; no decision written or built (today: first two get seats,
+others spectate, a leaver's seat frees immediately; spec/rooms.test.ts covers
+seats, spectators and practice-room reconnect only). Built together with task
+13 as one room-lifecycle deliverable
 Model: Opus to decide and write the rules, Sonnet to implement
 
 ## Goal

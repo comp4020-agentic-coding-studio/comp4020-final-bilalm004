@@ -1,6 +1,6 @@
 # 01 README: what "good" means
 
-Status: not started (README.md is still the template)
+Status: first draft written for crit 9 (569 words: inspiration, how it works, lag, controls, why it is 'good'); not yet checked claim by claim against CLAUDE.md and spec/; no screenshots in docs/ yet; rewrite for crit 10 must cover scoring, ready-up and the multi-user rules
 Model: Opus
 
 ## Goal

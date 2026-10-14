@@ -425,3 +425,16 @@ the format of the entries below (see CLAUDE.md, Docs).
   server's score state, with a short announcement and pulse on each point.
 - **Why:** The server owns the score, so the bar only renders the snapshot.
   Reduced-motion and screen-reader behaviour are in the spec up front.
+
+## 2026-10-15 00:27 AEDT | decision | Refreshed stale task statuses and merged tasks into four deliverables
+
+- **Situation:** User asked about tasks 1-10. Their status lines were stale:
+  01 said the README was a template (it is a 569-word draft), 10 said PROCESS.md
+  was a template (crit 9 reflection is written, 594 words), 03 predated the
+  playtest. 05's "not started" was right: grep finds no grace, forfeit or
+  duplicate-token handling in the server.
+- **Decision:** Grouped work into scoring and results (11 + 06), room lifecycle
+  (05 + 13), aim aids and training (16 + 17) and crit docs (01 + 10, with 07 as
+  a standing rule). Files are kept; the overview has the new table.
+- **Why:** Each pair edits the same code or the same document, so one branch
+  avoids the sim.ts-style conflicts seen on the first merge.

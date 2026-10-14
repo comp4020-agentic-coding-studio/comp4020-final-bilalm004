@@ -1,6 +1,6 @@
 # 10 Process evidence
 
-Status: ongoing (CLAUDE.md written; PROCESS.md and reflections still templates)
+Status: ongoing (CLAUDE.md written; crit 9 reflection and PROCESS.md written but 594 words against the 900-1100 target; rewrite each crit)
 Model: Opus
 
 ## Goal

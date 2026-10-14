@@ -1,6 +1,6 @@
 # 03 Webcam swing input
 
-Status: steps 1 and 2 done (sim, protocol, fallback input, camera layer, calibration, reticle); needs a real-webcam playtest, and the README privacy line waits on task 01
+Status: built and playtested once with a real webcam (2026-10-15); calibration, point aim as default and the mismatch penalty are superseded by tasks 12 and 14; the README privacy line waits on task 01
 Model: Opus for the design and swing heuristic, Sonnet for wiring and tests
 
 ## Goal
