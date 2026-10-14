@@ -513,8 +513,8 @@ describe("timing aim", () => {
     // seat 1 faces +z, so its right is -x
     expect(timingAim(ballAt(0), 1, "forehand", "right")).toBeCloseTo(0, 6);
     // right-hander's early forehand goes to their left (+x for seat 1)
-    expect(timingAim(ballAt(0.15), 1, "forehand", "right")).toBeGreaterThan(0.5);
-    expect(timingAim(ballAt(-0.15), 1, "forehand", "right")).toBeLessThan(-0.5);
+    expect(timingAim(ballAt(0.22), 1, "forehand", "right")).toBeGreaterThan(0.5);
+    expect(timingAim(ballAt(-0.22), 1, "forehand", "right")).toBeLessThan(-0.5);
   });
 
   it("backhand and left hand reverse it, and seat 0 is the mirror of seat 1", () => {
@@ -630,7 +630,8 @@ describe("rewind (ADR 001)", () => {
     start.phase = "rally";
     start.lastHitter = 0;
     start.shots = 1;
-    start.ball = { x: 0, y: 1.6, z: -COURT.halfL + 2, vx: 0, vy: 0, vz: -8 };
+    // lands in (task 12: a ball that has landed out is dead, so it must be in)
+    start.ball = { x: 0, y: 1.6, z: -COURT.halfL + 6, vx: 0, vy: 0, vz: -8 };
     start.players[1] = { x: 0, targetX: 0 };
     const g = tennisFrom(start);
     const shadow = cloneState(start);

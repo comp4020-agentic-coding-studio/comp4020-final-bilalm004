@@ -117,10 +117,12 @@ export interface Movement {
 
 // Auto-move stops this far short of where it will meet the ball, on the side
 // the ball is heading to, so the ball is clearly on the forehand or backhand
-// side (more than EITHER_SIDE) yet in reach across the hit window: the ball
-// drifts sideways up to about 0.8 m over the window at rally speeds, and
-// 0.6 m keeps OFFSET +- that between -EITHER_SIDE and PLAYER.reach. It is
-// also about where the racket meets the ball in the stroke animation.
+// side (more than EITHER_SIDE) yet in reach across the hit window. Auto
+// keeps following the ball until the middle of the window, so the drift that
+// matters is over its late half. Measured with the 0.32 s window (task 12,
+// 60 seeds of bot play): an auto-moved receiver is in reach with the side
+// auto set up at every tick of all three thirds, as with 0.22 s. It is also
+// about where the racket meets the ball in the stroke animation.
 export const AUTO_OFFSET = 0.6;
 // Auto-move walks at this share of PLAYER.speed (manual, tilt and keys keep
 // the full speed). At full speed it would reach nearly every ball and
@@ -148,8 +150,11 @@ export interface TennisState {
   // shots in the current rally, the serve included
   shots: number;
   // an unreturned ball's point, decided but not yet scored: it is scored once
-  // `atTick` comes, so a lagged swing judged earlier by rewind can still play it
-  pending: { winner: Seat; reason: PointReason; atTick: number } | null;
+  // `atTick` comes, so a lagged swing judged earlier by rewind can still play
+  // it. `dead`: decided by a touchdown that ends the rally (landing out, or a
+  // second bounce), so no swing can play it now; only a swing rewound to
+  // before that touchdown still can (task 12).
+  pending: { winner: Seat; reason: PointReason; atTick: number; dead: boolean } | null;
   // where the ball last touched down, including a bounce that ends the point
   lastBounce: { x: number; z: number; in: boolean; tick: number } | null;
   // real tennis scoring (scoring.ts); `server` above always equals score.server
@@ -401,14 +406,18 @@ function launch(b: Ball, seat: Seat, dirX: number, kind: SwingKind, level: Level
 // side. Camera swings land within about 0.1 s at best (frame interval plus
 // pose detection), so a fixed 1.6 m (0.09-0.15 s at rally speeds) was mostly
 // luck; time-based, the window is the same for fast and slow balls.
-export const HIT_WINDOW_S = 0.22;
+// 0.32 s (task 12, was 0.22): early, on time and late are about 0.21 s each.
+export const HIT_WINDOW_S = 0.32;
 
 /** How far from the baseline (along the court) the ball can be and still be hit. */
 export function hitWindowDistance(b: Ball): number {
   return Math.max(COURT.hitWindow, Math.abs(b.vz) * HIT_WINDOW_S);
 }
 
-export type Miss = "no ball" | "early" | "late" | "reach" | "high" | "wrong side";
+// "out" / "two bounces": the ball has already landed out, or bounced twice, so
+// it is dead (task 12). A ball still in the air that is going out can be hit:
+// that is the player's choice.
+export type Miss = "no ball" | "out" | "two bounces" | "early" | "late" | "reach" | "high" | "wrong side";
 
 /**
  * Whether `kind` suits a ball at `ballX`: the natural swing, or either one
@@ -428,6 +437,7 @@ export function missReason(s: TennisState, seat: Seat, kind?: SwingKind, hand: H
   const b = s.ball;
   const heading = seat === 0 ? b.vz > 0 : b.vz < 0;
   if (!heading) return "no ball";
+  if (s.pending?.dead) return s.pending.reason === "out" ? "out" : "two bounces";
   // positive once the ball is past the baseline
   const past = (b.z - seatZ(seat)) * Math.sign(seatZ(seat));
   const window = hitWindowDistance(b);
@@ -512,11 +522,11 @@ function onBounce(s: TennisState, ev: TennisEvent[]): void {
   }
   // out on the receiver's side: they could have played it before it landed
   if (!inBounds) {
-    s.pending = { winner: other(hitter), reason: "out", atTick: s.tick + CONFIRM_TICKS };
+    s.pending = { winner: other(hitter), reason: "out", atTick: s.tick + CONFIRM_TICKS, dead: true };
     return;
   }
   s.bounces++;
-  if (s.bounces >= 2 && !s.pending) s.pending = { winner: hitter, reason: "unreturned", atTick: s.tick + CONFIRM_TICKS };
+  if (s.bounces >= 2 && !s.pending) s.pending = { winner: hitter, reason: "unreturned", atTick: s.tick + CONFIRM_TICKS, dead: true };
 }
 
 export function step(s: TennisState, inputs: readonly TennisInput[]): TennisEvent[] {
@@ -563,15 +573,42 @@ export function step(s: TennisState, inputs: readonly TennisInput[]): TennisEven
     onBounce(s, ev);
     if (s.phase !== "rally") return ev;
   }
-  // past the receiver's end: they could have played it, so it waits for rewind
-  if (Math.abs(s.ball.z) > COURT.halfL + COURT.endMargin && !s.pending) {
-    const hitter = s.lastHitter as Seat;
+  // past the receiver's end and their hit window, still in the air: they could
+  // have played it, so it waits for rewind. Only the receiver's end: a ball
+  // just hit from deep behind the hitter's own baseline is still on its way.
+  // Not before the window closes: deciding it while the ball is still
+  // hittable would score it before a lagged on-time swing arrives (task 12:
+  // the 0.32 s window reaches past endMargin at rally speeds).
+  const hitter = s.lastHitter as Seat;
+  const past = s.ball.z * Math.sign(seatZ(other(hitter))) - COURT.halfL;
+  const pastEnd = past > Math.max(COURT.endMargin, hitWindowDistance(s.ball));
+  if (pastEnd && !s.pending) {
     s.pending = s.bounces >= 1
-      ? { winner: hitter, reason: "unreturned", atTick: s.tick + CONFIRM_TICKS }
-      : { winner: other(hitter), reason: "out", atTick: s.tick + CONFIRM_TICKS };
+      ? { winner: hitter, reason: "unreturned", atTick: s.tick + CONFIRM_TICKS, dead: false }
+      : { winner: other(hitter), reason: "out", atTick: s.tick + CONFIRM_TICKS, dead: false };
   }
   if (s.pending && s.tick >= s.pending.atTick) awardPoint(s, s.pending.winner, s.pending.reason, ev);
   return ev;
+}
+
+/**
+ * Whether the ball in flight will first touch down in bounds on the far side
+ * from its hitter: run on with the same moveBall the sim uses. False if it
+ * goes into the net or lands out (or on the hitter's own side). A ball that
+ * has already bounced in has nothing left to decide, so it is in. Pure.
+ */
+export function willLandIn(s: TennisState): boolean {
+  if (s.phase !== "rally" || s.lastHitter === null) return false;
+  if (s.pending) return false;
+  if (s.bounces > 0) return true;
+  const b = { ...s.ball };
+  const farSide = s.lastHitter === 0 ? -1 : 1;
+  for (let i = 0; i < 600; i++) {
+    const event = moveBall(b);
+    if (event === "net") return false;
+    if (event === "bounce") return Math.abs(b.x) <= COURT.halfW && Math.abs(b.z) <= COURT.halfL && Math.sign(b.z) === farSide;
+  }
+  return false;
 }
 
 export interface Contact {
@@ -581,21 +618,30 @@ export interface Contact {
 
 /**
  * Where the ball will be when it reaches `seat`'s baseline (the middle of the
- * hit window), if the rally gets that far. Pure: `s` is not modified.
+ * hit window), if the rally gets that far. A ball that will land out before
+ * the baseline is dead from then on (task 12), so its contact is the last tick
+ * it is still in the air, if that is inside the window (it can be volleyed),
+ * and none otherwise; likewise none for the net or a second bounce. Pure: `s`
+ * is not modified.
  */
 export function predictContact(s: TennisState, seat: Seat, maxTicks = 600): Contact | null {
   if (s.phase !== "rally" || s.lastHitter === seat) return null;
   const b = { ...s.ball };
   const heading = seat === 0 ? b.vz > 0 : b.vz < 0;
-  if (!heading) return null;
+  if (!heading || s.pending?.dead) return null;
   let bounces = s.bounces;
   const baseline = seatZ(seat);
   for (let ticks = 0; ticks <= maxTicks; ticks++) {
     const past = (b.z - baseline) * Math.sign(baseline);
     if (past >= 0) return past <= hitWindowDistance(b) ? { ball: b, ticks } : null;
+    const before = { ...b };
     const event = moveBall(b);
     if (event === "net") return null;
-    if (event === "bounce" && ++bounces >= 2) return null;
+    if (event === "bounce") {
+      const inBounds = Math.abs(b.x) <= COURT.halfW && Math.abs(b.z) <= COURT.halfL;
+      if (bounces === 0 && !inBounds) return past >= -hitWindowDistance(before) ? { ball: before, ticks } : null;
+      if (++bounces >= 2) return null;
+    }
   }
   return null;
 }

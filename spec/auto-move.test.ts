@@ -218,7 +218,8 @@ describe("auto-move", () => {
     start.phase = "rally";
     start.lastHitter = 0;
     start.shots = 1;
-    start.ball = { x: 0, y: 1.6, z: -COURT.halfL + 2, vx: 0, vy: 0, vz: -8 };
+    // lands in (task 12: a ball that has landed out is dead, so it must be in)
+    start.ball = { x: 0, y: 1.6, z: -COURT.halfL + 6, vx: 0, vy: 0, vz: -8 };
     const g = tennisFrom(start);
     const shadow = structuredClone(start);
     let onTimeAgo = -1;

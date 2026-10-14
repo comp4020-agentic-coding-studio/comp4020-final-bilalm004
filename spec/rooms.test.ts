@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, inject, it } from "vitest";
 import WebSocket from "ws";
-import { COURT, DT, PLAYER, missReason } from "../shared/games/tennis/sim.ts";
+import { COURT, DT, PLAYER, hitWindowDistance, missReason } from "../shared/games/tennis/sim.ts";
 import type { TennisSnapshot } from "../shared/games/tennis/sim.ts";
 import type { ClientMsg, ServerMsg } from "../shared/protocol.ts";
 
@@ -392,7 +392,10 @@ describe("movement mode (task 2: auto-move)", () => {
     while (Date.now() < deadline && !met) {
       const s = (await peer.next("state")).state as TennisSnapshot;
       const why = s.phase === "rally" ? missReason({ ...s, rng: 0 }, 0) : "no ball";
-      if (why === null) met = s;
+      // in the on-time third (task 12: at the early edge of the wider window
+      // the ball hasn't drifted out to auto's offset yet)
+      const onTime = Math.abs(s.ball.z - COURT.halfL) <= hitWindowDistance(s.ball) / 3;
+      if (why === null && onTime) met = s;
     }
     expect(met, "no incoming ball was ever in reach").not.toBeNull();
     expect(met!.movement[0]).toEqual({ mode: "auto", manual: false });
