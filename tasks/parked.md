@@ -32,7 +32,7 @@ first, then queue order, leave-the-queue and what a spectator sees.
 
 ## One player on two tabs (flagged)
 Allowed for now so one person can test with two tabs (same browser token or the
-demo accounts). When it matters: a match where both seats share a token should
-not move ratings or the leaderboard (task 7), duplicate-token reconnect needs a
-rule for which tab gets the seat, and a "replace the old tab" or "reject the
-second tab" policy can come with accounts.
+demo accounts). Task 4 settled two parts: a match where both seats share a
+token is stored unrated, and a held seat goes to the next tab with that token
+to join. A "replace the old tab" or "reject the second tab" policy, and
+renaming (with length and character limits), can come with accounts.

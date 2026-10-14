@@ -23,12 +23,15 @@ lazily and only when a player enters a game. Video never leaves the browser.
   adapter) and registers in `shared/games/registry.ts`. Tennis scoring
   (points, games, sets, tiebreak, faults) is `shared/games/tennis/scoring.ts`;
   the sim keeps its `ScoreState` in the snapshot.
-- `server/` `index.ts` (http + ws + `/readme/`), `rooms.ts` (60 Hz tick loop,
-  seats, spectators), `db.ts` (SQLite on `/data`), `schema.ts` (versioned
+- `server/` `index.ts` (http + ws + `/readme/`), `rooms.ts` (live rooms with
+  the real clock and db), `room.ts` (one room: 60 Hz tick loop, seats,
+  spectators, game), `lobby.ts` (pure room rules: phases, ready, format,
+  countdown, the 30 s hold; clock injected), `db.ts` (SQLite on `/data`), `schema.ts` (versioned
   schema, migrations, match rows, who is rated), `log.ts` (JSON log lines).
   Rooms get their sim from the registry, so networking is game-agnostic.
 - `client/` Vite app: `games/<name>/view.ts` (scene, HUD, input wiring),
   `games/tennis/score-bar.ts` (top score bar and the umpire's call),
+  `games/tennis/ready-panel.ts` + `.css` (the room's ready panel, task 4),
   `games/tennis/stadium.ts` (arena from primitives, instanced crowd/trees),
   `games/tennis/character.ts` (Mii-style player and racket),
   `games/tennis/stroke.ts` (forehand/backhand keyframes, shot label text),
@@ -73,10 +76,26 @@ lazily and only when a player enters a game. Video never leaves the browser.
 - The server never trusts a client's claim of a hit or a score; it resolves
   hits from swing timestamps against its own sim.
 - Scoring is real tennis for everyone (`spec/sim-scoring.test.ts`): one set by
-  default or best of three, tiebreak at 6-6, two serves per point, no lets.
+  default, best of three or unlimited, tiebreak at 6-6, two serves per point, no lets.
   The score bar only renders the server's `ScoreState`. Practice never ends
   (a won match starts a new one) and practice-vs-bot is never rated
   (`spec/db.test.ts`).
+- Rooms (task 4; `spec/lobby.test.ts`, `spec/room-rules.test.ts`,
+  `spec/rooms.test.ts`): invite link or room code only, no public list. Two
+  seats; a third arrival only spectates (no queue). Phases `waiting ->
+  ready-check -> countdown (3 s) -> playing`; each seat's `ready` is the
+  server's, the bot is always ready, un-readying cancels the countdown, a
+  disconnect before the match frees the seat. The host (first seat) picks one
+  set (default), best of three or unlimited before play; a change clears both
+  ready flags. Mid-match, a dropped connection holds the seat and pauses for
+  30 s ("waiting for <name>", seconds left); the same token reclaims it and a
+  3 s countdown resumes play, otherwise the room closes with no result.
+  Pressing Leave mid-match ends it with no result. Unlimited has no winner,
+  counts points and best rally, ends when someone leaves and is stored
+  unrated. Practice vs bot starts at once. One token may hold both seats (two
+  tabs, for testing); its second seat is shown "<name> (2)" and its matches
+  are unrated. Names are server-made pseudonyms, not renameable. Ratings read
+  only `rated = 1` rows.
 - A schema change is a new step in `server/schema.ts` plus a test that opens
   a database made by the previous version; never edit an old step.
 - A ball in the air is live for everyone, even one going out: a person may
