@@ -619,3 +619,19 @@ the format of the entries below (see CLAUDE.md, Docs).
   key takes over at full speed until the next ball comes at you. Keyboard
   players get the help by default and can still go anywhere, and no
   keyboard-only toggle is needed. The user may overrule this.
+
+## 2026-10-15 03:28 AEDT | bug | Out ball volleyed by the bot is not called out
+
+- **Situation:** User: when the trajectory pointed out and they hit that swing,
+  the ball went out, but the bot still hit it and the point wasn't counted as
+  out. This matches the earlier probe: the bot swings at a ball in the air
+  before it lands (a legal volley in the sim), and an out call only happens
+  when the ball lands, so a volley skips it.
+- **Decision:** a shot that will land out is dead from the moment it is hit,
+  not only after it lands: the receiver can't hit it, the bot doesn't try, and
+  the point is called when it lands. Written into tasks/12. This changes the
+  rules for people too (no volleying a ball that is going out), which is what
+  the user described wanting.
+- **Why:** The out call should follow the shot, not whether the receiver
+  happened to swing. Deciding at launch is deterministic and keeps rewind
+  (ADR 001) safe because the ball's own history decides.
