@@ -1,0 +1,96 @@
+/* Trajectory aid (task 3): timing meter, last swing's strength and the
+   on/off switch, in one row along the bottom, above the stroke label and the
+   swing buttons. Its own file so the HUD and style.css stay untouched. */
+
+.aid {
+  position: absolute;
+  left: 50%;
+  /* above the stroke label, which sits 72px above the swing buttons */
+  bottom: calc(max(1rem, env(safe-area-inset-bottom)) + 72px + 2.5rem);
+  transform: translateX(-50%);
+  width: min(32rem, calc(100% - 1.5rem));
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+
+/* the setup panel takes this space while it is open */
+.game.calibrating .aid {
+  display: none;
+}
+
+.aid-meter {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  height: 1.75rem;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #0f1720b3;
+  font-size: 0.8rem;
+}
+
+.aid-meter[hidden] {
+  /* keeps the row's shape so the toggle doesn't jump */
+  display: grid;
+  visibility: hidden;
+}
+
+.aid-meter span {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.aid-meter span + span {
+  border-left: 1px solid #ffffff26;
+}
+
+.aid-meter span[data-on="true"] {
+  background: #ffffff2e;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.aid-mark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  margin-left: -2px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.aid-mark[hidden] {
+  display: none;
+}
+
+.aid-strength {
+  flex: 0 0 auto;
+  font-size: 0.8rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.aid-strength:empty {
+  display: none;
+}
+
+.aid-toggle {
+  flex: 0 0 auto;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 0.6rem;
+  font-size: 0.85rem;
+  pointer-events: auto;
+}
+
+.aid-toggle[aria-pressed="false"] {
+  opacity: 0.7;
+  text-decoration: line-through;
+}

@@ -1,6 +1,6 @@
 # 3 Trajectory aid
 
-Status: planned
+Status: done (devlog 2026-10-15 01:19); playtest the colours and the meter with a real camera
 Model: Opus for the design, Sonnet for the rendering
 
 Depends on: shot rules (done; height-compensated `launch()`)
@@ -24,8 +24,27 @@ mapping. Replaces the old point-aim reticle for timing mode.
 - Built on `predictLanding` and `shot-fx.ts`. A prediction only: the server
   rewinds to the swing time (ADR 001) and decides.
 
+## Built
+- `client/games/tennis/trajectory-aid.ts` (pure, `spec/trajectory-aid.test.ts`):
+  `windowPosition` (the same -1..1 measure `timingAim` uses), `litTiming`
+  (thirds of the window), `meterPosition`, `timingArcs` (each arc is a copy
+  of the sim stepped to that moment and hit with a timing-aimed swing, so it
+  is what the server does), `realArc`, `strengthPosition`/`shownStrength`.
+  No change to `sim.ts`.
+- `aid-fx.ts` draws the arcs, depth ticks and slider, and the real arc;
+  `aid.ts` the meter, strength readout and "Aid" toggle (in `aid.css`, along
+  the bottom above the stroke label, hidden while the camera panel is open).
+- The three arcs show with the camera on and aiming by timing; they replace
+  the reticle and single arc then. With keys/mouse the reticle and arc stay,
+  the depth ticks sit on the aimed shot, and the chosen strength is picked.
+- Arcs are computed once per incoming shot (grip, strength); a passed arc
+  keeps showing where it would have gone.
+- Camera peak speed: `SwingDetector.peak` and `CameraOutput.peak` (classic
+  mode only; follow mode has no swing in progress).
+- Off switch remembered in localStorage (`trajectory-aid`), default on.
+
 ## Done when
-- [ ] Test: predicted arcs land on the same side as `timingAim` for every hand,
+- [x] Test: predicted arcs land on the same side as `timingAim` for every hand,
       kind and timing.
-- [ ] Greying/lighting follows the ball in an e2e at both viewports.
-- [ ] Off switch works; nothing else depends on it.
+- [x] Greying/lighting follows the ball in an e2e at both viewports.
+- [x] Off switch works; nothing else depends on it.

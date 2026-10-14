@@ -18,6 +18,7 @@ import { createPlayInput } from "../../input/keyboard.ts";
 import type { Connection } from "../../net/socket.ts";
 import { makePlayer } from "./character.ts";
 import { createScoreBar } from "./score-bar.ts";
+import { createTrajectoryAid } from "./aid.ts";
 import { createShotFx } from "./shot-fx.ts";
 import { buildStadium } from "./stadium.ts";
 
@@ -109,6 +110,7 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
   reticle.visible = false;
   scene.add(reticle);
   const fx = createShotFx(scene);
+  const aid = createTrajectoryAid(view, scene, canvas);
   let bounceMarks = 0;
 
   const camera = new PerspectiveCamera(55, 1, 0.1, 120);
@@ -194,6 +196,7 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
   const swing = (level: Level, dirX: number) => {
     if (info.seat === null) return;
     const me = snap?.players[info.seat].x ?? 0;
+    aid.swung(level, "keys");
     send(level, dirX, naturalKind(info.seat, me, snap?.ball.x ?? me));
   };
   // Hold: walk toward the sideline. Release: stop where the server last had us.
@@ -214,6 +217,7 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
     // (taking the racket back before a backhand looks like a forehand).
     swing: (level, kind, aim, hand, lift, timingAim) => {
       if (info.seat === null) return;
+      aid.swung(level, "camera");
       const timing = snap ? swingTiming({ ...snap, rng: 0 }, info.seat) : "none";
       if (timing === "ready") return send(level, aim * worldSign, kind, hand, lift, timingAim);
       if (cameraInput.arm() === null) animate(kind, hand);
@@ -319,8 +323,23 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
           p.pose(null, grip === "backhand", grip ? (cameraInput.hand() === "right" ? 1 : -1) : side, aim);
         }
       }
-      const landing =
+      // camera aiming by timing: the aid's three arcs stand in for the reticle and arc
+      const threeArcs = aid.update(
         info.seat === null || snap.phase === "over"
+          ? null
+          : {
+              shown: shown!,
+              seat: info.seat,
+              hand: cameraInput.hand(),
+              grip: cameraInput.grip(),
+              timingAim: cameraInput.on() && cameraInput.aimMode() === "timing",
+              aim: currentAim(),
+              peak: cameraInput.peak(),
+              thresholds: cameraInput.thresholds(),
+            },
+      );
+      const landing =
+        info.seat === null || snap.phase === "over" || threeArcs
           ? null
           : predictLanding({ ...snap, rng: 0 }, info.seat, currentAim(), reticleLevel, cameraInput.hand(), cameraInput.grip() ?? undefined);
       reticle.visible = landing !== null;
@@ -356,6 +375,7 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
     unsubscribe();
     input.dispose();
     cameraInput.dispose();
+    aid.dispose();
     observer.disconnect();
     renderer.dispose();
   };

@@ -33,6 +33,10 @@ export interface CameraInput {
   aim(): number | null;
   /** Level of the last camera swing. */
   level(): Level | null;
+  /** Peak wrist speed so far in a camera swing in progress, else null. */
+  peak(): number | null;
+  /** Wrist speeds separating light/medium and medium/hard for this player. */
+  thresholds(): readonly [number, number];
   /** Grip being held while tracking (palm to camera forehand, back of hand backhand), else null. */
   grip(): SwingKind | null;
   hand(): Hand;
@@ -40,6 +44,8 @@ export interface CameraInput {
   arm(): ArmPose | null;
   mode(): SwingMode;
   aimMode(): AimMode;
+  /** The camera is running (tracking or not). */
+  on(): boolean;
   dispose(): void;
 }
 
@@ -125,6 +131,7 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
   let arm: ArmPose | null = null;
   let grip: SwingKind | null = null;
   let lastLevel: Level | null = null;
+  let peak: number | null = null;
   const moves = new MoveThrottle();
   // set while a calibration step wants the raw frames
   let capture: ((f: CameraFrame) => void) | null = null;
@@ -159,6 +166,7 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
     tiltMark.dataset.tracking = String(out.tracking);
     aim = out.tracking ? out.aim : null;
     arm = out.tracking && calib.mode === "follow" ? out.arm : null;
+    peak = out.peak;
     // no gameplay while calibrating
     if (capture || !panel.hidden) return;
     const target = moves.next(f.t, out.target);
@@ -186,6 +194,7 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
     aim = null;
     arm = null;
     grip = null;
+    peak = null;
     video.hidden = true;
     hud.hidden = true;
     chip.hidden = true;
@@ -421,11 +430,14 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
   return {
     aim: () => aim,
     level: () => lastLevel,
+    peak: () => peak,
+    thresholds: () => calib.thresholds,
     grip: () => grip,
     hand: () => calib.hand,
     arm: () => arm,
     mode: () => calib.mode,
     aimMode: () => calib.aim,
+    on: () => session !== null,
     dispose() {
       button.removeEventListener("click", onButton);
       window.removeEventListener("keydown", onKey);

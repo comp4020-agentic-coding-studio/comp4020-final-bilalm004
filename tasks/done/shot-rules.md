@@ -1,6 +1,6 @@
 # 12 Shot rules: strength, height, timing, wrong side
 
-Status: in progress (sim rules, tests and miss label done; HUD level display open)
+Status: done (HUD level display shipped with task 3, the trajectory aid)
 Model: Opus for the design and tuning, Sonnet for the tests
 
 ## Goal
@@ -58,6 +58,8 @@ timing aim are the camera's only modes.
 - [x] Test: a swing of the wrong kind returns `"wrong side"`.
 - [x] `predictLanding` uses the same `launch()`; bot unchanged in behaviour
       (bot-vs-bot mean rally 3.77 shots before, 3.9 after).
-- [ ] Detected level shown after each swing (HUD).
+- [x] Detected level shown after each swing (HUD): "Detected: hard" for a
+      camera swing, "Chosen: hard" for keys and buttons, next to the timing
+      meter (`client/games/tennis/aid.ts`, e2e in `e2e/aid.e2e.ts`).
 - [x] Three levels vs two decided and written here.
 - [x] `pnpm check` green.

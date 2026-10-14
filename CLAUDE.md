@@ -31,7 +31,9 @@ lazily and only when a player enters a game. Video never leaves the browser.
   `games/tennis/score-bar.ts` (top score bar and the umpire's call),
   `games/tennis/stadium.ts` (arena from primitives, instanced crowd/trees),
   `games/tennis/character.ts` (Mii-style player and racket),
-  `games/tennis/shot-fx.ts` (ball trail, bounce marks, shot arc), `input/`
+  `games/tennis/shot-fx.ts` (ball trail, bounce marks, shot arc),
+  `games/tennis/trajectory-aid.ts` (pure: timing arcs, meter, strength ticks)
+  with `aid.ts`/`aid-fx.ts`/`aid.css` drawing it (task 3), `input/`
   (`keyboard.ts` for keys, pointer and buttons; `camera/` with `pose.ts` pure
   landmark maths, `camera.ts` webcam + lazy MediaPipe, `index.ts` setup
   panel), `net/socket.ts`, `ui/menu.ts`. Camera swings have two modes,

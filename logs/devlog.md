@@ -516,3 +516,29 @@ the format of the entries below (see CLAUDE.md, Docs).
   format and call; on a phone that pushed the HUD 9 px into the camera
   preview's spot, so those moved into a right-hand column.
 
+## 2026-10-15 01:19 AEDT | milestone | Trajectory aid (task 3): three timing arcs, timing meter, strength readout
+
+- **Situation:** Aiming by timing (the camera default) showed one straight
+  arc, so players couldn't see that early goes cross-court and late down the
+  line. The detected strength was never shown (left open in shot rules).
+- **Outcome:** With the camera aiming by timing, three arcs (early, on time,
+  late) show on the opponent's court; the arc for the ball's current third of
+  the hit window is lit, the others grey. A meter along the bottom (early | on
+  time | late) has a marker that moves with the ball. The lit arc carries
+  light/medium/hard depth ticks: the last swing's level is picked, and during
+  a classic camera swing a marker slides with the peak wrist speed so far.
+  After your hit the real arc replaces them until it lands. "Detected: hard"
+  (camera) or "Chosen: hard" (keys/buttons) sits beside the meter. An "Aid"
+  button switches it all off (remembered); the reticle and game don't depend
+  on it. Pure logic in `client/games/tennis/trajectory-aid.ts` with 19 unit
+  tests, drawing in `aid.ts`/`aid-fx.ts`/`aid.css`; `e2e/aid.e2e.ts` at both
+  viewports. No change to `sim.ts`, the protocol or the HUD.
+- **Why:** Each arc is a copy of the shared sim stepped to that moment and hit
+  with the same timing-aimed swing the server resolves, not a separate
+  formula, so the test can compare it with a real hit for every seat, hand
+  and kind. Turning off timing aim in the arc helper fails 11 of the tests.
+  The arcs are worked out once per incoming shot, not per frame. The keyboard
+  depth ticks first ran three `predictLanding` calls every frame and the
+  frame-rate-sensitive trail e2e failed 2 of 3 runs on desktop (with another
+  agent's browsers also running); computed only for an incoming ball and
+  cached, it passed 6 of 6.
