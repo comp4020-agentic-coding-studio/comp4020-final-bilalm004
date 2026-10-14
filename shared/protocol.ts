@@ -1,4 +1,4 @@
-import type { Hand, Level, SwingKind } from "./games/tennis/sim.ts";
+import type { Hand, Level, MoveMode, SwingKind } from "./games/tennis/sim.ts";
 
 export type ClientMsg =
   // demo: sign in as one of the two fixed demo accounts instead of the
@@ -15,6 +15,10 @@ export type ClientMsg =
   // server judges the swing there if it can (ADR 001), within its own limits
   | { t: "swing"; dirX: number; kind: SwingKind; level: Level; hand?: Hand; lift?: number; timingAim?: boolean; tick?: number }
   | { t: "move"; x: number }
+  // movement mode for the sender's own seat: "auto" (the server walks you to
+  // the ball, the default) or "tilt" (only your own moves); anything else is
+  // a bad message
+  | { t: "mode"; mode: MoveMode }
   // practice only: hold the game while the player sets up the camera
   | { t: "pause"; paused: boolean }
   // reply to the server's ping, echoing its id, so it can time the round trip
@@ -73,6 +77,8 @@ export function parseClientMsg(raw: string): ClientMsg | null {
     }
     case "move":
       return typeof m.x === "number" && Number.isFinite(m.x) ? { t: "move", x: m.x } : null;
+    case "mode":
+      return m.mode === "auto" || m.mode === "tilt" ? { t: "mode", mode: m.mode } : null;
     case "pause":
       return typeof m.paused === "boolean" ? { t: "pause", paused: m.paused } : null;
     case "pong":

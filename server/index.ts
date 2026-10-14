@@ -191,6 +191,9 @@ wss.on("connection", (ws: WebSocket) => {
       case "move":
         client.room?.move(client, msg.x);
         break;
+      case "mode":
+        client.room?.mode(client, msg.mode);
+        break;
       case "pause":
         client.room?.pause(client, msg.paused);
         break;

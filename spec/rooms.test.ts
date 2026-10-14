@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, inject, it } from "vitest";
 import WebSocket from "ws";
-import { COURT, DT, PLAYER } from "../shared/games/tennis/sim.ts";
+import { COURT, DT, PLAYER, missReason } from "../shared/games/tennis/sim.ts";
 import type { TennisSnapshot } from "../shared/games/tennis/sim.ts";
 import type { ClientMsg, ServerMsg } from "../shared/protocol.ts";
 
@@ -343,4 +343,62 @@ describe("rooms over WebSocket", () => {
     again.peer.seen.length = 0;
     expect(((await again.peer.next("state")).state as TennisSnapshot).tick).toBeGreaterThan(t0 + 10);
   });
+});
+
+describe("movement mode (task 2: auto-move)", () => {
+  it("accepts auto and tilt, and rejects an unknown or missing movement mode", async () => {
+    const { peer } = await Peer.connect();
+    peer.send({ t: "mode", mode: "tilt" });
+    peer.send({ t: "mode", mode: "auto" });
+    await new Promise((r) => setTimeout(r, 300));
+    expect(peer.seen.filter((m) => m.t === "error")).toEqual([]);
+    for (const bad of [{ t: "mode", mode: "run" }, { t: "mode" }, { t: "mode", mode: 1 }]) {
+      peer.ws.send(JSON.stringify(bad));
+      expect((await peer.next("error")).message).toMatch(/bad message/);
+    }
+  });
+
+  it("applies a seat's mode to that seat only; both start in auto", async () => {
+    const a = await Peer.connect();
+    a.peer.send({ t: "create", game: "tennis", practice: false });
+    const room = await a.peer.next("room");
+    const b = await Peer.connect();
+    b.peer.send({ t: "join", room: room.room });
+    await b.peer.next("room");
+    await new Promise((r) => setTimeout(r, 150));
+    b.peer.seen.length = 0;
+    expect(((await b.peer.next("state")).state as TennisSnapshot).movement.map((m) => m.mode)).toEqual(["auto", "auto"]);
+
+    a.peer.send({ t: "mode", mode: "tilt" });
+    await new Promise((r) => setTimeout(r, 150));
+    b.peer.seen.length = 0;
+    expect(((await b.peer.next("state")).state as TennisSnapshot).movement.map((m) => m.mode)).toEqual(["tilt", "auto"]);
+
+    b.peer.send({ t: "mode", mode: "tilt" });
+    a.peer.send({ t: "mode", mode: "auto" });
+    await new Promise((r) => setTimeout(r, 150));
+    a.peer.seen.length = 0;
+    expect(((await a.peer.next("state")).state as TennisSnapshot).movement.map((m) => m.mode)).toEqual(["auto", "tilt"]);
+  });
+
+  it("in auto, the server walks the player to the incoming ball without any move messages", async () => {
+    const { peer } = await Peer.connect();
+    peer.send({ t: "create", game: "tennis", practice: true });
+    await peer.next("room");
+    // seat 0 never swings, so the bot's serves (alternate games) and returns
+    // of seat 0's serves come at it; wait for one in the hit window
+    const deadline = Date.now() + 25_000;
+    let met: TennisSnapshot | null = null;
+    while (Date.now() < deadline && !met) {
+      const s = (await peer.next("state")).state as TennisSnapshot;
+      const why = s.phase === "rally" ? missReason({ ...s, rng: 0 }, 0) : "no ball";
+      if (why === null) met = s;
+    }
+    expect(met, "no incoming ball was ever in reach").not.toBeNull();
+    expect(met!.movement[0]).toEqual({ mode: "auto", manual: false });
+    expect(Math.abs(met!.ball.x - met!.players[0].x)).toBeLessThanOrEqual(PLAYER.reach);
+    // it was walked there (it starts in the middle and stops short of the ball, beside it)
+    expect(met!.players[0].x).not.toBe(0);
+    expect(Math.abs(met!.ball.x - met!.players[0].x)).toBeGreaterThan(0.1);
+  }, 30_000);
 });

@@ -1,7 +1,7 @@
 import type { GameDef, GameInstance } from "../registry.ts";
 import { botInputs } from "./bot.ts";
-import { cloneState, createState, snapshot, step } from "./sim.ts";
-import type { Hand, MatchFormat, Seat, SwingKind, TennisEvent, TennisInput, TennisState } from "./sim.ts";
+import { MOVE_MODES, cloneState, createState, snapshot, step } from "./sim.ts";
+import type { Hand, MatchFormat, MoveMode, Seat, SwingKind, TennisEvent, TennisInput, TennisState } from "./sim.ts";
 
 // Past ticks kept for rewind. The room decides how far back a swing may go
 // (at most 9 ticks, 150 ms); this only has to be at least that.
@@ -16,6 +16,9 @@ export function asInput(seat: Seat, input: unknown): TennisInput | null {
   const m = input as Record<string, unknown>;
   if (m.t === "move") {
     return typeof m.x === "number" && Number.isFinite(m.x) ? { t: "move", seat, x: m.x } : null;
+  }
+  if (m.t === "mode") {
+    return (MOVE_MODES as readonly unknown[]).includes(m.mode) ? { t: "mode", seat, mode: m.mode as MoveMode } : null;
   }
   if (m.t === "swing") {
     const { dirX, kind, level, hand, lift, timingAim } = m;
@@ -55,7 +58,7 @@ export const tennis: GameDef = {
   id: "tennis",
   name: "Tennis",
   create(seed, options) {
-    return makeInstance(createState(seed, { endless: options?.endless === true, format: asFormat(options?.format) }));
+    return makeInstance(createState(seed, { endless: options?.endless === true, format: asFormat(options?.format), moveMode: "auto" }));
   },
 };
 

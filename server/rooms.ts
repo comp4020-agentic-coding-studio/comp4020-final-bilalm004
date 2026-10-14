@@ -67,6 +67,9 @@ class Room {
   private lastSwing: [number, number] = [-1000, -1000];
   // latest move target per seat, applied once on the next tick
   private pendingMove: [number | null, number | null] = [null, null];
+  // a seat's wanted movement mode, kept until the game next steps (so one
+  // sent while waiting for an opponent or paused isn't lost)
+  private pendingMode: [string | null, string | null] = [null, null];
   private moveWindow: [{ start: number; count: number }, { start: number; count: number }] = [
     { start: 0, count: 0 },
     { start: 0, count: 0 },
@@ -122,6 +125,8 @@ class Room {
     else {
       this.seats[seat] = c;
       this.tokens[seat] = c.token;
+      // a new occupant starts in the default; their own mode message follows
+      this.pendingMode[seat] = "auto";
     }
     this.emptySince = null;
     send(c, { t: "room", room: this.id, game: this.gameId, seat, practice: this.practice });
@@ -180,6 +185,13 @@ class Room {
     this.pendingMove[c.seat] = x;
   }
 
+  /** Movement mode for the sender's own seat only; the game validates the value. */
+  mode(c: Client, mode: string): void {
+    if (c.seat === null) return;
+    this.pendingMode[c.seat] = mode;
+    log("move_mode", { room: this.id, seat: c.seat, mode });
+  }
+
   isStale(now: number): boolean {
     return this.emptySince !== null && now - this.emptySince > EMPTY_ROOM_TTL_MS;
   }
@@ -223,6 +235,11 @@ class Room {
   private advance(): void {
     if (this.ready() && !this.paused) {
       const inputs = this.pending;
+      for (const seat of [0, 1] as const) {
+        const mode = this.pendingMode[seat];
+        if (mode !== null) inputs.push({ seat, input: { t: "mode", mode } });
+      }
+      this.pendingMode = [null, null];
       for (const seat of [0, 1] as const) {
         const x = this.pendingMove[seat];
         if (x !== null) inputs.push({ seat, input: { t: "move", x } });

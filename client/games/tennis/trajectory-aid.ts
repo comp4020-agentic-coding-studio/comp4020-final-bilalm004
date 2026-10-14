@@ -116,6 +116,8 @@ function shoot(s: TennisState, seat: Seat, u: number, kind: SwingKind, level: Le
     step(c, []);
   }
   c.players[seat] = { x: c.ball.x, targetX: c.ball.x };
+  // held there for the swing, whatever the seat's movement mode
+  c.movement[seat] = { mode: "tilt", manual: false };
   const contact = { x: c.ball.x, y: c.ball.y, z: c.ball.z };
   const ev = step(c, [{ t: "swing", seat, dirX: 0, kind, level, hand, timingAim: true }]);
   if (!ev.some((e) => e.type === "swing" && e.outcome === "hit")) return null;

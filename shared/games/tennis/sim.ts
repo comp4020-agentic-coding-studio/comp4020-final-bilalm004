@@ -100,6 +100,41 @@ export interface Player {
   targetX: number;
 }
 
+/**
+ * How a seat moves. "auto": the server walks it to the ball (autoTargetX),
+ * so the player only swings. "tilt": only the player's own move messages
+ * (shoulder tilt, keys, buttons) move it. A move message in auto still moves
+ * you (`manual`), until the next ball is struck toward you.
+ */
+export type MoveMode = "auto" | "tilt";
+export const MOVE_MODES: readonly MoveMode[] = ["auto", "tilt"];
+
+export interface Movement {
+  mode: MoveMode;
+  // a move message took over from auto; cleared when a ball is next struck toward this seat
+  manual: boolean;
+}
+
+// Auto-move stops this far short of where it will meet the ball, on the side
+// the ball is heading to, so the ball is clearly on the forehand or backhand
+// side (more than EITHER_SIDE) yet in reach across the hit window: the ball
+// drifts sideways up to about 0.8 m over the window at rally speeds, and
+// 0.6 m keeps OFFSET +- that between -EITHER_SIDE and PLAYER.reach. It is
+// also about where the racket meets the ball in the stroke animation.
+export const AUTO_OFFSET = 0.6;
+// Auto-move walks at this share of PLAYER.speed (manual, tilt and keys keep
+// the full speed). At full speed it would reach nearly every ball and
+// strength would stop mattering: a full-aim wide shot needs a run of about
+// AIM_SPREAD x ball speed, ~1.7 m/s light, 2.8 medium, 4.7 hard. Measured
+// from the far sideline (spec/auto-move.test.ts, devlog 2026-10-15): at 0.7
+// (3.5 m/s) full-aim shots that land in are reached 100% light, 50% medium,
+// 0% hard; straight shots 100% at every level. 0.6 gave 80/25/0 and a
+// bot-vs-bot mean rally of 3.76 (0.7: 3.91, the band before auto was 3.8-3.9).
+export const AUTO_SPEED = 0.7;
+// Sideways speed (m/s) under which a ball counts as coming straight: auto then
+// takes it on the side of the court it is on.
+const AUTO_STRAIGHT_VX = 0.5;
+
 export interface TennisState {
   tick: number;
   phase: "serve" | "rally" | "over";
@@ -107,6 +142,7 @@ export interface TennisState {
   server: Seat;
   ball: Ball;
   players: [Player, Player];
+  movement: [Movement, Movement];
   lastHitter: Seat | null;
   bounces: number;
   // shots in the current rally, the serve included
@@ -151,7 +187,13 @@ export interface Move {
   x: number;
 }
 
-export type TennisInput = Swing | Move;
+export interface ModeInput {
+  t: "mode";
+  seat: Seat;
+  mode: MoveMode;
+}
+
+export type TennisInput = Swing | Move | ModeInput;
 
 // "double fault" ends a point; the others end a rally (or, on a serve the
 // receiver never touched, make a fault)
@@ -197,6 +239,9 @@ function resetServe(s: TennisState): void {
 export interface StateOptions {
   format?: MatchFormat;
   endless?: boolean;
+  // both seats start in this; a bare sim (tests) defaults to "tilt" so players
+  // stay where a test puts them, a real game (index.ts) to "auto"
+  moveMode?: MoveMode;
 }
 
 export function createState(seed: number, options: StateOptions = {}): TennisState {
@@ -209,6 +254,10 @@ export function createState(seed: number, options: StateOptions = {}): TennisSta
     players: [
       { x: 0, targetX: 0 },
       { x: 0, targetX: 0 },
+    ],
+    movement: [
+      { mode: options.moveMode ?? "tilt", manual: false },
+      { mode: options.moveMode ?? "tilt", manual: false },
     ],
     lastHitter: null,
     bounces: 0,
@@ -244,6 +293,7 @@ export function snapshot(s: TennisState): TennisSnapshot {
     server: s.server,
     ball: { ...s.ball },
     players: [{ ...s.players[0] }, { ...s.players[1] }],
+    movement: [{ ...s.movement[0] }, { ...s.movement[1] }],
     lastHitter: s.lastHitter,
     bounces: s.bounces,
     shots: s.shots,
@@ -313,6 +363,7 @@ function launchServe(s: TennisState): void {
   s.lastHitter = s.server;
   s.bounces = 0;
   s.shots = 1;
+  s.movement[other(s.server)].manual = false;
 }
 
 /**
@@ -412,12 +463,20 @@ function tryHit(s: TennisState, swing: Swing): Miss | null {
   s.bounces = 0;
   s.shots++;
   s.pending = null;
+  s.movement[other(swing.seat)].manual = false;
   return null;
 }
 
+/** Top speed (m/s) for `seat` now: slower while auto-move is walking it. */
+export function seatSpeed(s: TennisState, seat: Seat): number {
+  const m = s.movement[seat];
+  return m.mode === "auto" && !m.manual ? PLAYER.speed * AUTO_SPEED : PLAYER.speed;
+}
+
 function movePlayers(s: TennisState): void {
-  const maxStep = PLAYER.speed * DT;
-  for (const p of s.players) {
+  for (const seat of [0, 1] as const) {
+    const p = s.players[seat];
+    const maxStep = seatSpeed(s, seat) * DT;
     const d = p.targetX - p.x;
     p.x = Math.abs(d) <= maxStep ? p.targetX : p.x + Math.sign(d) * maxStep;
   }
@@ -470,7 +529,16 @@ export function step(s: TennisState, inputs: readonly TennisInput[]): TennisEven
   if (s.phase === "over") return ev;
 
   for (const input of inputs) {
-    if (input.t === "move") s.players[input.seat].targetX = clamp(input.x, -maxPlayerX, maxPlayerX);
+    if (input.t === "mode") s.movement[input.seat] = { mode: input.mode, manual: false };
+  }
+  for (const input of inputs) {
+    if (input.t !== "move") continue;
+    s.players[input.seat].targetX = clamp(input.x, -maxPlayerX, maxPlayerX);
+    if (s.movement[input.seat].mode === "auto") s.movement[input.seat].manual = true;
+  }
+  for (const seat of [0, 1] as const) {
+    const m = s.movement[seat];
+    if (m.mode === "auto" && !m.manual) s.players[seat].targetX = autoTargetX(s, seat);
   }
   movePlayers(s);
 
@@ -530,6 +598,29 @@ export function predictContact(s: TennisState, seat: Seat, maxTicks = 600): Cont
     if (event === "bounce" && ++bounces >= 2) return null;
   }
   return null;
+}
+
+/**
+ * Where auto-move sends `seat`: AUTO_OFFSET short of where it will meet the
+ * coming ball, on the side the ball is heading to (its sideways travel, or for
+ * a straight ball the side of the court it is on; dead centre is the
+ * forehand side of a right-hander). The sim still applies the speed cap, so a
+ * wide ball can beat you. Once the ball is past the middle of the window it
+ * keeps the target, so a late swing still finds it; with no ball coming it
+ * goes back to the middle. Pure.
+ */
+export function autoTargetX(s: TennisState, seat: Seat): number {
+  const contact = predictContact(s, seat);
+  if (!contact) {
+    const heading = seat === 0 ? s.ball.vz > 0 : s.ball.vz < 0;
+    const coming = s.phase === "rally" && s.lastHitter !== seat && heading;
+    return coming ? s.players[seat].targetX : 0;
+  }
+  const b = contact.ball;
+  // +1: the ball is to end up on the +x side of the player
+  const forehandSide = seat === 0 ? 1 : -1;
+  const side = Math.abs(b.vx) >= AUTO_STRAIGHT_VX ? Math.sign(b.vx) : b.x !== 0 ? Math.sign(b.x) : forehandSide;
+  return clamp(b.x - side * AUTO_OFFSET, -maxPlayerX, maxPlayerX);
 }
 
 // A camera swing counts as a shot at the ball from this long before the ball
