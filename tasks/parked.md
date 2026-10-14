@@ -23,3 +23,9 @@ One swing sometimes counts as two (wind-up then forward swing, or the return
 stroke). Fix when picked up: count only motion in the hitting direction, a
 longer cooldown (about 500-600 ms), and require the wrist to settle before a
 new swing. Training mode (task 5) may show it; note instances in the devlog.
+
+## Winner stays on (spectator queue)
+A third arrival joins a queue; when a match ends the winner keeps the seat and
+the next in the queue takes the loser's. Liked, but built later: today a third
+person is a spectator and nothing more. Needs the room state machine from task 4
+first, then queue order, leave-the-queue and what a spectator sees.

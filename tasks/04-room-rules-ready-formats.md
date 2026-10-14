@@ -14,7 +14,8 @@ machine also stops multiplayer starting instantly: players set up their
 camera, agree the rules, ready up, then play.
 
 ## Decide (write each answer in one or two sentences) (write each answer in one or two sentences)
-- Third arrival: spectator with a queue ("winner stays on")? Or refused?
+- Third arrival: **decided.** Spectator only, as today. No queue for now;
+  "winner stays on" is parked (parked.md).
 - Disconnect mid-match: grace period (suggested 15-30 s), then pause, forfeit
   or bot takeover?
 - Reconnect: same token reclaims the same seat and the match resumes?

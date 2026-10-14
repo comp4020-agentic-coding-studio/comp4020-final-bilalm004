@@ -461,3 +461,13 @@ the format of the entries below (see CLAUDE.md, Docs).
   append-only, so it is not rewritten).
 - **Why:** One numbering, with "waits on" per task, is easier to plan from than
   groups of groups. Files were moved with git mv to keep their history.
+
+## 2026-10-15 00:36 AEDT | decision | Third arrival stays a spectator; winner-stays-on parked
+
+- **Situation:** Deciding the multi-user rules for task 4. User likes the
+  "winner stays on" idea but wants it later.
+- **Outcome:** A third person is a spectator, as today, with no queue. Winner
+  stays on is in parked.md. Still open for task 4: disconnect grace, second tab
+  with the same token, and whether open rooms are listed.
+- **Why:** The queue needs the ready-up room state machine first; spectating
+  already works and is tested.
