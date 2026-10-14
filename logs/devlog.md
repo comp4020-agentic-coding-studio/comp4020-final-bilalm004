@@ -569,3 +569,24 @@ the format of the entries below (see CLAUDE.md, Docs).
   The layout e2e "invite link" frame-count check fails on and off on this
   branch and on a clean build of main alike while other agents' browsers keep
   the load average at 15-22; it isn't caused by this change.
+
+## 2026-10-15 02:19 AEDT | decision | Playtest: out balls and a short timing window queued as task 12
+
+- **Situation:** User reported getting the point on a ball they hit out, the bot
+  returning a ball and the user still getting the point, and the early / on
+  time / late window going by too quickly.
+- **Findings (probes against the real sim and bot, no code changed):** the bot
+  volleys balls that are going out; a swing is accepted for about 5 ticks
+  (80 ms) after an out ball lands, which cancels the pending out point; the
+  hit window is 0.22 s either side of the baseline, so each third is about
+  0.15 s. The dev server log doesn't record who hit last, so a specific rally
+  couldn't be matched; the user's case is not confirmed to be either.
+- **Also found:** strength sets flight speed (22 m / ball speed gives 1.98,
+  1.57 and 1.22 s to the far baseline for light, medium and hard); depth only
+  decides where it bounces and how high it arrives. With full-speed auto-move
+  nothing beats the opponent, so auto-move is being made slower (about 60% of
+  5 m/s, to be tuned by measurement) and the agent was told.
+- **Decision:** queued as tasks/12-rally-fixes.md, to start after task 2 lands,
+  because auto-move changes who can reach what in the same rallies.
+- **Also noted:** the Vite dev server has the same stale-file problem on /mnt/c
+  as node --watch; after any merge restart both dev processes.
