@@ -375,6 +375,11 @@ export class SwingDetector {
     return this.active !== null;
   }
 
+  /** Peak wrist speed so far in the swing in progress, or null between swings. */
+  get peak(): number | null {
+    return this.active?.peak ?? null;
+  }
+
   /** Feed one wrist sample. Returns whether a swing just started, and the swing if it just ended. */
   update(t: number, w: Wrist): { started: boolean; swing: SwingEvent | null } {
     const prev = this.prev;
@@ -610,6 +615,8 @@ export interface CameraOutput {
   arm: ArmPose | null;
   /** A shot: in classic mode from SwingDetector, in follow mode from ZoneDetector (with lift). */
   swing: { level: Level; kind: SwingKind; aim: number; lift?: number; at: number } | null;
+  /** Peak wrist speed so far while a classic swing is in progress, for the strength guide; else null. */
+  peak: number | null;
 }
 
 // A swing's wind-up moves the hand a little before it is fast enough to count
@@ -666,7 +673,7 @@ export class CameraController {
       this.frozen = null;
       this.history = [];
       this.autoNeutral.restart();
-      return { tracking: false, swinging: false, target: null, tilt: 0, aim: this.aim, grip: this.grip, arm: null, swing: null };
+      return { tracking: false, swinging: false, target: null, tilt: 0, aim: this.aim, grip: this.grip, arm: null, swing: null, peak: null };
     }
 
     // In both modes a fast hand starts the freeze. Classic: the swing is the
@@ -705,7 +712,8 @@ export class CameraController {
       if (hit) swing = { level: hit.level, kind: shown.grip, aim: shown.aim, lift: hit.lift, at: hit.at };
     }
     if (swing || classic.swing) this.frozen = null;
-    return { tracking: true, swinging: !swing && f0 !== null, ...shown, tilt: neutral === null ? 0 : tilt - neutral, arm, swing };
+    const peak = this.calib.mode === "classic" ? this.detector.peak : null;
+    return { tracking: true, swinging: !swing && f0 !== null, ...shown, tilt: neutral === null ? 0 : tilt - neutral, arm, swing, peak };
   }
 }
 
