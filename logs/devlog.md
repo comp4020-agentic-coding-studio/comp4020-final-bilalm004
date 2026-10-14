@@ -652,6 +652,104 @@ the format of the entries below (see CLAUDE.md, Docs).
   cancel an out call after the bounce. Written into tasks/12; the agent building
   it was told to drop the dead-from-launch design.
 
+## 2026-10-15 04:01 AEDT | decision | Wii-style home screen requested (task 13)
+
+- **Situation:** User asked for a new home screen inspired by Wii Sports /
+  Resort: "Weblympics" title, a thumbnail below it, sport buttons below that,
+  on theme, listing every sport (only Tennis exists). Reference:
+  design/reference/WiiSports-Menu.webp (300x237).
+- **Decision:** Built as task 13, written to tasks/13-home-screen.md and given to
+  an Opus agent. Took the look (pale sky-blue background, glossy pill buttons, a
+  framed preview that follows the focused sport, a pointer marker) but not the
+  reference's layout, since the user specified title, thumbnail, buttons. No
+  Nintendo assets or text; all CSS/SVG, no Three.js on the menu. Tennis stays
+  the only playable sport (CLAUDE.md); disabled "coming soon" buttons for other
+  sports are optional and flagged for the user.
+- **Why:** The menu is the first thing a player sees, and a list-driven sport
+  menu makes adding a second game one entry once the core is solid.
+
+## 2026-10-15 04:01 AEDT | bug | Dev server shows old code on this drive; cause not yet found
+
+- **Situation:** After merges the user twice saw the old client (a score line
+  reading "undefined – undefined", then no auto-move toggle) on the dev server.
+- **Findings:** (1) `node --watch` and Vite's file watcher both miss edits on
+  /mnt/c, so after a merge or branch switch both need a manual restart; the first
+  stale view was Vite serving a cached view.ts, fixed by restarting it. (2) Port
+  8080 serves the built bundle in dist/client, which was last built at
+  00:15 on 15 Oct, so it stays old until `pnpm build`; 5173 is the one to use.
+  (3) On the second report I confirmed from WSL and from Windows (PowerShell) that
+  127.0.0.1:5173 and localhost:5173 both serve the new files, that
+  wslrelay.exe is the Windows-side listener (expected), that there is no service
+  worker, and that Vite sends Cache-Control: no-cache; only [::1] fails.
+- **Status:** UNRESOLVED. A headless browser sees the new page, the user's
+  browser still reportedly does not. Next: which browser, and does 127.0.0.1
+  differ from localhost, a private window, hard refresh.
+- **Why this matters:** a "fixed" feature that the user can't see wastes
+  playtests. Worth a one-command restart script and a rule in CLAUDE.md.
+
+## 2026-10-15 04:01 AEDT | milestone | Merge verification for tasks 1, 3, 6 and 2
+
+- **Situation:** Four agent branches merged into main by me, each on a fresh
+  integration branch with a clean build.
+- **Outcome:** Tasks 1, 3 and 6 merged at c0d726b: pnpm check 227/227, pnpm e2e
+  --workers=1 48/48. Task 2 merged at 47d2d7e: check 243/243, e2e 54/54. Both
+  verified by me, not only by the agents' own reports.
+- **Problems the merge caught:** task 1 changed createState's second argument
+  from a score limit to an options object, so task 3's tests (written against
+  the old signature) failed typecheck only on the merged tree; fixed by passing
+  { endless: true }. Task 1's first e2e run failed the trail test under machine
+  load (load average 10-13) and passed 3 of 3 alone and in the full run on a
+  quiet machine, so it was load, not the code; that test is timing-sensitive
+  and is on the test-gaps list.
+- **Why:** Each branch was green alone; only the merged tree shows cross-branch
+  breaks.
+
+## 2026-10-15 04:01 AEDT | decision | Reaction time comes from ball speed, not depth
+
+- **Situation:** User asked whether the speed and depth a ball is delivered at
+  change the reaction time they have, in light of auto-move.
+- **Measured (real sim, hit from the baseline):** flight to the far baseline is
+  1.98 s light (11 m/s), 1.57 s medium (14 m/s), 1.22 s hard (18 m/s): about
+  22 m / forward speed. The ball keeps 100% of its forward speed after the
+  bounce and contact height doesn't change the time, so depth (4, 6, 8.2 m) only
+  decides where it bounces. My first "sideways run" figure for hard was wrong
+  (a full-aim hard shot lands out, so the probe stopped early); light needs
+  about 1.7 m/s and medium 2.8 m/s of sideways running.
+- **Decision:** auto-move was made slower than manual (the agent measured
+  AUTO_SPEED options and chose 0.7, 3.5 m/s; manual stays 5 m/s) so hard wide
+  shots still beat it. Making depth affect time would need a post-bounce speed
+  change; not done, speed already does the job.
+- **Why:** with full-speed auto-move nothing could beat the opponent, so strength
+  would have stopped mattering.
+
+## 2026-10-15 04:01 AEDT | event | Which model each agent ran on
+
+- **Situation:** User asked whether the agents ran on Opus 5.5.
+- **Outcome:** Read from each agent's transcript (the model field of every
+  request). First wave: scoring module and camera setup ran on claude-sonnet-5-5;
+  shot rules on claude-opus-5-5. Everything launched since (tasks 1, 3, 6, 2,
+  12, 13) is claude-opus-5-5 via the `opus` alias. The main session itself
+  (this log, merges, task files) is Sonnet 5.5.
+- **Why:** The user wanted Opus for the building; recording it so the process
+  evidence doesn't have to guess.
+
+## 2026-10-15 04:03 AEDT | decision | Devlog rule: log as it happens, and say who decided
+
+- **Decided by:** user (asked for the rule and for the user/Claude split to be
+  visible); wording by Claude.
+- **Situation:** The user checked whether things were being logged. Several
+  decisions, the merge checks and the dev-server problem had not been written
+  up until asked, and the log didn't say who made each call.
+- **Outcome:** CLAUDE.md's Docs section now requires entries when things
+  happen, entries for playtest findings, merges (with the checks run) and
+  unresolved problems, and a Decided by line (user, Claude or agent). Tuning
+  numbers count as Claude or agent guesses until the user playtests them, and
+  any visible choice by Claude or an agent is told to the user at the time.
+  Older entries have no Decided by line; the log is append-only, so they are
+  not rewritten.
+- **Why:** The process mark rests on an honest account of who decided what, and
+  the user needs to know which choices are theirs to overrule.
+
 ## 2026-10-15 04:04 AEDT | milestone | Wii-style home screen (task 13)
 
 - **Situation:** The user asked for a new home screen in the spirit of a

@@ -64,9 +64,15 @@ lazily and only when a player enters a game. Video never leaves the browser.
   status line when it changes.
 - `README.md` 400-600 words on what "good" means here (served at `/readme/`).
   `PROCESS.md` 900-1100 words, rewritten each crit.
-- `logs/devlog.md` is append-only. When a design decision, milestone, notable
-  bug or config change happens, add an entry (date/time from `date`, type,
-  situation, outcome, why) in the format of the existing entries.
+- `logs/devlog.md` is append-only. Log design
+  decisions, milestones, bugs, config changes, playtest findings, merges (with
+  the checks run) and anything left unresolved. Entry: date/time from `date`,
+  type, situation, outcome, why, in the format of the existing entries.
+- Decision entries end with **Decided by:** `user`, `Claude` or `agent`. Only
+  `user` if they said or picked it; a "sure" to a summary doesn't cover its
+  numbers. Tuning values are guesses until the user playtests them. Tell the
+  user at the time about any Claude or agent choice they'd see or feel, and
+  have agent briefs ask for the same.
 
 ## Rules
 
