@@ -61,109 +61,393 @@ a:focus-visible {
   outline-offset: 2px;
 }
 
+/* Home screen (task 13): pale sky, glossy pills, a framed preview of the
+   focused sport. Look borrowed from a console sports menu, built entirely
+   from CSS/SVG/DOM; no image files, no Three.js. */
 .menu {
+  --ink: #12385e;
+  --ink-soft: #3d5873;
+  --rim: #ffffff;
+  --pill-top: #ffffff;
+  --pill-bottom: #dcebf7;
+  --pill-edge: #8fb3d1;
+  --focus: #0b63c4;
   color-scheme: light;
   position: relative;
   min-height: 100dvh;
   display: flex;
-  align-items: center;
   justify-content: center;
-  padding: 2rem 1rem;
-  /* same sky as the stadium (client/games/tennis/stadium.ts), so the menu
-     previews the court instead of inventing its own palette */
-  background: linear-gradient(180deg, #3d8fe0 0%, #8cc8f5 55%, #d8eefc 100%);
-}
-
-.menu::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 42% 0;
+  padding: clamp(1rem, 3vh, 2.5rem) 1rem 2rem;
+  color: var(--ink);
+  font-family: "Fredoka", ui-rounded, system-ui, sans-serif;
   background:
-    radial-gradient(34px 18px at 14% 24%, #ffffffd9, transparent 70%),
-    radial-gradient(46px 22px at 82% 16%, #ffffffbf, transparent 70%),
-    radial-gradient(26px 15px at 58% 34%, #ffffffb3, transparent 70%);
+    repeating-linear-gradient(180deg, #ffffff00 0 6px, #ffffff59 6px 8px),
+    linear-gradient(180deg, #cfe8fa 0%, #eaf5fd 45%, #ffffff 100%);
 }
 
-.menu-scene {
+.menu-tab {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 0.35rem 1.6rem 0.4rem 1rem;
+  border-radius: 0 0 22px 0;
+  background: linear-gradient(180deg, #5a6b7b, #44515f);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
+  box-shadow: 0 2px 6px #12385e40;
+}
+
+.menu-column {
+  width: 100%;
+  max-width: 34rem;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: clamp(0.75rem, 2vh, 1.25rem);
+}
+
+.menu h1 {
+  margin: 0.75rem 0 0;
+  font-size: clamp(2.4rem, 7vw, 3.6rem);
+  font-weight: 700;
+  line-height: 1.05;
+  text-align: center;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+  text-shadow:
+    0 2px 0 #fff,
+    0 4px 10px #4a90d040;
+}
+
+/* Framed preview: thin bright frame, rounded corners, soft drop shadow */
+.thumb {
+  margin: 0;
+  padding: 6px;
+  border-radius: 22px;
+  background: linear-gradient(180deg, #ffffff, #d5e6f4);
+  border: 2px solid #9fbfd9;
+  box-shadow:
+    0 10px 24px -12px #12385e66,
+    inset 0 1px 0 #fff;
+}
+
+.thumb-frame {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 16px;
+  border: 2px solid #ffffff;
+  background: #bfe0f7;
+  container-type: inline-size;
+}
+
+.thumb-art,
+.thumb-svg {
   position: absolute;
   inset: 0;
-  overflow: hidden;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* gloss across the top of the preview, like a glass screen */
+.thumb-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 55% 0;
+  background: linear-gradient(180deg, #ffffff47, #ffffff00);
   pointer-events: none;
 }
 
-.menu-court {
-  /* the mown-stripe court, same greens as the stadium's inner court */
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 42%;
-  border-top: 5px solid #ffffffe6;
-  background: repeating-linear-gradient(180deg, #62b04f 0 36px, #55a044 36px 72px);
-  box-shadow: 0 -16px 30px -16px #0003 inset;
+.thumb-frame.is-soon .thumb-art {
+  filter: saturate(0.45) brightness(1.05);
 }
 
-.menu-card {
+.thumb-caption {
+  padding: 0.5rem 0.5rem 0.15rem;
+  color: var(--ink-soft);
+  font-family: system-ui, sans-serif;
+  font-size: 0.95rem;
+  line-height: 1.35;
+  text-align: center;
+  min-height: 2.9em;
+}
+
+.thumb-caption strong {
+  color: var(--ink);
+  font-family: "Fredoka", ui-rounded, system-ui, sans-serif;
+}
+
+/* Glossy pill buttons: bright rim, light top-to-bottom gradient, a white
+   shine on the upper half, and a darker edge underneath. */
+.menu .pill {
   position: relative;
-  z-index: 1;
-  width: 100%;
-  max-width: 26rem;
-  padding: 2.5rem 1.75rem 2rem;
-  border-radius: 24px;
-  background: #fffdf7;
-  box-shadow: 0 20px 45px -20px #16324a66;
+  min-height: 52px;
+  padding: 0 1.5rem;
+  border: 2px solid var(--pill-edge);
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, #ffffffcc 0 45%, #ffffff00 55%),
+    linear-gradient(180deg, var(--pill-top), var(--pill-bottom));
+  color: var(--ink);
+  font-family: "Fredoka", ui-rounded, system-ui, sans-serif;
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  box-shadow:
+    inset 0 0 0 2px var(--rim),
+    0 3px 0 #9fbcd4,
+    0 6px 12px -8px #12385e80;
+  transition:
+    transform 0.1s ease,
+    box-shadow 0.1s ease,
+    border-color 0.1s ease;
+}
+
+.menu .pill:active {
+  transform: translateY(2px);
+  box-shadow:
+    inset 0 0 0 2px var(--rim),
+    0 1px 0 #9fbcd4;
+}
+
+.menu .pill--primary {
+  --pill-top: #fff3c4;
+  --pill-bottom: #ffc93d;
+  --pill-edge: #d99a00;
+  color: #4d2c00;
+  box-shadow:
+    inset 0 0 0 2px #fffbe8,
+    0 3px 0 #c98a00,
+    0 6px 12px -8px #5a330080;
+}
+
+.menu .pill--blue {
+  --pill-top: #e3f3ff;
+  --pill-bottom: #8cceff;
+  --pill-edge: #3a8fd0;
+  color: #06263f;
+}
+
+.menu .pill--small {
+  min-height: 44px;
+  padding: 0 0.9rem;
+  font-size: 0.9rem;
+}
+
+.menu .pill:focus-visible,
+.menu input:focus-visible,
+.menu a:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+/* Sport buttons */
+.sports {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+
+/* playable sports span the row; placeholders pair up beneath */
+.menu .sport:not([aria-disabled="true"]) {
+  grid-column: 1 / -1;
+}
+
+.menu .sport {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  min-height: 56px;
+  font-size: 1.3rem;
+}
+
+.menu .sport[aria-pressed="true"] {
+  --pill-top: #f2fbff;
+  --pill-bottom: #a8dcff;
+  --pill-edge: #2f86d0;
+  box-shadow:
+    inset 0 0 0 2px var(--rim),
+    0 0 0 3px #7cc4ff80,
+    0 3px 0 #5b9fd6,
+    0 6px 14px -8px #12385e99;
+}
+
+.menu .sport.is-pointed {
+  border-color: #2f86d0;
+}
+
+.menu .sport[aria-disabled="true"] {
+  flex-direction: column;
+  gap: 0;
+  min-height: 52px;
+  padding: 0.2rem 0.75rem;
+  font-size: 1.05rem;
+  line-height: 1.15;
+  --pill-top: #f7fafc;
+  --pill-bottom: #e6edf3;
+  --pill-edge: #c3d1dd;
+  color: #4f6273;
+  cursor: not-allowed;
+  box-shadow:
+    inset 0 0 0 2px var(--rim),
+    0 2px 0 #c3d1dd;
+}
+
+.menu .sport[aria-disabled="true"]:active {
+  transform: none;
+}
+
+.sport-icon {
+  width: 1.5em;
+  height: 1.5em;
+  flex: 0 0 auto;
+  filter: drop-shadow(0 1px 1px #12385e40);
+}
+
+.menu .sport[aria-disabled="true"] .sport-icon {
+  position: absolute;
+  left: 0.9rem;
+  top: 50%;
+  width: 1.4rem;
+  height: 1.4rem;
+  margin-top: -0.7rem;
+  opacity: 0.75;
+}
+
+.sport-soon {
+  color: #4f6273;
+  font-family: system-ui, sans-serif;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* the pointer arrow sits on the right of the focused/hovered pill */
+.pointer {
+  position: absolute;
+  right: 1.1rem;
+  top: 50%;
+  width: 30px;
+  height: 30px;
+  margin-top: -6px;
+  opacity: 0;
+  transform: translate(6px, 4px) rotate(-14deg);
+  transition:
+    opacity 0.12s ease,
+    transform 0.12s ease;
+  filter: drop-shadow(0 2px 2px #12385e59);
+  pointer-events: none;
+}
+
+.sport.is-pointed .pointer {
+  opacity: 1;
+  transform: translate(0, 0) rotate(-14deg);
+}
+
+.menu .error {
+  margin: 0;
+  color: #b3122e;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* The selected sport's options */
+.options {
+  padding: 0.9rem 1rem 1rem;
+  border-radius: 22px;
+  background: #ffffffb3;
+  border: 2px solid #c6dbec;
+}
+
+.options h2 {
+  margin: 0 0 0.6rem;
+  font-size: 1rem;
+  font-weight: 600;
+  text-align: center;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.options-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+
+.options-row .join {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.menu .join input {
+  flex: 1;
+  min-width: 0;
+  min-height: 52px;
+  padding: 0 1rem;
+  border: 2px solid #3a8fd0;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  box-shadow: inset 0 2px 4px #12385e1f;
+  font-family: system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+}
+
+.menu .join input::placeholder {
+  color: #5e7387;
+}
+
+.join .pill {
+  flex: 0 0 auto;
+}
+
+.options.is-opened {
+  animation: options-open 0.35s ease;
+}
+
+@keyframes options-open {
+  0% {
+    box-shadow: 0 0 0 0 #7cc4ffcc;
+  }
+  100% {
+    box-shadow: 0 0 0 14px #7cc4ff00;
+  }
+}
+
+.menu-footer {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  color: #1a2733;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: system-ui, sans-serif;
+  color: var(--ink-soft);
+  text-align: center;
 }
 
-.menu-card h1 {
+.menu-footer p {
   margin: 0;
-  font-family: "Fredoka", ui-rounded, system-ui, sans-serif;
-  font-size: 2.25rem;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  text-align: center;
-  color: #163a5f;
 }
 
-.menu-card .muted {
-  color: #5b6b7a;
-  text-align: center;
+.menu-footer strong {
+  color: var(--ink);
+}
+
+.menu-footer a {
+  color: #0b5aa8;
+  font-weight: 600;
 }
 
 .hud .muted {
   color: var(--muted);
-}
-
-.menu-card button {
-  min-height: 52px;
-  border-radius: 999px;
-  background: #eef3f8;
-  color: #1a2733;
-  font-family: "Fredoka", ui-rounded, system-ui, sans-serif;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  box-shadow: 0 3px 0 #c9d4de;
-  transition:
-    transform 0.08s ease,
-    box-shadow 0.08s ease;
-}
-
-.menu-card button:active {
-  transform: translateY(2px);
-  box-shadow: 0 1px 0 #c9d4de;
-}
-
-.menu-card button.primary {
-  background: #ffc233;
-  color: #5a3300;
-  box-shadow: 0 3px 0 #d99900;
-}
-
-.menu-card button.primary:active {
-  box-shadow: 0 1px 0 #d99900;
 }
 
 .identity-row {
@@ -171,73 +455,130 @@ a:focus-visible {
   flex-wrap: wrap;
   justify-content: center;
   gap: 0.5rem;
-  margin: -0.5rem 0 0;
 }
 
-.identity-row button {
-  flex: 1 1 auto;
-  min-height: 40px;
-  padding: 0 0.75rem;
-  font-size: 0.85rem;
+/* Desktop: preview on top, sports in a two-column grid, options beside the
+   sports' column so all of it fits one 1080p screen without scrolling. */
+@media (min-width: 900px) {
+  .menu-column {
+    max-width: 44rem;
+  }
+
+  .menu .sport[aria-disabled="true"] {
+    flex-direction: row;
+    gap: 0.6rem;
+    font-size: 1.2rem;
+  }
+
+  .options-row {
+    grid-template-columns: auto auto 1fr;
+  }
+
+  .options-row > .pill {
+    white-space: nowrap;
+  }
+
+  .options-row .join {
+    grid-column: auto;
+  }
 }
 
-.menu-card form {
-  display: flex;
-  gap: 0.5rem;
+/* Phone: tighter spacing and a shorter preview so Tennis's options sit on
+   the first screen at 390x844. */
+@media (max-width: 560px) {
+  .menu {
+    padding-top: 0.5rem;
+  }
+
+  .menu-tab {
+    display: none;
+  }
+
+  .menu-column {
+    gap: 0.6rem;
+  }
+
+  .menu h1 {
+    margin-top: 0.25rem;
+  }
+
+  .thumb-frame {
+    aspect-ratio: 2.1 / 1;
+  }
+
+  .sports {
+    gap: 0.5rem;
+  }
+
+  .options h2 {
+    margin-bottom: 0.45rem;
+    font-size: 0.85rem;
+  }
+
+  .menu-footer {
+    gap: 0.4rem;
+  }
+
+  .thumb-caption {
+    min-height: 0;
+    font-size: 0.85rem;
+  }
+
+  .menu .pill {
+    padding: 0 0.8rem;
+    font-size: 1rem;
+  }
+
+  .options {
+    padding: 0.75rem;
+  }
+
+  .menu-footer {
+    font-size: 0.9rem;
+  }
+
+  .pointer {
+    right: 0.45rem;
+    width: 24px;
+    height: 24px;
+  }
+
+  .identity-row .pill {
+    flex: 1 1 0;
+    padding: 0 0.5rem;
+    font-size: 0.85rem;
+  }
 }
 
-.menu-card input {
-  flex: 1;
-  min-width: 0;
-  min-height: 52px;
-  padding: 0 0.75rem;
-  border: 3px solid #4fb3ff;
-  border-radius: 12px;
-  background: #fff;
-  color: #1a2733;
-  text-transform: uppercase;
-  letter-spacing: 0.2em;
+@media (prefers-reduced-motion: reduce) {
+  .menu .pill,
+  .pointer {
+    transition: none;
+  }
+
+  .options.is-opened {
+    animation: none;
+  }
 }
 
-.menu-card form button {
-  flex: 0 0 auto;
-  padding: 0 1.25rem;
-  background: #4fb3ff;
-  color: #06263f;
-  box-shadow: 0 3px 0 #2f8fd6;
-}
-
-.menu-card form button:active {
-  box-shadow: 0 1px 0 #2f8fd6;
-}
-
-.menu-card .error {
-  margin: 0;
-  color: #c81e3a;
-  font-weight: 600;
-  text-align: center;
-}
-
-.menu-card a {
-  color: #1b6fb0;
-}
-
-.menu-card button:focus-visible,
-.menu-card input:focus-visible,
-.menu-card a:focus-visible {
-  outline-color: #1b6fb0;
-}
-
-/* Decorative Mii-style figures crossing the court behind the card, built the
+/* Decorative Mii-style figures crossing the tennis preview, built the
    same way as client/games/tennis/character.ts (round head, tapered torso,
    bright top, dark trousers, oval racket) but as flat CSS shapes. One shared
    10s cycle: the runner crosses, then (almost immediately after) the server
    walks in, tosses, hits and runs on. All percentages below are positions on
    that same cycle, so the arm/ball/leg animations stay in sync with the
-   body's position without any JS timing. */
+   body's position without any JS timing. Positions are in cqi (the preview
+   frame is the container), so they cross the frame, not the window. */
+.thumb-sprites {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
 .sprite {
   position: absolute;
-  bottom: calc(42% - 4px);
+  bottom: 7%;
   left: 0;
   width: 54px;
   height: 86px;
@@ -461,32 +802,32 @@ a:focus-visible {
 @keyframes menu-cross-runner {
   0%,
   2% {
-    transform: translateX(-15vw);
+    transform: translateX(-15cqi);
   }
   38% {
-    transform: translateX(115vw);
+    transform: translateX(115cqi);
   }
   100% {
-    transform: translateX(115vw);
+    transform: translateX(115cqi);
   }
 }
 
 @keyframes menu-cross-server {
   0%,
   36% {
-    transform: translateX(-15vw);
+    transform: translateX(-15cqi);
   }
   44% {
-    transform: translateX(10vw);
+    transform: translateX(10cqi);
   }
   68% {
-    transform: translateX(10vw);
+    transform: translateX(10cqi);
   }
   94% {
-    transform: translateX(115vw);
+    transform: translateX(115cqi);
   }
   100% {
-    transform: translateX(115vw);
+    transform: translateX(115cqi);
   }
 }
 
@@ -617,10 +958,8 @@ a:focus-visible {
   }
 }
 
-/* Below this width the card fills nearly the whole viewport (it's a ~26rem
-   card with ~1rem gutters), so a 54px figure spends almost the entire cycle
-   hidden behind it, including the whole stationary serve. Rather than
-   animate something nobody can see, mobile keeps the static court. */
+/* On a phone the preview is small, so an 86px figure would fill half of it;
+   mobile (and reduced motion) keeps the static court. */
 @media (prefers-reduced-motion: reduce), (max-width: 560px) {
   .sprite,
   .sprite-body,
