@@ -79,6 +79,10 @@ lazily and only when a player enters a game. Video never leaves the browser.
   (`spec/db.test.ts`).
 - A schema change is a new step in `server/schema.ts` plus a test that opens
   a database made by the previous version; never edit an old step.
+- A ball in the air is live for everyone, even one going out: a person may
+  volley it or leave it. Once it has landed out (or bounced twice) it is dead
+  and every swing misses. The bot lets go a ball it predicts will land out
+  (`spec/rally-fixes.test.ts`, task 12).
 - Game logic stays deterministic (seed + input stream) so it can be tested.
 - Tennis is the only game until the core is solid (rooms, reconnect, logging).
   Don't add a second game unless I ask; keep the registry so one can slot in.

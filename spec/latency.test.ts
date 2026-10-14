@@ -23,7 +23,8 @@ function incoming(i: number): TennisState {
   s.lastHitter = 0;
   s.shots = 1;
   const x = ((i * 7) % 11) / 10 - 0.5;
-  s.ball = { x, y: 1.1, z: -COURT.halfL + 8, vx: 0, vy: 2.5, vz: -14 };
+  // bounces in about 0.5 m short of the baseline (task 12: an out ball is dead once it lands)
+  s.ball = { x, y: 1.1, z: -COURT.halfL + 8, vx: 0, vy: 0.5, vz: -14 };
   s.players[1] = { x, targetX: x };
   return s;
 }

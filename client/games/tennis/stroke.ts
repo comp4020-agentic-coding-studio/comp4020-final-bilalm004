@@ -73,6 +73,9 @@ export function shotLabel(kind: "forehand" | "backhand", miss: string | null, wh
     const other = kind === "forehand" ? "backhand" : "forehand";
     return { text, note: `Wrong side: ball was on your ${other}`, wrongSide: true };
   }
+  // a dead ball (task 12): it had already landed out, or bounced twice
+  if (miss === "out") return { text, note: "Too late: the ball had already landed out", wrongSide: false };
+  if (miss === "two bounces") return { text, note: "Too late: the ball had already bounced twice", wrongSide: false };
   return { text, note: who, wrongSide: false };
 }
 

@@ -43,9 +43,9 @@ half a round trip to reach the server.
 
 Today a swing is judged when it arrives. With 60 ms each way, a swing that was
 on time on the player's screen is about 120 ms late on the server. At rally
-speeds the hit window is 0.22 s either side of the baseline
-(`HIT_WINDOW_S`, `shared/games/tennis/sim.ts`), so that lag spends over half
-of it. On-time swings come back "too late", and how often depends on the
+speeds the hit window was then 0.22 s either side of the baseline
+(`HIT_WINDOW_S`, `shared/games/tennis/sim.ts`; 0.32 s since task 12), so that
+lag spends over half of it. On-time swings come back "too late", and how often depends on the
 player's connection, not their timing.
 
 When the two screens disagree, someone's view has to win. This is the
@@ -104,6 +104,17 @@ that moment and bounded so it can't be abused:
    arrive, and rewind refused it. At 150 ms that left the hit rate at 64%.)*
 4. **A miss is still a miss.** If the ball was outside the window or out of
    reach at tick T, it misses. Rewind removes lag, not bad timing.
+   *(Task 12, the dead ball:)* a ball that has landed out, or bounced twice,
+   is dead from that tick: `missReason` says `"out"` or `"two bounces"`. A
+   swing judged at a tick before that touchdown is unaffected, so a lagged
+   swing at a ball that was still in the air is rewound and counts (and
+   cancels the pending point); only a swing judged after it is refused.
+   Whether a ball is dead is part of the state at each tick (the pending
+   point's `dead` flag), so rewinding to an earlier tick replays it exactly.
+   A ball still in the air that is going out stays live: the receiver may
+   volley it or leave it. A ball flying past the receiver's end is only
+   decided once it is also past their hit window, so the wider window never
+   scores a point while a lagged swing could still reach it.
 5. **The hitter sees an on-time return.** On swing the client plays the racket
    animation and a hit sound at once, but leaves the ball on the server's
    path. When the confirming state arrives, the return is drawn from where the
@@ -148,6 +159,12 @@ window as seen on the player's own screen, so all of them hit with no lag:
 | 100 ms | 81.3% | 100% |
 | 150 ms | 64.5% | 97.8% |
 | 200 ms | 56.3% | 89.5% (past the 150 ms cap, by design) |
+
+Re-measured with task 12 (0.32 s window, and a test ball that lands in; the
+old one landed about 3 m long, which is now a dead ball after it lands):
+93.0 / 87.5 / 76.2 / 70.8% without rewind at 50 / 100 / 150 / 200 ms, and
+100 / 100 / 100 / 95.8% with it. The wider window leaves lag a smaller share
+of it, so rewind off improves too.
 
 Checked on every `pnpm check`: at least 95% at 150 ms with rewind, under 85%
 without it, and rewind never lowers the rate. The cap itself (measured round

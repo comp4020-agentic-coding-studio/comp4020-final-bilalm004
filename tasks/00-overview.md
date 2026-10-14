@@ -24,7 +24,7 @@ One flat list. Start at the top; a task only waits on the ones named.
 | 9 | [Menu, accessibility and polish](09-menu-accessibility.md) | 4 | Sonnet |
 | 10 | [README](10-readme.md): check claims, screenshots, rewrite per crit | 4 | Opus |
 | 11 | [Ship](11-ship.md): push, make the repo public, CI green, tag | - | Sonnet |
-| 12 | [Rally fixes](12-rally-fixes.md): out balls, dead ball, wider hit window | 2 | Opus |
+| 12 | [Rally fixes](12-rally-fixes.md): out balls, dead ball, wider hit window (done) | 2 | Opus |
 | 13 | [Wii-style home screen](13-home-screen.md): title, sport thumbnail, themed sport buttons (done) | - | Opus |
 
 Not numbered:

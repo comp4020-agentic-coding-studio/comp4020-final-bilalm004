@@ -775,3 +775,37 @@ the format of the entries below (see CLAUDE.md, Docs).
   (no Nintendo assets or text, no image files) and Three.js stays lazy. The
   placeholders show the "many sports" shape the user described without adding
   a second game; deleting four list entries removes them.
+
+## 2026-10-15 04:05 AEDT | milestone | Rally fixes (task 12): out ball dead once it lands, bot leaves balls going out, 0.32 s window
+
+- **Situation:** Three playtest reports: the bot returned a ball going out and
+  no "out" was called; "I hit it out and still got the point"; and early / on
+  time / late went by too quickly (0.22 s window, thirds of about 0.15 s).
+- **Outcome:** A ball in the air stays live, even one going out (the user's
+  ruling). Once it has landed out, or bounced twice, it is dead: `missReason`
+  says `"out"` / `"two bounces"`, so a swing can no longer cancel the out call
+  in the ~80 ms after the bounce. The bot runs the ball on with `moveBall`
+  (`willLandIn`) and doesn't swing at one that will land out. `HIT_WINDOW_S`
+  is 0.32 s (thirds about 0.21 s). A new sweep (`spec/rally-fixes.test.ts`,
+  40 seeded matches, a random swinger vs the bot, its own referee with a copy
+  of the physics) checks every point against where the ball landed and who
+  hit it last. On the old code it found 43 hits on balls that had already
+  landed out. With the wider window it then found a second bug: a ball past
+  the end was decided at 3 m past *either* baseline, so a late hit from deep
+  behind your own baseline was called "out" against you on the same tick.
+  Now only the receiver's end, and only once past their window. Without the
+  window part, a lagged swing in the late third arrived after the point was
+  scored and rewind refused it (85% hits at 150 ms).
+  Measured before -> after: bot-vs-bot mean rally 3.914 -> 3.918; auto reach
+  from the far sideline 100/50/0% full aim and 100% straight, both; an
+  auto-moved receiver is in reach with the right side at every tick of all
+  three thirds, both; timing-aimed shots landing out 2/2/14% -> 0/2/15%; lag
+  hit rate at 150 ms 100% with rewind, 76% without. `pnpm check` 258 tests
+  and `pnpm e2e --workers=1` 54 passed, both exit 0.
+- **Why:** The rally length barely moved because every bot-vs-bot point ends
+  wide, and a wide ball lands out beside the court before the bot's swing
+  zone, so the let-go rule never fires between bots; it shows up against
+  people who hit long. The dead flag lives in the state per tick, so rewind
+  stays deterministic and ADR 001's promise holds for balls still in the
+  air. The latency and rewind tests had been using balls that landed about
+  3 m long; they now use balls that land in, which is what they meant.

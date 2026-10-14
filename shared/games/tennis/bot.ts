@@ -1,11 +1,12 @@
-import { COURT, PLAYER, autoTargetX, naturalKind, seatZ } from "./sim.ts";
+import { COURT, PLAYER, autoTargetX, naturalKind, seatZ, willLandIn } from "./sim.ts";
 import type { Seat, TennisInput, TennisState } from "./sim.ts";
 
 /**
  * The bot plays by the same rules as a person: it moves by the auto-move rule
  * (in auto the sim walks it there at the auto speed; otherwise it sends that
  * target itself) and swings, and the sim applies the speed cap and reach
- * check to both.
+ * check to both. Like a person would, it lets go a ball it can see will land
+ * out (or hit the net), and plays everything that will land in.
  */
 export function botInputs(s: TennisState, seat: Seat): TennisInput[] {
   const me = s.players[seat];
@@ -18,7 +19,7 @@ export function botInputs(s: TennisState, seat: Seat): TennisInput[] {
   const b = s.ball;
   const heading = seat === 0 ? b.vz > 0 : b.vz < 0;
   const close = Math.abs(b.z - seatZ(seat)) <= COURT.hitWindow * 0.5;
-  if (s.phase === "rally" && s.lastHitter !== seat && heading && close && Math.abs(b.x - me.x) <= PLAYER.reach) {
+  if (s.phase === "rally" && s.lastHitter !== seat && heading && close && Math.abs(b.x - me.x) <= PLAYER.reach && willLandIn(s)) {
     inputs.push({
       t: "swing",
       seat,
