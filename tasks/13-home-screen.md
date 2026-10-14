@@ -1,6 +1,6 @@
 # 13 Wii-style home screen
 
-Status: planned (building)
+Status: done (home screen built; Tennis playable, Baseball/Bowling/Golf/Boxing shown as disabled "coming soon" placeholders, the user to keep or drop)
 Model: Opus (visual design judgment)
 Waits on: nothing (touches client/ui/menu.ts, client/main.ts, client/style.css,
 tests); can run beside task 12, which is sim-only
@@ -48,10 +48,12 @@ third-party screenshot: take the look, not the assets; no Nintendo logos,
 - Works with no camera and no network beyond the page itself.
 
 ## Done when
-- [ ] New home screen in `client/ui/menu.ts` (+ CSS) matching the layout above.
-- [ ] Sports come from a list; Tennis starts a practice/room exactly as before.
-- [ ] `e2e/layout.e2e.ts` menu test still passes and a new e2e covers: title,
+- [x] New home screen in `client/ui/menu.ts` (+ CSS) matching the layout above.
+- [x] Sports come from a list; Tennis starts a practice/room exactly as before.
+- [x] `e2e/layout.e2e.ts` menu test still passes and a new e2e covers: title,
       thumbnail, buttons order (top to bottom), keyboard navigation, both
       viewports, no horizontal scroll.
-- [ ] Screenshots of both viewports checked by eye and kept in `docs/`.
-- [ ] README and CLAUDE.md layout line updated if the files change.
+- [x] Screenshots of both viewports checked by eye and kept in `docs/`.
+- [x] README and CLAUDE.md layout line updated if the files change (CLAUDE.md
+      updated; README makes no menu claim, so unchanged). New e2e:
+      `e2e/home.e2e.ts`; screenshots `docs/home-desktop.png`, `docs/home-mobile.png`.

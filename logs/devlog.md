@@ -749,3 +749,29 @@ the format of the entries below (see CLAUDE.md, Docs).
   not rewritten.
 - **Why:** The process mark rests on an honest account of who decided what, and
   the user needs to know which choices are theirs to overrule.
+
+## 2026-10-15 04:04 AEDT | milestone | Wii-style home screen (task 13)
+
+- **Situation:** The user asked for a new home screen in the spirit of a
+  console sports menu: "Weblympics" title, a thumbnail below it, the sports as
+  on-theme buttons below that. The old menu was one dark-edged card on a sky.
+- **Decision:** `client/ui/menu.ts` now renders title, a framed 16:9 preview,
+  then glossy pill buttons from a `SPORTS` list (id, name, playable, blurb,
+  icon, thumbnail renderer), then the selected sport's options (practice /
+  create / join), then sign-in and the README link. Previews are inline SVG
+  (a low-poly court with stands, stripes, net and ball for tennis); the old
+  CSS Mii sprites now run inside the tennis preview (container units) and
+  stay off on phones and under reduced motion. A drawn arrow marks the
+  focused/hovered pill. Tennis is the only playable sport; Baseball, Bowling,
+  Golf and Boxing are aria-disabled "coming soon" pills that only swap the
+  preview, are out of the Tab order and never send anything. Arrow keys move
+  between sports (roving tabindex), Enter on Tennis jumps to its options.
+- **Outcome:** Fits 1920x1080 and 390x844 with no scroll at all; contrast is
+  at least 4.9:1 for all text on the pale background (WCAG AA). New `e2e/home.e2e.ts`
+  (order, keyboard, practice message unchanged, placeholders inert, every
+  action present); full e2e 64/64 and `pnpm check` green. Screenshots in
+  `docs/home-desktop.png` and `docs/home-mobile.png`.
+- **Why:** The look comes from the reference, but everything is drawn in code
+  (no Nintendo assets or text, no image files) and Three.js stays lazy. The
+  placeholders show the "many sports" shape the user described without adding
+  a second game; deleting four list entries removes them.
