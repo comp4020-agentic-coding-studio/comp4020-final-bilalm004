@@ -16,7 +16,7 @@ One flat list. Start at the top; a task only waits on the ones named.
 | 1 | [Scoring in the game](01-scoring-in-game.md): wire real tennis scoring into the sim, the top score bar with point announcements, games and sets stored (done) | - | Opus |
 | 2 | [Auto-move](02-auto-move.md): the server moves you to the ball (done) | - | Opus then Sonnet |
 | 3 | [Trajectory aid](03-trajectory-aid.md): three arcs, timing meter, detected-strength readout | - | Opus then Sonnet |
-| 4 | [Room rules, ready-up and formats](04-room-rules-ready-formats.md): seats, reconnect, ready check, one set / best of three / unlimited | 1, and your rule decisions | Opus then Sonnet |
+| 4 | [Room rules, ready-up and formats](04-room-rules-ready-formats.md): seats, reconnect, ready check, one set / best of three / unlimited (built; needs your playtest and OK on agent choices) | 1 | Opus then Sonnet |
 | 5 | [Training mode](05-training-mode.md): the camera onboarding | 2, 3 | Opus then Sonnet |
 | 6 | [Forehand and backhand look different](06-stroke-animation.md) | - | Sonnet |
 | 7 | [Leaderboard and ratings](07-leaderboard-ratings.md) | 1, 4 | Sonnet |
@@ -26,6 +26,9 @@ One flat list. Start at the top; a task only waits on the ones named.
 | 11 | [Ship](11-ship.md): push, make the repo public, CI green, tag | - | Sonnet |
 | 12 | [Rally fixes](12-rally-fixes.md): out balls, dead ball, wider hit window (done) | 2 | Opus |
 | 13 | [Wii-style home screen](13-home-screen.md): title, sport thumbnail, themed sport buttons (done) | - | Opus |
+| 14 | [Weblympics colours and logo](14-brand-and-logo.md): Olympic colours, a fun logo | - | Opus |
+| 15 | [Game pages, recorded thumbnails, webcam by default](15-game-pages-and-thumbnails.md) | 4, 5 | Opus |
+| 16 | [Point-scored banner and reaction effects](16-point-scored-banner.md) | - | Opus |
 
 Not numbered:
 - [parked.md](parked.md): accounts and profiles, room codes, double-swing cooldown.

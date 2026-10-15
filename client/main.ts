@@ -62,6 +62,11 @@ conn.on((msg) => {
   if (msg.t === "welcome" && currentRoom === null && !training) showMenu();
   else if (msg.t === "room") {
     if (msg.room !== currentRoom) enterRoom(msg);
+  } else if (msg.t === "closed" && msg.room === currentRoom) {
+    // a dropped player didn't come back in time: say why on the home screen
+    error = `Room ${msg.room} closed: ${msg.reason}.`;
+    history.replaceState(null, "", location.pathname);
+    showMenu();
   } else if (msg.t === "error") {
     error = msg.message;
     if (currentRoom === null && !training) showMenu();

@@ -81,6 +81,11 @@ test("the joining player (seat 1) gets the label on their side of the arena", as
   const guestContext = await browser.newContext({ viewport: page.viewportSize()!, isMobile: mobile, hasTouch: mobile });
   const guest = await guestContext.newPage();
   await guest.goto(page.url());
+  // a two-player match starts once both are ready (task 4); before that the
+  // ready panel is up and the label steps aside
+  await guest.getByRole("button", { name: "I'm ready" }).click();
+  await page.getByRole("button", { name: "I'm ready" }).click();
+  await expect(guest.getByRole("region", { name: /match setup/i })).toBeHidden({ timeout: 8000 });
   // two software-rendered pages at once: frames come slowly
   await expect.poll(async () => Number(await guest.locator("canvas").getAttribute("data-frames")), { timeout: 15_000 }).toBeGreaterThan(5);
   await guest.getByRole("button", { name: /medium swing/i }).click();

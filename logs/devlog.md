@@ -823,6 +823,88 @@ the format of the entries below (see CLAUDE.md, Docs).
   - The user's browser still reportedly shows old code on 5173 (see the dev-server entry); unresolved.
 - **Why:** Each branch was green alone; only the merged tree shows cross-branch breaks, as the task 1 and 3 merge did.
 
+## 2026-10-15 05:03 AEDT | decision | Keyboard and touch aim by timing unless an arrow is held; placeholder sports; keyboard starts in auto-move
+
+- **Decided by:** user (option C, the placeholder sports and the keyboard auto-move answer); Claude (the pointer no longer aims, and the rule that touch buttons use timing).
+- **Situation:** The user noticed that with the keyboard the highlighted trajectory didn't matter and the shot fell back to the middle. Cause: a keyboard swing sent only dirX from the arrow keys or pointer, never timingAim, and the three-arc aid only draws for timingAim, which was camera-only.
+- **Outcome:** Option C: keyboard, mouse and touch swings aim by timing like the camera, so the lit arc is the shot; holding an arrow key while swinging aims by hand (timingAim false) and the single reticle returns. The pointer position no longer aims (Claude's choice, to make "no arrow = timing" unambiguous; the on-screen buttons use timing). Keyboard and touch players start in auto-move (user: yes). Home screen sports are now Tennis, Bowling, Archery and two ?? tiles (user: keep Bowling, add Archery, the rest ??; the two ?? is Claude's reading of "the rest"), the ?? tiles don't say Coming soon.
+- **Tests:** keyboard e2e checks timingAim is false with an arrow held and true otherwise; the reticle and trail e2e now hold an arrow, since by default the three arcs replace the reticle; all three updated because the design changed, not because of a bug.
+
+## 2026-10-15 05:03 AEDT | bug | The three arcs vanished for a ball that lands out
+
+- **Decided by:** Claude (the fix); user (the rule that a ball going out can be hit).
+- **Situation:** User asked why there is no trajectory for an out ball. timingArcs returned null if any of its nine simulated shots (three moments x three strengths) failed, and for a ball that lands out the later moments fail because the ball is dead after the bounce.
+- **Finding (probe, real sim):** a hard wide shot landed out at about t62 and went dead at window position -0.5, so early is a legal volley and on-time and late are not.
+- **Fix:** timingArcs returns the arcs that can still be hit and null for the moments after the ball goes dead; nothing is shown only if no moment can be hit. Tests: the out-ball case keeps early and drops late; a ball that lands in still gets all three; no arcs once dead. The out-ball test fails with the old give-up behaviour (checked).
+
+## 2026-10-15 05:03 AEDT | bug | Flaky e2e "a swing carries the tick": 3 of 8 runs failed on clean main
+
+- **Decided by:** Claude (the diagnosis and the test change).
+- **Situation:** The test failed once on mobile in a full run and passed on rerun. Run 8 times on clean main with my changes stashed, it failed 3 of 8, so it was not my change and not machine load (load 2.5).
+- **Cause:** It asserted at least one swing was allowed to rewind (allowed > 0). allowed is min(ticks behind, lag allowance, 9); on a loopback the screen can be exactly in step with the server, so all four swings can have allowed 0. A timing race in the test, not a game bug.
+- **Fix:** assert the invariant that always holds (an integer from 0 to 9); rewind itself is covered deterministically in spec/latency.test.ts and spec/sim.test.ts. 8 of 8 passed after.
+- **Verification:** pnpm check 261/261 and pnpm e2e --workers=1 66/66, both exit 0.
+
+## 2026-10-15 05:03 AEDT | decision | Tasks 14, 15 and 16 queued; tasks 4 and 5 started
+
+- **Decided by:** user (the features and that 4 and 5 start in their own agents); Claude (the task split and the dependencies).
+- **Situation:** The user asked for: Olympic colours and a fun logo; a small recorded bot-vs-bot rally as the tennis thumbnail; a dedicated page when a sport is selected; webcam as the default when a game starts; a bold point-scored call at the top ("15 love"), not covering the court, with a frustrated scribble over the loser and a fitting effect for the winner, shown locally.
+- **Outcome:** Written as tasks/14 (colours and logo), 15 (game pages, recorded thumbnail, webcam by default, waits on 4 and 5) and 16 (point banner and effects). Effects are driven from the server's score snapshot on each client, so no new network messages and the server stays the score's only owner (the user suggested local; Claude agrees it is the better approach). The logo must not copy the official Olympic rings. Tasks 4 and 5 started on Opus agents in separate worktrees; the agents record their own decisions as "Decided by: agent".
+- **Why:** 4 touches rooms.ts and the protocol and 5 is client-side with a local sim, so they don't share files; the new tasks wait because 14 and 15 edit the home screen that 4's panel and 5's Train button also touch.
+
+## 2026-10-15 05:35 AEDT | decision | Task 4: identity, which tab reclaims, and the room state machine's shape
+
+- **Decided by:** agent (everything below; the user's rules for task 4 are taken as given: spectator only, two tabs allowed, 30 s hold then close, invite or code only, the phases, the formats, unlimited, camera never required).
+- **Situation:** Task 4 left identity, the two-tab reclaim rule and the panel wording open, and several smaller rules had to be picked to build the phases.
+- **Outcome:**
+  - Identity: one pseudonym per token, made by the server from its word list ("Swift Otter 42"). Not renameable for now: no free text means nothing to moderate and no way to type someone else's name, "Bot" or "Demo One". If both seats show the same name (one token on two tabs), the second seat is shown as "<name> (2)".
+  - Which tab reclaims: a held seat goes to the next connection with that token that joins the room. A tab already in the room (in the other seat, or watching) is never moved into it.
+  - The state machine is a pure module (`server/lobby.ts`, injected clock and grace) so the 30 s rules are tested without a 30 s wait; `rooms.ts` drives it.
+  - Before the match a disconnect frees the seat (un-readying it); only a match in progress holds a seat. A returning player gets the 3 s countdown again before play resumes, so a serve isn't already on them.
+  - Pressing Leave mid-match ends the match at once with no result (nobody waits 30 s for someone who chose to go); the room stays open, waiting for a new opponent. Only an expired hold closes the room, as the user decided.
+  - Host: whoever took the first seat; if they leave before the match the other seated player becomes host. Format changes only before the match; picking the same format again changes nothing.
+  - After a finished match the room goes back to the ready check (rematch with the same or a new format).
+  - Practice stays instant: the bot and the player are both ready, no countdown, no panel.
+  - Ratings: a match where both seats share a token, or any unlimited match, is stored with rated = 0.
+- **Why:** Each keeps the user's rules exactly and adds the least new surface; every choice is flagged in the report so the user can overrule it.
+
+## 2026-10-15 06:35 AEDT | decision | Task 4 smaller choices: schema v3, wording, the panel's layout
+
+- **Decided by:** agent.
+- **Situation:** Building task 4 surfaced choices the brief didn't cover.
+- **Outcome:**
+  - Schema v3: `matches.winner` must be NULL for unlimited, and SQLite can't drop a NOT NULL in place, so v3 rebuilds the table (all rows and their `rated` kept) and adds `best_rally`. Test opens a v2 database.
+  - Panel wording: "Waiting for an opponent" / "Ready up" / "Starting in 3…"; "I'm ready" / "Not ready"; "Camera off (optional)" / "Camera on, can't see you yet" / "Camera OK". HUD: "Paused: waiting for <name> to reconnect (27 s)" and "Back. Resuming in 3…".
+  - The safety notice in the panel is collapsed under "Before you swing" so the Ready button is on the first screen at 390x844; the full notice still shows before the camera starts.
+  - Before the match the timing aid, stroke line and shot label are hidden (there is no ball), so nothing sits under the panel. The panel places itself below the HUD and, on a phone, below the camera preview, measured at run time because the preview's height depends on the camera.
+  - The panel is in its own files (`ready-panel.ts`, `ready-panel.css`); `client/ui/menu.ts` and the home screen styles are untouched, and the home screen has no format chooser.
+- **Why:** Smallest change that keeps the user's rules, fits both viewports and leaves the queued home-screen work alone.
+
+## 2026-10-15 06:35 AEDT | milestone | Task 4 built: ready-up, formats, 30 s seat hold, unlimited
+
+- **Decided by:** agent (the build); user (the rules it implements).
+- **Situation:** Task 4 started on an Opus agent in its own worktree (branch worktree-agent-a8daf84a0a540eb29).
+- **Outcome:** `server/lobby.ts` (pure rules), `server/room.ts` (one room, no db import), `server/rooms.ts` (real clock, db, log). Protocol `ready`, `format`, `lobby`, `closed`. Ready panel and HUD states on the client. Tests written first; against a server built from the previous HEAD, all 8 new WebSocket tests and the 4 new db tests failed, and the lobby and room-rules suites can't import. `pnpm check` 298/298 exit 0; `pnpm e2e --workers=1` 72/72 exit 0 (load 1.2 before, 12.5 after: another session was busy). One existing e2e (the seat-1 shot label) assumed two-player play starts at once; it now readies up first, a design change, not a bug.
+- **Open:** the two-session playtest and next-day pickup (needs the user); confirm the agent choices in tasks/04.
+- **Why:** Crit 10 needs the multi-user rules written, built and tested.
+
+## 2026-10-15 06:48 AEDT | milestone | Merged task 4 (room rules, ready-up, formats) into main
+
+- **Decided by:** Claude (merge and verification); agent (the twelve choices below); user (the rules in the brief).
+- **Situation:** The task 4 agent finished: server/lobby.ts (pure room state machine with an injected clock), server/room.ts, ready panel, schema v3 (matches.winner nullable, best_rally), README "Playing together", room rules in CLAUDE.md.
+- **Outcome:** main fast-forwarded (no conflicts; main had not moved). Verified on a fresh build by me: typecheck exit 0, pnpm check 298/298 exit 0, pnpm e2e --workers=1 72/72 exit 0, with machine load 11 to 19 from another agent's browsers and no failures. The schema v3 migration was run by me on a temporary copy of the real dev database: version 2 to 3, all 28 matches kept and identical, the one rated match still rated, 1,176 players intact; the real file was not touched. The agent ran on claude-opus-5-5 (transcript). PROCESS.md and menu.ts untouched.
+- **Agent choices, not yet confirmed by the user:** names are server-made and can't be changed; a held seat goes to the next tab with that token that joins; Leave mid-match ends the match with no result and keeps the room open; a disconnect before the match frees the seat; a reclaimed seat gets a 3 s countdown; host is the first seat, or the other player if they leave before the match; the format locks once the match starts; after a finished match the room returns to the ready check; practice vs bot stays instant; unlimited uses one-set scoring that never ends and tracks points and best rally; ready panel wording; the safety notice is collapsed in the panel; the timing aid and shot label are hidden before the match.
+- **Open:** two real simultaneous sessions and a next-day pickup with the same token need the user's playtest (unchecked in the task file); task 7 must read only rated = 1 rows, which a new test enforces.
+
+## 2026-10-15 15:04 AEDT | decision | Movement uses reaction time; earlier claim corrected; measurements noted
+
+- **Decided by:** Claude (the measurements and the correction); user (asked whether running to a far ball reduces the reaction window, and to note it down).
+- **Situation:** The user asked whether movement reduces reaction time when an opponent hits far away.
+- **Findings:** Yes. Written up in docs/reaction-time.md. From the middle no in-bounds shot needs more than about 1.9 m/s, so auto-move (3.5 m/s) reaches all of them. From 4 m out auto-move reaches 100% of light, 80% of medium and 67% of hard returns; manual (5 m/s) reaches all of them. All of this assumes instant movement, so it is an upper bound.
+- **Correction:** I told the user earlier that auto-move was slowed so hard wide shots still beat it. That holds only when the player is out of position; from the middle, no in-bounds shot beats auto-move. The agent's 100/50/0% was measured from the far sideline.
+- **Probe error caught:** my first probe gave 0.43 s and x = 0 for every shot because the launching swing was refused (the seat had hit last); the table was discarded, and the redo checks the swing outcome. Recorded in the doc so it isn't repeated.
+- **Open:** reaction delay (human and camera), the opponent's choice of aim, tilt movement and recovery between shots are not measured.
+
 ## 2026-10-15 05:48 AEDT | decision | Training mode (task 5) runs the view against a local link, not a server room
 
 - **Decided by:** agent (the shape); user (local, no server room, no score, reuse the view).

@@ -20,7 +20,11 @@ The ball is a shared state - exactly one of it, living on the server, not sync c
 
 ## When lag makes two screens disagree
 
-Every player sees the ball slightly in the past, so a swing that looked on time can reach the server late. The rule: if the ball was hittable on your screen when you swung, it counts. The server checks that against its own record of that moment, never your word for it. It only looks back as far as your measured lag (at most 150 ms), and a point already scored stays scored. A ball that gets past you is scored 150 ms after it does, so a lagged swing isn't beaten by the point; once landed out, it's dead. Your opponent pays: your return may leave a moment late on their screen. At 150 ms of lag this keeps 100% of on-time swings as hits, against 76% without. Options, trade-offs and the measurements are in [ADR 001](docs/adr/001-who-wins-under-lag.md).
+Every player sees the ball slightly in the past, so an on-time swing can reach the server late. The rule: if the ball was hittable on your screen when you swung, it counts, checked against the server's own record, never your word. It looks back at most your measured lag (capped at 150 ms); a scored point stays scored. Your opponent pays: your return may leave late on their screen. At 150 ms, 100% of on-time swings hit, against 76% without. See [ADR 001](docs/adr/001-who-wins-under-lag.md).
+
+## Playing together
+
+Invite link or room code only; no public room list. Two seats, everyone else watches. The host picks one set, best of three or unlimited (no winner, unrated); both press Ready, camera optional, then a 3 s countdown. A mid-match drop pauses for 30 s: rejoin to resume, or the room closes.
 
 ## Controls
 In tennis specifically: by default the game walks you to the ball, slower than you can run, so a hard wide shot can still beat you. "Move: lean" under the camera preview lets you shift your shoulders to move instead. Pick one racket hand when you set up the camera — you swing with that same arm throughout — and it's how you turn that hand, not which arm you use, that decides forehand or backhand: palm to the screen is a forehand, the back of your hand is a backhand.

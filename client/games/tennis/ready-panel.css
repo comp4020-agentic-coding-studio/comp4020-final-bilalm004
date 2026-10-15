@@ -1,0 +1,169 @@
+/* The room's ready panel (task 4). Its own file so style.css and the home
+   screen stay untouched. Placed by ready-panel.ts below the HUD (and the
+   camera preview on a phone) and above the swing buttons; it scrolls inside
+   itself if it doesn't fit (e2e/ready.e2e.ts). */
+
+.ready-panel {
+  position: absolute;
+  left: 50%;
+  top: 8rem;
+  transform: translateX(-50%);
+  width: min(28rem, calc(100% - 1.5rem));
+  box-sizing: border-box;
+  overflow-y: auto;
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.9rem 1rem;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg) 94%, transparent);
+  box-shadow: 0 8px 30px #0008;
+}
+
+.ready-panel[hidden] {
+  display: none;
+}
+
+/* the camera setup takes the screen while it is open */
+.game.calibrating .ready-panel {
+  display: none;
+}
+
+.ready-panel h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.ready-panel .rp-seats {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ready-panel .rp-seats li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.ready-panel .rp-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+
+.ready-panel .rp-state {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+
+.ready-panel li[data-ready="true"] .rp-state {
+  color: #4ade80;
+  font-weight: 700;
+}
+
+.ready-panel .rp-format {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.ready-panel legend {
+  padding: 0;
+  margin-bottom: 0.3rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.ready-panel .rp-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.ready-panel .rp-options button {
+  min-height: 44px;
+  min-width: 0;
+  padding: 0 0.3rem;
+  font-size: 0.9rem;
+}
+
+.ready-panel .rp-options [aria-checked="true"] {
+  outline: 2px solid var(--accent);
+  font-weight: 700;
+}
+
+.ready-panel .rp-options button:disabled {
+  cursor: default;
+}
+
+.ready-panel .rp-options button:disabled:not([aria-checked="true"]) {
+  opacity: 0.55;
+}
+
+.ready-panel .rp-note,
+.ready-panel .rp-hint {
+  margin: 0.3rem 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.ready-panel .rp-camera {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.ready-panel .rp-camera button {
+  min-height: 44px;
+}
+
+.ready-panel .rp-cam-state[data-state="ok"] {
+  color: #4ade80;
+  font-weight: 700;
+}
+
+.ready-panel .rp-safety {
+  font-size: 0.85rem;
+}
+
+.ready-panel .rp-safety ul {
+  margin: 0.3rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.ready-panel .rp-ready {
+  min-height: 52px;
+  font-size: 1.1rem;
+}
+
+.ready-panel [data-seated][hidden] {
+  display: none;
+}
+
+/* before the match there is no ball: the timing aid, the stroke line and the
+   shot label step aside so nothing sits under the panel */
+.game[data-prematch="true"] .aid,
+.game[data-prematch="true"] .stroke,
+.game[data-prematch="true"] .shot-label {
+  display: none;
+}
+
+@media (max-width: 560px) {
+  .ready-panel {
+    gap: 0.45rem;
+    padding: 0.7rem 0.8rem;
+  }
+
+  .ready-panel h2 {
+    font-size: 1.1rem;
+  }
+}

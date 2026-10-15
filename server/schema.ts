@@ -7,8 +7,11 @@ import type { DatabaseSync } from "node:sqlite";
  * Version 2: matches store real tennis results: score0/score1 become sets won,
  * plus the format, each set's games (JSON), whether it was a practice match,
  * and whether it counts towards ratings.
+ * Version 3: unlimited matches (task 4) have no winner, so `winner` may be
+ * NULL, and `best_rally` keeps the longest rally (shots). SQLite can't relax a
+ * NOT NULL in place, so the table is rebuilt with every row kept.
  */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 const V1 = `
   CREATE TABLE IF NOT EXISTS players (
@@ -38,6 +41,29 @@ const V2 = `
   ALTER TABLE matches ADD COLUMN rated INTEGER NOT NULL DEFAULT 0;
 `;
 
+const V3 = `
+  CREATE TABLE matches_v3 (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    room TEXT NOT NULL,
+    game TEXT NOT NULL,
+    p0 TEXT,
+    p1 TEXT,
+    score0 INTEGER NOT NULL,
+    score1 INTEGER NOT NULL,
+    winner INTEGER,
+    ended_at INTEGER NOT NULL,
+    format TEXT NOT NULL DEFAULT 'points5',
+    sets TEXT NOT NULL DEFAULT '[]',
+    practice INTEGER NOT NULL DEFAULT 0,
+    rated INTEGER NOT NULL DEFAULT 0,
+    best_rally INTEGER
+  );
+  INSERT INTO matches_v3 (id, room, game, p0, p1, score0, score1, winner, ended_at, format, sets, practice, rated)
+    SELECT id, room, game, p0, p1, score0, score1, winner, ended_at, format, sets, practice, rated FROM matches;
+  DROP TABLE matches;
+  ALTER TABLE matches_v3 RENAME TO matches;
+`;
+
 export function schemaVersion(db: DatabaseSync): number {
   db.exec("CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)");
   const row = db.prepare("SELECT version FROM schema_version").get() as { version: number } | undefined;
@@ -52,7 +78,7 @@ export function schemaVersion(db: DatabaseSync): number {
 
 /** Brings `db` up to SCHEMA_VERSION, one step at a time, each in a transaction. */
 export function migrate(db: DatabaseSync): void {
-  const steps: Record<number, string> = { 1: V1, 2: V2 };
+  const steps: Record<number, string> = { 1: V1, 2: V2, 3: V3 };
   let v = schemaVersion(db);
   if (v > SCHEMA_VERSION) throw new Error(`database schema ${v} is newer than this app (${SCHEMA_VERSION})`);
   while (v < SCHEMA_VERSION) {
@@ -73,28 +99,34 @@ export interface MatchRecord {
   room: string;
   game: string;
   tokens: [string | null, string | null];
-  /** Headline result: sets won, in tennis. */
+  /** Headline result: sets won, in tennis; points won in unlimited. */
   score: [number, number];
-  winner: 0 | 1;
+  /** null: unlimited, which has no winner. */
+  winner: 0 | 1 | null;
   format: string;
   /** Games in each finished set. */
   sets: Array<[number, number]>;
   practice: boolean;
+  /** Longest rally in shots; unlimited only. */
+  bestRally?: number;
 }
 
 /**
  * Whether a match counts towards ratings. Decided: practice against the bot
  * never does, so a rating can't be farmed off a bot and only reflects people
- * beating people. A match also needs two signed-in players.
+ * beating people. A match also needs two signed-in players. Task 4: unlimited
+ * (no winner) never does, and nor does one person on both seats (one token on
+ * two tabs, allowed for testing), so nobody can feed themselves wins.
  */
 export function isRated(m: MatchRecord): boolean {
-  return !m.practice && m.tokens[0] !== null && m.tokens[1] !== null;
+  if (m.practice || m.format === "unlimited" || m.winner === null) return false;
+  return m.tokens[0] !== null && m.tokens[1] !== null && m.tokens[0] !== m.tokens[1];
 }
 
 export function insertMatch(db: DatabaseSync, m: MatchRecord, endedAt = Date.now()): void {
   db.prepare(
-    `INSERT INTO matches (room, game, p0, p1, score0, score1, winner, ended_at, format, sets, practice, rated)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO matches (room, game, p0, p1, score0, score1, winner, ended_at, format, sets, practice, rated, best_rally)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     m.room,
     m.game,
@@ -108,5 +140,6 @@ export function insertMatch(db: DatabaseSync, m: MatchRecord, endedAt = Date.now
     JSON.stringify(m.sets),
     m.practice ? 1 : 0,
     isRated(m) ? 1 : 0,
+    m.bestRally ?? null,
   );
 }

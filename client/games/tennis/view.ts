@@ -12,12 +12,13 @@ import {
 } from "three";
 import { COURT, DT, LEVEL_NAMES, PLAYER, missReason, naturalKind, predictLanding, seatZ, step, swingTiming } from "../../../shared/games/tennis/sim.ts";
 import type { Hand, Level, Miss, SwingKind, TennisSnapshot, TennisState } from "../../../shared/games/tennis/sim.ts";
-import type { RoomInfo, ServerMsg } from "../../../shared/protocol.ts";
+import type { LobbyView, RoomInfo, ServerMsg } from "../../../shared/protocol.ts";
 import { createCameraInput } from "../../input/camera/index.ts";
 import { shownAim } from "../../input/camera/pose.ts";
 import { createPlayInput } from "../../input/keyboard.ts";
 import type { GameLink } from "../../net/link.ts";
 import { makePlayer } from "./character.ts";
+import { createReadyPanel } from "./ready-panel.ts";
 import { createScoreBar } from "./score-bar.ts";
 import { createTrajectoryAid } from "./aid.ts";
 import { createShotFx } from "./shot-fx.ts";
@@ -330,12 +331,31 @@ export function startTennis(root: HTMLElement, conn: GameLink, info: RoomInfo, o
 
   const label = (seat: 0 | 1) => (seat === info.seat ? "You" : (names[seat] ?? `Player ${seat + 1}`));
 
+  // the room's state from the server (task 4): phase, ready flags, format,
+  // countdown, a held seat
+  let lobby: LobbyView | null = null;
+  const readyPanel = createReadyPanel(view, info.seat, info.room, {
+    ready: (ready) => conn.send({ t: "ready", ready }),
+    format: (format) => conn.send({ t: "format", format }),
+    openCamera: () => cameraButton.click(),
+  });
+  readyPanel.camera("off");
+  // "camera OK" in the panel: on and tracking you (aim is only set while tracking)
+  const camTimer = window.setInterval(() => readyPanel.camera(!cameraInput.on() ? "off" : cameraInput.aim() !== null ? "ok" : "on"), 500);
+
   const updateHud = () => {
     if (!snap) return;
     scoreBar.update(snap, label);
-    if (snap.phase === "over") statusEl.textContent = snap.winner === info.seat ? "You win!" : `${label(snap.winner as 0 | 1)} wins`;
-    else if (!info.practice && (names[0] === null || names[1] === null)) statusEl.textContent = `Waiting for an opponent. Share code ${info.room}`;
+    const l = lobby;
+    view.dataset.phase = l?.phase ?? "";
+    if (l?.phase === "paused" && l.hold) {
+      const who = l.hold.seat === info.seat ? "you" : l.hold.name;
+      statusEl.textContent = `Paused: waiting for ${who} to reconnect (${l.hold.seconds} s)`;
+    } else if (l?.match && l.phase === "countdown") statusEl.textContent = `Back. Resuming in ${l.countdown ?? 0}…`;
+    else if (snap.phase === "over" && !l?.match) statusEl.textContent = snap.winner === info.seat ? "You win! Ready up for a rematch." : `${label(snap.winner as 0 | 1)} wins`;
+    else if (l && !info.practice && l.phase !== "playing") statusEl.textContent = "";
     else if (paused) statusEl.textContent = "Paused while you set up the camera";
+    else if (l?.tally) statusEl.textContent = `Unlimited · points ${l.tally.points[0]}-${l.tally.points[1]} · best rally ${l.tally.bestRally}`;
     else statusEl.textContent = info.seat === null ? "Spectating" : snap.phase === "serve" ? "Get ready…" : "";
   };
 
@@ -368,6 +388,11 @@ export function startTennis(root: HTMLElement, conn: GameLink, info: RoomInfo, o
       if (!roomEcho) sendMode();
     } else if (msg.t === "presence") {
       names = msg.names;
+      updateHud();
+    } else if (msg.t === "lobby") {
+      const { t: _t, ...v } = msg;
+      lobby = v;
+      readyPanel.update(v);
       updateHud();
     } else if (msg.t === "swing" && DEAD_OR_WRONG.has(msg.outcome) && ownShot && performance.now() - ownShot.at < LABEL_MS && info.seat !== null) {
       // the server's ruling: a wrong-side or dead-ball miss the screen didn't predict
@@ -480,6 +505,8 @@ export function startTennis(root: HTMLElement, conn: GameLink, info: RoomInfo, o
     cancelAnimationFrame(raf);
     clearTimeout(strokeTimer);
     scoreBar.dispose();
+    readyPanel.dispose();
+    clearInterval(camTimer);
     clearTimeout(shotTimer);
     unsubscribe();
     input.dispose();
