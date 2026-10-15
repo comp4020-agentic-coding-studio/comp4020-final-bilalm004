@@ -1,5 +1,5 @@
 import { DEFAULT_SWING, levelFromSpeed } from "../../input/camera/pose.ts";
-import { cloneState, hitWindowDistance, naturalKind, predictContact, seatZ, step } from "../../../shared/games/tennis/sim.ts";
+import { cloneState, hitWindowDistance, kindFits, naturalKind, predictContact, seatZ, step } from "../../../shared/games/tennis/sim.ts";
 import type { Hand, Level, Seat, SwingKind, TennisState } from "../../../shared/games/tennis/sim.ts";
 
 // The trajectory aid's logic, kept pure so it can be tested: which of the
@@ -201,3 +201,35 @@ export function shownStrength(
   const level = last ?? 1;
   return { level, position: level, live: false };
 }
+
+export interface StanceHint {
+  /** The stroke the next swing will be: the grip held (camera) or the one the ball's side calls for (keys). */
+  kind: SwingKind;
+  /** The held grip doesn't fit the ball's side, so the swing would be a "wrong side" miss. */
+  wrong: boolean;
+  /** The stroke the ball needs, when the grip is wrong. */
+  needs?: SwingKind;
+  /** What to show. */
+  text: string;
+}
+
+const KIND_NAME: Record<SwingKind, string> = { forehand: "Forehand", backhand: "Backhand" };
+
+/**
+ * Which stroke your next swing will be, and whether the grip you hold is wrong
+ * for the ball's side. Judged by the sim's own rule (`kindFits`: either stroke
+ * within a short distance of you, otherwise the one the ball's side calls for)
+ * at the place the ball will cross your baseline, which is where you hit it.
+ * Keys and a camera that can't read your hand (`grip` null) get the stroke the
+ * ball calls for and never a warning. Null when no ball is coming at you.
+ */
+export function stanceHint(s: TennisState, seat: Seat, hand: Hand, grip: SwingKind | null): StanceHint | null {
+  if (windowPosition(s, seat) === null) return null;
+  const at = predictContact(s, seat)?.ball.x ?? s.ball.x;
+  const me = s.players[seat].x;
+  const needs = naturalKind(seat, me, at, hand);
+  if (grip === null) return { kind: needs, wrong: false, text: KIND_NAME[needs] };
+  if (kindFits(seat, me, at, grip, hand)) return { kind: grip, wrong: false, text: KIND_NAME[grip] };
+  return { kind: grip, wrong: true, needs, text: `${KIND_NAME[grip]} grip: the ball needs a ${needs}` };
+}
+

@@ -33,6 +33,12 @@ export interface ShotFx {
    * ring on your baseline shows where to go.
    */
   arc(path: readonly Point3[] | null, good: boolean, reachable: boolean): number;
+  /**
+   * Only the "stand here" ring, for when the three timing arcs are showing
+   * instead of the single arc: it marks where you'll meet the ball, and is
+   * "ready" coloured once you are within reach of it. Null hides it.
+   */
+  contact(at: { x: number; z: number } | null, reachable: boolean): void;
   /** Fade the bounce marks; call every frame. */
   update(now: number): void;
 }
@@ -102,6 +108,16 @@ export function createShotFx(scene: Scene): ShotFx {
       mark.mesh.position.set(x, 0.025, z);
       (mark.mesh.material as MeshBasicMaterial).color.copy(good ? IN_COLOR : OUT_COLOR);
       mark.mesh.visible = true;
+    },
+
+    contact(at, reachable) {
+      if (!at) {
+        contact.visible = false;
+        return;
+      }
+      contact.visible = true;
+      contact.position.set(at.x, 0.03, at.z);
+      contactMat.color.copy(reachable ? READY_COLOR : GO_HERE_COLOR);
     },
 
     arc(path, good, reachable) {

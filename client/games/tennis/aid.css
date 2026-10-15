@@ -94,3 +94,34 @@
   opacity: 0.7;
   text-decoration: line-through;
 }
+
+/* Which stroke your next swing is; red when the grip you hold is wrong for the
+   ball's side (the swing would be a "wrong side" miss). Sits above the meter
+   row so the row keeps its shape. */
+.aid-stance {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 0.35rem);
+  transform: translateX(-50%);
+  padding: 0.2rem 0.7rem;
+  border-radius: 999px;
+  background: #0f1720d9;
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.aid-stance[hidden] {
+  display: none;
+}
+
+.aid-stance[data-wrong="true"] {
+  background: #b3261e;
+  color: #fff;
+}
+
+.game.calibrating .aid-stance {
+  display: none;
+}
+

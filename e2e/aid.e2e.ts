@@ -113,3 +113,15 @@ test("with the camera aiming by timing, three arcs show and the lit one follows 
   await expect(canvas).toHaveAttribute("data-aid-lit", "");
   await page.getByRole("button", { name: /stop camera/i }).click();
 });
+
+test("the ring that marks where to stand stays up while the three arcs show, and says whether you can reach the ball", async ({ page }) => {
+  test.setTimeout(90_000);
+  await practice(page);
+  const canvas = page.locator("canvas");
+  // keys and mouse aim by timing by default, so the three arcs are what shows (no arrow held)
+  await expect.poll(() => canvas.getAttribute("data-aid-arcs"), { timeout: 40_000 }).toBe("3");
+  await expect.poll(() => canvas.getAttribute("data-contact"), { timeout: 40_000 }).toMatch(/^(ready|go)$/);
+  // and it reports whether you can reach the ball from where you stand
+  await expect.poll(() => canvas.getAttribute("data-reach"), { timeout: 40_000 }).toMatch(/^(yes|no)$/);
+});
+

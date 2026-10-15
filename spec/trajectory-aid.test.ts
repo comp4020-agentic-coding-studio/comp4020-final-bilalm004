@@ -8,10 +8,9 @@ import {
   shownStrength,
   strengthPosition,
   timingArcs,
-  windowPosition,
-} from "../client/games/tennis/trajectory-aid.ts";
+  windowPosition, stanceHint } from "../client/games/tennis/trajectory-aid.ts";
 import { DEFAULT_SWING, levelFromSpeed } from "../client/input/camera/pose.ts";
-import { cloneState, createState, other, seatZ, step, timingAim } from "../shared/games/tennis/sim.ts";
+import { cloneState, createState, missReason, other, seatZ, step, timingAim } from "../shared/games/tennis/sim.ts";
 import type { Hand, Level, Seat, SwingKind, TennisState } from "../shared/games/tennis/sim.ts";
 
 /** A rally ball 6 m short of `seat`'s baseline, coming at them, with `seat` standing where it will arrive. */
@@ -262,3 +261,62 @@ describe("a ball that will land out can still be volleyed, so its early arc show
     expect(timingArcs(s, 0, 1, "right", "forehand")).toBeNull();
   });
 });
+
+describe("stance hint: which stroke your next swing is, and whether your grip is wrong for the ball's side", () => {
+  /** A ball coming at seat 0 that will cross its baseline `side` metres to the right of where the player stands. */
+  function ballAt(side: number): TennisState {
+    const s = incoming(0);
+    s.players[0] = { x: 0, targetX: 0 };
+    // aim the ball so it crosses the baseline `side` m from the player (positive: their right)
+    const toBaseline = (seatZ(0) - s.ball.z) / s.ball.vz;
+    s.ball.vx = (side - s.ball.x) / toBaseline;
+    return s;
+  }
+
+  it("says nothing when no ball is coming at you", () => {
+    const s = createState(1, { endless: true });
+    expect(stanceHint(s, 0, "right", null)).toBeNull();
+  });
+
+  it("keys (no grip): the stroke the ball's side calls for, never a warning", () => {
+    expect(stanceHint(ballAt(1.5), 0, "right", null)).toMatchObject({ kind: "forehand", wrong: false });
+    expect(stanceHint(ballAt(-1.5), 0, "right", null)).toMatchObject({ kind: "backhand", wrong: false });
+    // a left-hander's sides are the other way round
+    expect(stanceHint(ballAt(1.5), 0, "left", null)).toMatchObject({ kind: "backhand", wrong: false });
+  });
+
+  it("camera: the right grip for the side is shown plainly", () => {
+    expect(stanceHint(ballAt(1.5), 0, "right", "forehand")).toMatchObject({ kind: "forehand", wrong: false });
+    expect(stanceHint(ballAt(-1.5), 0, "right", "backhand")).toMatchObject({ kind: "backhand", wrong: false });
+  });
+
+  it("camera: the wrong grip for the side is flagged, and says which grip the ball needs", () => {
+    const h = stanceHint(ballAt(1.5), 0, "right", "backhand")!;
+    expect(h).toMatchObject({ kind: "backhand", wrong: true, needs: "forehand" });
+    expect(h.text).toMatch(/forehand/i);
+    expect(stanceHint(ballAt(-1.5), 0, "right", "forehand")).toMatchObject({ wrong: true, needs: "backhand" });
+  });
+
+  it("within the sim's either-side zone no grip is wrong, so the hint never flickers when you are lined up", () => {
+    for (const side of [0, 0.1, -0.1, 0.25, -0.25]) {
+      for (const grip of ["forehand", "backhand"] as const) {
+        expect(stanceHint(ballAt(side), 0, "right", grip), `${side} m, ${grip}`).toMatchObject({ wrong: false });
+      }
+    }
+  });
+
+  it("agrees with the sim: it flags a grip exactly when a swing of that kind would be a wrong-side miss", () => {
+    // balls within reach of the player (further out the sim says "reach", a different miss)
+    for (const side of [-1.3, -1, -0.5, -0.2, 0, 0.2, 0.5, 1, 1.3]) {
+      for (const grip of ["forehand", "backhand"] as const) {
+        const s = ballAt(side);
+        // run the ball to the baseline so the sim's own rule applies at the contact
+        for (let n = 0; n < 600 && (s.ball.z - seatZ(0)) * Math.sign(seatZ(0)) < 0; n++) step(s, []);
+        const miss = missReason(s, 0, grip, "right");
+        const hint = stanceHint(ballAt(side), 0, "right", grip)!;
+        expect(hint.wrong, `${side} m, ${grip}`).toBe(miss === "wrong side");
+      }
+    }
+  });
+});
+

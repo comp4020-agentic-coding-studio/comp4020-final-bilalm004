@@ -10,7 +10,7 @@ import {
   Vector3,
   WebGLRenderer,
 } from "three";
-import { COURT, DT, LEVEL_NAMES, PLAYER, missReason, naturalKind, predictLanding, seatZ, step, swingTiming } from "../../../shared/games/tennis/sim.ts";
+import { COURT, DT, LEVEL_NAMES, PLAYER, missReason, naturalKind, predictContact, predictLanding, seatZ, step, swingTiming } from "../../../shared/games/tennis/sim.ts";
 import type { Hand, Level, Miss, SwingKind, TennisSnapshot, TennisState } from "../../../shared/games/tennis/sim.ts";
 import type { LobbyView, RoomInfo, ServerMsg } from "../../../shared/protocol.ts";
 import { createCameraInput } from "../../input/camera/index.ts";
@@ -500,8 +500,23 @@ export function startTennis(root: HTMLElement, conn: GameLink, info: RoomInfo, o
       } else {
         canvas.dataset.reticle = "";
         canvas.dataset.arc = String(fx.arc(null, true, true));
-        canvas.dataset.reach = "";
+        if (!threeArcs) canvas.dataset.reach = "";
       }
+      // The three arcs replace the single arc, but not the ring that marks where
+      // to stand: it answers "can I reach it", which the arcs don't. Drawn last,
+      // after fx.arc(null) above has hidden it, so nothing can take it down.
+      if (threeArcs) {
+        const meet = info.seat === null || snap.phase === "over" ? null : predictContact({ ...snap, rng: 0 }, info.seat);
+        if (meet) {
+          const reachable = Math.abs(meet.ball.x - players[info.seat!].group.position.x) <= PLAYER.reach;
+          fx.contact({ x: meet.ball.x, z: meet.ball.z }, reachable);
+          canvas.dataset.contact = reachable ? "ready" : "go";
+          canvas.dataset.reach = reachable ? "yes" : "no";
+        } else {
+          fx.contact(null, true);
+          canvas.dataset.contact = "";
+        }
+      } else canvas.dataset.contact = "";
     }
     renderer.render(scene, camera);
     canvas.dataset.frames = String(++frames);

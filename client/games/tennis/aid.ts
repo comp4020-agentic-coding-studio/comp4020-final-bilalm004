@@ -4,7 +4,7 @@ import { LEVEL_NAMES, predictLanding } from "../../../shared/games/tennis/sim.ts
 import type { Hand, Level, Seat, SwingKind, TennisState } from "../../../shared/games/tennis/sim.ts";
 import { createAidFx } from "./aid-fx.ts";
 import type { AidLanding, Point3, Timing, TimingAid } from "./trajectory-aid.ts";
-import { TIMINGS, litTiming, meterPosition, realArc, shownStrength, timingArcs, windowPosition } from "./trajectory-aid.ts";
+import { TIMINGS, litTiming, meterPosition, realArc, shownStrength, timingArcs, windowPosition, stanceHint } from "./trajectory-aid.ts";
 
 // The trajectory aid (task 3): a timing meter along the bottom, three timing
 // arcs on the court for camera timing aim, depth ticks for light/medium/hard,
@@ -60,6 +60,7 @@ export function createTrajectoryAid(view: HTMLElement, scene: Scene, canvas: HTM
   const bar = document.createElement("div");
   bar.className = "aid";
   bar.innerHTML = `
+    <span class="aid-stance" role="status" aria-live="polite" hidden></span>
     <div class="aid-meter" role="img" aria-label="Timing meter: early, on time, late">
       <span data-t="early">early</span><span data-t="ontime">on time</span><span data-t="late">late</span>
       <i class="aid-mark" hidden></i>
@@ -70,6 +71,7 @@ export function createTrajectoryAid(view: HTMLElement, scene: Scene, canvas: HTM
   const meter = bar.querySelector(".aid-meter") as HTMLElement;
   const mark = bar.querySelector(".aid-mark") as HTMLElement;
   const strengthEl = bar.querySelector(".aid-strength") as HTMLElement;
+  const stanceEl = bar.querySelector(".aid-stance") as HTMLElement;
   const toggle = bar.querySelector(".aid-toggle") as HTMLButtonElement;
   const fx = createAidFx(scene);
 
@@ -130,6 +132,15 @@ export function createTrajectoryAid(view: HTMLElement, scene: Scene, canvas: HTM
       if (!mine) real = null;
       else if (!real || real.shots !== s.shots) real = { shots: s.shots, path: realArc(s) };
       canvas.dataset.aidReal = String(fx.real(real ? real.path : null));
+
+      // which stroke your next swing is, and a warning when the grip you hold is wrong for the ball's side
+      const stance = stanceHint(s, seat, f.hand, f.grip);
+      stanceEl.hidden = stance === null;
+      if (stance) {
+        if (stanceEl.textContent !== stance.text) stanceEl.textContent = stance.text;
+        stanceEl.dataset.wrong = String(stance.wrong);
+      }
+      canvas.dataset.stance = stance ? `${stance.kind}${stance.wrong ? ",wrong" : ""}` : "";
 
       const u = windowPosition(s, seat);
       const lit = litTiming(u);
