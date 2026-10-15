@@ -57,10 +57,25 @@ export function machineFeed(seed: number, drill: Drill, i: number, hand: Hand, p
     case "timing":
       return { x: fore * (0.3 + 0.4 * r1), dirX: fore * 0.06 * r2, level: 1 };
     case "movement": {
+      // to the side away from the player, crossing their baseline 2.4-3.2 m
+      // from the middle, at medium pace (about 1.6 s of flight)
       const side = Math.abs(playerX) > 0.5 ? -Math.sign(playerX) : r2 < 0.5 ? -1 : 1;
-      return { x: side * (1.5 + r1), dirX: side * (0.35 + 0.15 * r2), level: 0 };
+      const cross = side * (2.4 + 0.8 * r1);
+      const x = cross * 0.4;
+      // sideways travel over the 22 m at medium: dirX x AIM_SPREAD[1] x 22 m
+      return { x, dirX: (cross - x) / (0.2 * 2 * COURT.halfL), level: 1 };
     }
   }
+}
+
+/**
+ * Where the movement drill puts the player before feed `i`: out of position,
+ * near a sideline, alternating sides. docs/reaction-time.md: from the middle
+ * auto-move reaches every in-bounds ball, so a drill from there needs no
+ * running; from near the edge a ball to the far side does.
+ */
+export function movementStart(i: number): number {
+  return (i % 2 === 0 ? 1 : -1) * 4.2;
 }
 
 /** The ball as it leaves the machine: from the far baseline, launched as seat 1 would hit it. */

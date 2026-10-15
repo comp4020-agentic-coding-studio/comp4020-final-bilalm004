@@ -1,4 +1,4 @@
-import { DRILLS, feedBall, machineFeed } from "../../../shared/games/tennis/machine.ts";
+import { DRILLS, feedBall, machineFeed, movementStart } from "../../../shared/games/tennis/machine.ts";
 import type { Drill } from "../../../shared/games/tennis/machine.ts";
 import { COURT, createState, predictContact, seatZ, step } from "../../../shared/games/tennis/sim.ts";
 import type { Hand, Level, Miss, MoveMode, SwingKind, TennisEvent, TennisInput, TennisState } from "../../../shared/games/tennis/sim.ts";
@@ -75,6 +75,14 @@ export class TrainingSim {
     this.record = { swings: 0, shots: [], targets: 0 };
     this.flying = null;
     this.target = 0;
+    if (this.drill === "movement") {
+      // a fresh feed for this drill: the ball in play was fed for the last step
+      const s = this.state;
+      s.phase = "serve";
+      s.phaseTick = 0;
+      s.lastHitter = null;
+      s.pending = null;
+    }
     out.push(this.progress());
     return out;
   }
@@ -104,6 +112,12 @@ export class TrainingSim {
 
   private feed(out: TrainingEvent[]): void {
     const s = this.state;
+    if (this.drill === "movement") {
+      // out of position before each ball, or there is nothing to run for
+      // (docs/reaction-time.md: from the middle auto reaches every ball)
+      const x = movementStart(this.feeds);
+      s.players[0] = { x, targetX: x };
+    }
     const f = machineFeed(this.seed, this.drill, this.feeds++, this.hand, s.players[0].x);
     this.machineX = f.x;
     s.ball = feedBall(f);

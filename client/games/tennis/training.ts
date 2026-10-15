@@ -1,7 +1,7 @@
 import { Mesh, MeshBasicMaterial, RingGeometry } from "three";
 import type { Scene } from "three";
 import "./training.css";
-import { LESSONS, TARGET_RADIUS, missFeedback, shotFeedback } from "./lessons.ts";
+import { LESSONS, MOVEMENT_OFFER, REQUIRED_LESSONS, TARGET_RADIUS, afterLesson, missFeedback, shotFeedback, trainingComplete } from "./lessons.ts";
 import type { LessonId } from "./lessons.ts";
 import { LocalLink } from "./local-link.ts";
 import { TrainingSim } from "./training-sim.ts";
@@ -13,7 +13,6 @@ import { startTennis } from "./view.ts";
 // server room, no score, nothing sent over the network. A coach panel walks
 // through the steps; each completes from what the player actually does.
 
-const REQUIRED = LESSONS.filter((l) => !l.optional);
 // a finished step stays up this long before the next one starts
 const NEXT_MS = 1400;
 
@@ -51,6 +50,7 @@ export function startTraining(root: HTMLElement, onExit: () => void): () => void
     <p class="coach-step"></p>
     <h2 class="coach-title"></h2>
     <p class="coach-how"></p>
+    <details class="coach-why" hidden><summary>Why?</summary><p></p></details>
     <p class="coach-progress" role="status"></p>
     <p class="coach-feedback" aria-live="polite"></p>
     <div class="coach-row"></div>`;
@@ -105,22 +105,50 @@ export function startTraining(root: HTMLElement, onExit: () => void): () => void
     f.dataset.kind = kind;
   };
 
-  const finish = () => {
+  const why = el("coach-why") as HTMLDetailsElement;
+  const setWhy = (text: string | undefined) => {
+    why.hidden = !text;
+    why.open = false;
+    (why.querySelector("p") as HTMLElement).textContent = text ?? "";
+  };
+
+  // between steps: no lesson running, so the machine just keeps feeding gently
+  const idle = (lesson: string) => {
     current = null;
-    coach.dataset.lesson = "done";
+    coach.dataset.lesson = lesson;
+    coach.dataset.done = "false";
     sim.setLesson("targets");
     targetMark.visible = false;
-    setText("Training done", "You're ready to play", "Your settings stay as they are. Practise against the bot or play a friend from the lobby.");
+    setWhy(undefined);
+  };
+
+  const finish = () => {
+    idle("done");
+    setText(
+      trainingComplete(done) ? "Training complete" : "Training over",
+      "You're ready to play",
+      "Auto-move stays on in games (switch it under the camera preview). Practise against the bot or play a friend from the lobby.",
+    );
+    const extras: [string, string, () => void][] = [];
+    if (!done.has("movement")) extras.push(["Practise moving", "movement", () => begin("movement")]);
+    if (!done.has("targets")) extras.push(["Try targets", "targets", () => begin("targets")]);
+    buttons([["Go to the lobby", "lobby", onExit, true], ...extras]);
+  };
+
+  // user's call: auto-move is on throughout; moving yourself is offered, not required
+  const offerMovement = () => {
+    idle("offer");
+    setText("Optional", MOVEMENT_OFFER.question, "Training is complete either way. The drill starts you near the sideline and sends the ball to the other side.");
     buttons([
-      ["Go to the lobby", "lobby", onExit, true],
-      ...(done.has("targets") ? [] : ([["Try targets (optional)", "targets", () => begin("targets")]] as [string, string, () => void][])),
+      [MOVEMENT_OFFER.yes, "yes", () => begin("movement"), true],
+      [MOVEMENT_OFFER.no, "no", finish],
     ]);
   };
 
   const nextAfter = (id: LessonId) => {
-    const i = REQUIRED.findIndex((l) => l.id === id);
-    const next = i >= 0 ? REQUIRED.slice(i + 1).find((l) => !done.has(l.id)) : undefined;
-    if (next) begin(next.id);
+    const after = afterLesson(id);
+    if ("next" in after) begin(after.next);
+    else if ("offer" in after) offerMovement();
     else finish();
   };
 
@@ -128,15 +156,18 @@ export function startTraining(root: HTMLElement, onExit: () => void): () => void
     clearTimeout(nextTimer);
     current = id;
     const lesson = LESSONS.find((l) => l.id === id)!;
-    const n = REQUIRED.findIndex((l) => l.id === id);
-    setText(n >= 0 ? `Step ${n + 1} of ${REQUIRED.length}` : "Extra", lesson.title, lesson.how);
+    const n = REQUIRED_LESSONS.findIndex((l) => l.id === id);
+    setText(n >= 0 ? `Step ${n + 1} of ${REQUIRED_LESSONS.length}` : "Extra", lesson.title, lesson.how);
+    setWhy(lesson.why);
     coach.dataset.lesson = id;
     coach.dataset.done = "false";
     const events = sim.setLesson(id);
+    // only this step's feeds count (for the e2e)
+    canvas.dataset.trainFeed = "";
     link.emitTraining(events);
     targetMark.visible = false;
     buttons([
-      ["Skip step", "next", () => (id === "targets" ? finish() : nextAfter(id))],
+      ["Skip step", "next", () => nextAfter(id)],
       ["Skip training", "skip", onExit],
     ]);
   };
@@ -150,7 +181,7 @@ export function startTraining(root: HTMLElement, onExit: () => void): () => void
         coach.dataset.done = "true";
         canvas.dataset.trainDone = [...done].join(",");
         const id = e.lesson;
-        nextTimer = window.setTimeout(() => (id === "targets" ? finish() : nextAfter(id)), NEXT_MS);
+        nextTimer = window.setTimeout(() => nextAfter(id), NEXT_MS);
       }
     } else if (e.type === "shot") {
       // the words now; "landed in/out" and the mark once it lands

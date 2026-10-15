@@ -3,25 +3,26 @@
 // without a browser. The browser flow (both viewports, keys, fake webcam, no
 // network) is e2e/training.e2e.ts.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { LESSONS, lessonProgress, missFeedback, shotFeedback } from "../client/games/tennis/lessons.ts";
+import { LESSONS, MOVEMENT_OFFER, REQUIRED_LESSONS, afterLesson, lessonProgress, missFeedback, shotFeedback, trainingComplete } from "../client/games/tennis/lessons.ts";
 import type { LessonId, ShotReport } from "../client/games/tennis/lessons.ts";
 import { LocalLink } from "../client/games/tennis/local-link.ts";
 import { TrainingSim } from "../client/games/tennis/training-sim.ts";
-import { DRILLS, feedBall, machineFeed } from "../shared/games/tennis/machine.ts";
+import { DRILLS, feedBall, machineFeed, movementStart } from "../shared/games/tennis/machine.ts";
 import type { Drill } from "../shared/games/tennis/machine.ts";
-import { COURT, createState, missReason, naturalKind, predictContact, step, timingAim } from "../shared/games/tennis/sim.ts";
+import { COURT, PLAYER, createState, missReason, naturalKind, predictContact, step, timingAim } from "../shared/games/tennis/sim.ts";
 import type { Hand, Level, SwingKind, TennisSnapshot, TennisState } from "../shared/games/tennis/sim.ts";
 import type { ServerMsg } from "../shared/protocol.ts";
 
 const HANDS: Hand[] = ["right", "left"];
 
 /** A receiver (seat 0) in `mode` standing in the middle, with the machine's feed `i` of `drill` on its way. */
-function fed(seed: number, drill: Drill, i: number, hand: Hand, mode: "auto" | "tilt" = "auto"): TennisState {
+function fed(seed: number, drill: Drill, i: number, hand: Hand, mode: "auto" | "tilt" = "auto", playerX = 0): TennisState {
   const s = createState(seed, { moveMode: mode, endless: true });
+  s.players[0] = { x: playerX, targetX: playerX };
   s.phase = "rally";
   s.lastHitter = 1;
   s.shots = 1;
-  s.ball = feedBall(machineFeed(seed, drill, i, hand));
+  s.ball = feedBall(machineFeed(seed, drill, i, hand, playerX));
   return s;
 }
 
@@ -76,19 +77,42 @@ describe("ball machine", () => {
     }
   }
 
-  it("movement drill: wide balls a player left in the middle can't reach, but can by walking", () => {
-    for (let i = 0; i < 20; i++) {
-      const still = fed(3, "movement", i, "right", "tilt");
-      toContact(still);
-      expect(missReason(still, 0), `feed ${i} out of reach from the middle`).toBe("reach");
+  // docs/reaction-time.md: from the middle every in-bounds ball is reachable
+  // even in auto, so a movement drill that starts there teaches nothing. It
+  // starts the player out of position, near one sideline, and feeds the other.
+  it("movement drill: starts you near a sideline and feeds the far side, so standing still always misses and running reaches it", () => {
+    for (const hand of HANDS) {
+      for (let i = 0; i < 30; i++) {
+        const start = movementStart(i);
+        expect(Math.abs(start), "near a sideline").toBeGreaterThanOrEqual(3.5);
+        const at = (mode: "auto" | "tilt") => {
+          const s = fed(3, "movement", i, hand, mode, start);
+          return s;
+        };
+        const still = at("tilt");
+        const cross = predictContact(still, 0)!.ball.x;
+        expect(Math.sign(cross), `feed ${i} goes to the other side`).toBe(-Math.sign(start));
+        expect(Math.abs(cross - start) - PLAYER.reach, `feed ${i} needs a run of over 3 m`).toBeGreaterThan(3);
+        toContact(still);
+        expect(missReason(still, 0), `feed ${i}: standing still misses`).toBe("reach");
 
-      // walk toward where it crosses the baseline (A/D, or leaning)
-      const walk = fed(3, "movement", i, "right", "tilt");
-      const cross = predictContact(walk, 0)!.ball.x;
-      step(walk, [{ t: "move", seat: 0, x: cross - Math.sign(cross) * 0.6 }]);
-      toContact(walk);
-      expect(missReason(walk, 0), `feed ${i} reachable by moving`).toBeNull();
+        // run (A/D or a lean, 5 m/s) to 0.6 m short of where it crosses
+        const run = at("tilt");
+        step(run, [{ t: "move", seat: 0, x: cross + Math.sign(start) * 0.6 }]);
+        toContact(run);
+        expect(missReason(run, 0), `feed ${i} reachable by running`).toBeNull();
+      }
     }
+  });
+
+  it("movement drill: from there, auto-move's slower walk misses some balls a full-speed run reaches", () => {
+    let autoMissed = 0;
+    for (let i = 0; i < 30; i++) {
+      const s = fed(3, "movement", i, "right", "auto", movementStart(i));
+      toContact(s);
+      if (missReason(s, 0) !== null) autoMissed++;
+    }
+    expect(autoMissed).toBeGreaterThan(0);
   });
 
   it("timing drill: early pulls the ball cross-court and late sends it down the line, both landing in", () => {
@@ -158,9 +182,50 @@ describe("lesson steps", () => {
   const landed = { x: 0, z: -6, in: true, net: false };
   const out = { x: 6, z: -6, in: false, net: false };
 
-  it("the camera check comes first, then forehand, backhand, timing, strength and movement; targets are optional", () => {
+  it("the camera check comes first, then forehand, backhand, timing and strength; movement and targets are optional", () => {
     expect(LESSONS.map((l) => l.id)).toEqual(["swing", "forehand", "backhand", "timing", "strength", "movement", "targets"]);
-    expect(LESSONS.filter((l) => l.optional).map((l) => l.id)).toEqual(["targets"]);
+    expect(REQUIRED_LESSONS.map((l) => l.id)).toEqual(["swing", "forehand", "backhand", "timing", "strength"]);
+    expect(LESSONS.filter((l) => l.optional).map((l) => l.id)).toEqual(["movement", "targets"]);
+  });
+
+  it("after the required steps, training is complete and offers moving yourself (auto-move is on)", () => {
+    const all = new Set<LessonId>(REQUIRED_LESSONS.map((l) => l.id));
+    expect(afterLesson("swing")).toEqual({ next: "forehand" });
+    // a skipped step is not done, but the next one still follows
+    expect(afterLesson("forehand")).toEqual({ next: "backhand" });
+    expect(afterLesson("strength")).toEqual({ offer: "movement" });
+    // the offer comes once: after movement (or a no thanks) it is the end
+    expect(afterLesson("movement")).toEqual({ finished: true });
+    expect(afterLesson("targets")).toEqual({ finished: true });
+    expect(trainingComplete(all)).toBe(true);
+    expect(trainingComplete(new Set<LessonId>(["swing", "forehand", "backhand", "timing"]))).toBe(false);
+    expect(MOVEMENT_OFFER.question).toBe("Auto-move is on. Want to practise moving yourself?");
+    expect(MOVEMENT_OFFER.yes).toBe("Yes");
+    expect(MOVEMENT_OFFER.no).toBe("No thanks");
+  });
+
+  it("timing, strength and movement each explain why in two or three short sentences, consistent with docs/reaction-time.md", () => {
+    const sentences = (s: string) => s.split(/(?<=[.!?])\s+/).filter(Boolean).length;
+    for (const id of ["timing", "strength", "movement"] as const) {
+      const why = LESSONS.find((l) => l.id === id)!.why!;
+      expect(why, id).toBeTruthy();
+      expect(sentences(why), `${id}: ${why}`).toBeGreaterThanOrEqual(2);
+      expect(sentences(why), `${id}: ${why}`).toBeLessThanOrEqual(3);
+      expect(why.length, id).toBeLessThan(330);
+    }
+    const timing = LESSONS.find((l) => l.id === "timing")!.why!;
+    expect(timing).toMatch(/early/i);
+    expect(timing).toMatch(/late/i);
+    expect(timing).toMatch(/run/i);
+    // the measured flight times (docs/reaction-time.md): 1.98, 1.57, 1.22 s
+    const strength = LESSONS.find((l) => l.id === "strength")!.why!;
+    expect(strength).toMatch(/2\.0 s/);
+    expect(strength).toMatch(/1\.6 s/);
+    expect(strength).toMatch(/1\.2 s/);
+    const movement = LESSONS.find((l) => l.id === "movement")!.why!;
+    expect(movement).toMatch(/out of position/i);
+    // "Not measured yet" in the doc: no claims about human reaction delay
+    for (const l of LESSONS) expect(l.why ?? "").not.toMatch(/reaction delay|milliseconds|ms\b/i);
   });
 
   const cases: [LessonId, { swings?: number; shots?: ShotReport[]; targets?: number }, boolean][] = [
@@ -171,8 +236,11 @@ describe("lesson steps", () => {
     ["forehand", { shots: [shot({ kind: "forehand" }), shot({ kind: "forehand" })] }, true],
     ["backhand", { shots: [shot({ kind: "backhand" }), shot({ kind: "backhand" })] }, true],
     ["timing", { shots: [shot({ timing: "early", landing: landed })] }, false],
-    ["timing", { shots: [shot({ timing: "early", landing: landed }), shot({ timing: "late", landing: out })] }, false],
-    ["timing", { shots: [shot({ timing: "early", landing: landed }), shot({ timing: "late", landing: landed })] }, true],
+    ["timing", { shots: [shot({ timing: "early", landing: landed }), shot({ timing: "late", landing: landed })] }, false],
+    ["timing", { shots: [shot({ timing: "early", landing: landed }), shot({ timing: "ontime", landing: landed }), shot({ timing: "late", landing: out })] }, false],
+    ["timing", { shots: [shot({ timing: "early", landing: landed }), shot({ timing: "ontime", landing: landed }), shot({ timing: "late", landing: landed })] }, true],
+    // aimed by hand doesn't count: the step is about timing
+    ["timing", { shots: [shot({ timing: "early", landing: landed }), shot({ timing: null, landing: landed }), shot({ timing: "late", landing: landed })] }, false],
     ["strength", { shots: [shot({ level: 0, landing: landed }), shot({ level: 1, landing: landed })] }, false],
     ["strength", { shots: [shot({ level: 0, landing: landed }), shot({ level: 2, landing: landed })] }, true],
     ["movement", { shots: [] }, false],
@@ -248,21 +316,26 @@ describe("training runs locally: lesson steps complete from real input", () => {
     }
 
     t.sim.setLesson("timing");
-    for (let k = 0; k < 6 && !done.includes("timing"); k++) swingAt(t, k % 2 ? "late" : "early");
+    const thirds = ["early", "ontime", "late"] as const;
+    for (let k = 0; k < 9 && !done.includes("timing"); k++) swingAt(t, thirds[k % 3]);
     expect(done).toContain("timing");
 
     t.sim.setLesson("strength");
     for (let k = 0; k < 6 && !done.includes("strength"); k++) swingAt(t, "ontime", k % 2 ? 2 : 0);
     expect(done).toContain("strength");
+    // auto-move stayed on through every required step
+    expect(t.sim.state.movement[0].mode).toBe("auto");
 
-    // movement: auto-move is off for this step, whatever the player asked for
+    // the optional movement drill (only on "Yes"): auto-move is off, and each
+    // ball starts you near a sideline; running there with moves hits it
     t.sim.setLesson("movement");
     t.link.send({ t: "mode", mode: "auto" });
     t.link.advance(3);
     expect(t.sim.state.movement[0].mode).toBe("tilt");
     for (let k = 0; k < 6 && !done.includes("movement"); k++) {
-      // wait for the feed, then walk to where it will cross the baseline, as A/D or a lean would
       for (let n = 0; n < 300 && !(t.sim.state.phase === "rally" && t.sim.state.lastHitter === 1); n++) t.link.advance(1);
+      // out of position when the ball leaves the machine
+      expect(Math.abs(t.sim.state.players[0].x)).toBeGreaterThan(3);
       const c = predictContact(t.sim.state, 0);
       if (c) t.link.send({ t: "move", x: c.ball.x - Math.sign(c.ball.x) * 0.6 });
       swingAt(t, "ontime");

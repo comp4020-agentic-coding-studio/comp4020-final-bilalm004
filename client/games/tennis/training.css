@@ -40,6 +40,26 @@
   color: #4ade80;
 }
 
+.coach-why {
+  margin: 0 0 0.3rem;
+}
+
+.coach-why[hidden] {
+  display: none;
+}
+
+.coach-why summary {
+  cursor: pointer;
+  color: var(--accent);
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+}
+
+.coach-why p {
+  color: var(--text);
+}
+
 .coach-progress {
   color: var(--accent);
   font-weight: 700;

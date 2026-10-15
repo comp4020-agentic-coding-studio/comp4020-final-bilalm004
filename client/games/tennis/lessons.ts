@@ -18,6 +18,8 @@ export interface Lesson {
   drill: Drill;
   /** Can be left out without the training counting as unfinished. */
   optional?: boolean;
+  /** Why it matters, in two or three short sentences (behind a "Why?" toggle). Figures from docs/reaction-time.md. */
+  why?: string;
 }
 
 export const LESSONS: readonly Lesson[] = [
@@ -41,21 +43,25 @@ export const LESSONS: readonly Lesson[] = [
   },
   {
     id: "timing",
-    title: "Timing sets the direction",
-    how: "Watch the meter: hit early to pull it cross-court, late to send it down the line. Land one of each in.",
+    title: "When you swing sets where it lands",
+    how: "Watch the meter and the three arcs: early pulls the ball cross-court, on time sends it straight, late sends it down the line (a backhand mirrors it). Land one of each in; the ring marks where each one landed.",
     drill: "timing",
+    why: "Swinging early, on time or late is how you aim left and right. Putting the ball away from your opponent makes them run for it. A player who has to run is late and out of position for the next ball.",
   },
   {
     id: "strength",
-    title: "Strength sets the depth",
+    title: "Strength sets speed and depth",
     how: "A light swing lands short, a hard one deep. Land a light and a hard one in. Keys: 1 light, 3 hard.",
     drill: "timing",
+    why: "A faster swing sends the ball faster and deeper. From your hit to their baseline takes about 2.0 s light, 1.6 s medium and 1.2 s hard, and that is all the time they have to get there. Hard aimed wide is the riskiest: it can go out.",
   },
   {
     id: "movement",
     title: "Moving yourself",
-    how: "Auto-move is off for this step and the balls go wide. Hold A / D (or ◀ ▶). Camera: pick Move: lean under the preview and shift your shoulders.",
+    how: "Auto-move is off and you start near the sideline; the ball goes to the other side. Hold A / D (or ◀ ▶) to run. Camera: pick Move: lean under the preview and shift your shoulders.",
     drill: "movement",
+    optional: true,
+    why: "The point of the game is to leave your opponent out of position and out of time, so mix where and how hard you hit. From the middle you reach every ball that lands in, even with auto-move. From near the sideline, a hard ball to the far side is the one you can miss.",
   },
   {
     id: "targets",
@@ -157,9 +163,10 @@ export function lessonProgress(id: LessonId, rec: LessonRecord): Progress {
     case "backhand":
       return count(rec.shots.filter((r) => r.kind === "backhand").length, 2, "Backhands hit");
     case "timing": {
-      const early = rec.shots.some((r) => r.timing === "early" && landedIn(r));
-      const late = rec.shots.some((r) => r.timing === "late" && landedIn(r));
-      return { done: early && late, text: `Early in: ${early ? "yes" : "not yet"} · Late in: ${late ? "yes" : "not yet"}` };
+      const got = (t: Timing) => rec.shots.some((r) => r.timing === t && landedIn(r));
+      const [early, ontime, late] = [got("early"), got("ontime"), got("late")];
+      const yn = (b: boolean) => (b ? "yes" : "not yet");
+      return { done: early && ontime && late, text: `Early in: ${yn(early)} · On time in: ${yn(ontime)} · Late in: ${yn(late)}` };
     }
     case "strength": {
       const light = rec.shots.some((r) => r.level === 0 && landedIn(r));
@@ -171,6 +178,33 @@ export function lessonProgress(id: LessonId, rec: LessonRecord): Progress {
     case "targets":
       return count(rec.targets, 3, "Targets hit");
   }
+}
+
+/** The steps training needs; auto-move stays on through all of them. */
+export const REQUIRED_LESSONS: readonly Lesson[] = LESSONS.filter((l) => !l.optional);
+
+/** Training is complete once every required step is done (movement and targets are extras). */
+export function trainingComplete(done: ReadonlySet<LessonId>): boolean {
+  return REQUIRED_LESSONS.every((l) => done.has(l.id));
+}
+
+/** Asked once, after the required steps (user's call: movement is optional). */
+export const MOVEMENT_OFFER = {
+  question: "Auto-move is on. Want to practise moving yourself?",
+  yes: "Yes",
+  no: "No thanks",
+} as const;
+
+/**
+ * What follows step `id`: the next required step (a skipped one is not
+ * repeated), then the movement offer once the required steps are behind
+ * you, then the end. Movement and targets are optional and end the run.
+ */
+export function afterLesson(id: LessonId):{ next: LessonId } | { offer: "movement" } | { finished: true } {
+  const i = REQUIRED_LESSONS.findIndex((l) => l.id === id);
+  if (i < 0) return { finished: true };
+  const next = REQUIRED_LESSONS[i + 1];
+  return next ? { next: next.id } : { offer: "movement" };
 }
 
 /** The optional step's circles on the machine's half, one lit at a time. */

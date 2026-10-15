@@ -111,16 +111,33 @@ test("training with keys: every step completes from real key presses, feedback i
     await untilDone(page, () => swingIn(page, "ontime"));
   }
 
-  // 4: timing to landing position: one early and one late, each landing in
+  // 4: when you swing sets where it lands: one early, one on time, one late, each landing in
   await expect(coach).toHaveAttribute("data-lesson", "timing");
-  await untilDone(page, (k) => swingIn(page, k % 2 ? "late" : "early"), 12);
+  // a short "Why?", closed until asked for
+  const why = coach.locator("details.coach-why");
+  await expect(why).toBeVisible();
+  await expect(why).not.toHaveAttribute("open", "");
+  await why.locator("summary").click();
+  await expect(why).toContainText(/run/i);
+  await coachClear(page);
+  await why.locator("summary").click();
+  const thirds = ["early", "ontime", "late"] as const;
+  await untilDone(page, (k) => swingIn(page, thirds[k % 3]), 15);
+  // the last landing, in words and marked on the court
   await expect.poll(() => canvas.getAttribute("data-train-landing")).toMatch(/^-?\d+\.\d+,-\d+\.\d+,(in|out|net)$/);
 
   // 5: strength: a light (1) and a hard (3), each landing in
   await expect(coach).toHaveAttribute("data-lesson", "strength");
+  await expect(why).toBeVisible();
   await untilDone(page, (k) => swingIn(page, "ontime", k % 2 ? "Digit3" : "Digit1"), 12);
 
-  // 6: movement: auto-move is off and the balls go wide; walk there with A / D
+  // required steps done: auto-move is on, moving yourself is offered, not required
+  await expect(coach.getByRole("heading", { name: "Auto-move is on. Want to practise moving yourself?" })).toBeVisible();
+  await expect(coach.getByRole("button", { name: "No thanks" })).toBeVisible();
+  await coachClear(page);
+  await coach.getByRole("button", { name: "Yes", exact: true }).click();
+
+  // optional movement: auto-move off, you start near the sideline and the ball goes to the other side
   await expect(coach).toHaveAttribute("data-lesson", "movement");
   await untilDone(
     page,
@@ -128,6 +145,7 @@ test("training with keys: every step completes from real key presses, feedback i
       await expect.poll(() => canvas.getAttribute("data-train-feed"), { timeout: 20_000 }).not.toBe("");
       const [cross, me] = (await canvas.getAttribute("data-train-feed"))!.split(",").map(Number);
       await canvas.evaluate((c) => (c.dataset.trainFeed = ""));
+      expect(Math.abs(me), "out of position when the ball is fed").toBeGreaterThan(3);
       // seat 0 is viewed from behind, so screen right (D) is world +x
       const dir = cross > me ? 1 : -1;
       // hold until about 0.6 m short of where it crosses, so it is in reach and on one side
@@ -144,6 +162,7 @@ test("training with keys: every step completes from real key presses, feedback i
 
   // done: off to the lobby, or the optional targets
   await expect(coach.getByRole("heading", { name: /ready to play/i })).toBeVisible();
+  await expect(coach.locator(".coach-step")).toHaveText("Training complete");
   await expect(coach.getByRole("button", { name: /try targets/i })).toBeVisible();
   await coachClear(page);
   await coach.getByRole("button", { name: /go to the lobby/i }).click();
@@ -210,6 +229,19 @@ test("Train is a Tennis option on the home screen, and Skip training goes straig
   expect(await noHorizontalScroll(page)).toBe(true);
   await options.getByRole("button", { name: "Train" }).click();
   await expect(page).toHaveURL(/#\/train$/);
+  const coach = page.locator(".coach");
+  // no room, so no ready panel
+  await expect(page.locator(".ready-panel")).toBeHidden();
+  // "No thanks" to moving yourself ends training without the movement drill
+  await coach.getByRole("button", { name: /keys and mouse/i }).click();
+  for (let i = 0; i < 5; i++) await coach.getByRole("button", { name: "Skip step" }).click();
+  await coach.getByRole("button", { name: "No thanks" }).click();
+  await expect(coach.getByRole("heading", { name: /ready to play/i })).toBeVisible();
+  await expect(coach.getByRole("button", { name: "Practise moving" })).toBeVisible();
+  await coachClear(page);
+  await coach.getByRole("button", { name: /go to the lobby/i }).click();
+  await expect(page.getByRole("button", { name: /practice vs bot/i })).toBeVisible();
+  await page.getByRole("button", { name: "Train" }).click();
   await page.locator(".coach").getByRole("button", { name: "Skip training" }).click();
   await expect(page.getByRole("button", { name: /practice vs bot/i })).toBeVisible();
   await expect(page.locator("canvas")).toHaveCount(0);
