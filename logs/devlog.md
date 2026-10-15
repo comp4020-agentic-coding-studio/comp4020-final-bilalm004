@@ -938,3 +938,10 @@ the format of the entries below (see CLAUDE.md, Docs).
 - **Tests:** two unit tests (a paused sim feeds nothing until released; a saved lean doesn't carry in), both failing on the old behaviour (checked); an e2e that sets a saved lean, checks the card is centred, no ball in 3 s, concise (under 30 words), then Start moves the coach aside and no tilt mode is sent. The existing training e2e tests now use Set up camera and Start.
 - **Verification:** pnpm check 344/344 exit 0 and pnpm e2e --workers=1 80/80 exit 0; I looked at the setup and started screens at both viewports.
 - **Open:** the saved-lean cause is unconfirmed; on mobile the coach goes across the top, not the side.
+
+## 2026-10-15 19:03 AEDT | decision | Swing-strength calibration per stroke added to the parked list
+
+- **Decided by:** user (wants it on the list to discuss later); Claude (the wording and the notes on how strength works today).
+- **Situation:** The user asked for a calibration of light, medium and hard swings, for forehand and backhand, to be noted down for later.
+- **Outcome:** Added to tasks/parked.md with what the code does now (one pair of speed thresholds for both strokes, 5 and 9 by default, with hysteresis; calibration only behind Advanced) and the questions to settle first. No code changed and nothing is built.
+- **Why:** The stance indicator and the grip work made it clear the two strokes may not read the same, but that needs a real-webcam look before any design.

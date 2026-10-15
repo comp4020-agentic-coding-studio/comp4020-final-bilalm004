@@ -36,3 +36,23 @@ demo accounts). Task 4 settled two parts: a match where both seats share a
 token is stored unrated, and a held seat goes to the next tab with that token
 to join. A "replace the old tab" or "reject the second tab" policy, and
 renaming (with length and character limits), can come with accounts.
+
+## Calibrate light / medium / hard, for forehand and backhand (to discuss)
+The user wants to discuss a per-player calibration of the three swing strengths,
+separately for forehand and backhand. Not started; the questions come first.
+What exists today (read from the code, not tested with a real webcam):
+- A swing's strength comes from peak wrist speed in shoulder-widths per second,
+  split at two thresholds (default 5 and 9, `DEFAULT_SWING` in `pose.ts`), with a
+  10% hysteresis so a steady swinger doesn't flicker between levels.
+- One pair of thresholds serves both strokes, and `thresholdsFrom` can set it
+  from a player's own light, medium and hard swings.
+- That tuning was taken out of the default setup (it measures in shoulder-widths,
+  so distance and body size are already normalised); it is only behind "Calibrate
+  manually" in the camera panel's Advanced section.
+- The sim treats the strokes differently: a backhand hard is 16.5 m/s against 18
+  for a forehand (`STROKES` in `sim.ts`).
+Questions for the discussion: does a backhand swing read slower than a forehand
+for the same effort (grip and arm path differ, so the same thresholds may be
+wrong for one of them)? Is a quick guided calibration (three swings per stroke)
+worth the setup time, or should it learn from play? What does the player see
+while doing it, and can keys and touch skip it as they do now?
