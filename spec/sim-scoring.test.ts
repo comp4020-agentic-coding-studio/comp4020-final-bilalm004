@@ -212,13 +212,49 @@ describe("tiebreak, sets and the end of the match", () => {
     expect(tennisFrom(s).finished()).toMatchObject({ score: [2, 0], format: "bestOfThree" });
   });
 
+  it("practice keeps the winning score on the board until the next serve, then starts a fresh match (user's playtest)", () => {
+    const s = createState(3, { endless: true });
+    // seat 0 is one point from winning the set: 5-0 in games, 40-0
+    s.score = { ...s.score, games: [5, 0], points: [3, 0], server: 0, gameServer: 0 } as typeof s.score;
+    s.phase = "rally";
+    s.lastHitter = 0;
+    s.shots = 4;
+    s.bounces = 0;
+    s.ball = { x: 0, y: 1.2, z: -3, vx: 0, vy: 0, vz: -14 };
+    let wonAt = -1;
+    let boardAtWin: typeof s.score | null = null;
+    for (let t = 0; t < 300 && wonAt < 0; t++) {
+      for (const e of step(s, [])) if (e.type === "point") { wonAt = t; boardAtWin = JSON.parse(JSON.stringify(s.score)); }
+    }
+    expect(wonAt, "the winning point was played").toBeGreaterThanOrEqual(0);
+    // the board still shows the finished match (a winner, the set won), not 0-0-0
+    expect(boardAtWin!.winner, "the won match is still on the board").toBe(0);
+    expect(boardAtWin!.sets[0] + boardAtWin!.sets[1] + boardAtWin!.games[0] + boardAtWin!.games[1], "with its score").toBeGreaterThan(0);
+    // and it stays for the pause before the next serve (about a second), not for one tick
+    for (let t = 0; t < 40; t++) step(s, []);
+    expect(s.score.winner, "still showing after 40 ticks").toBe(0);
+    // then the next serve starts a fresh match at 0-0
+    for (let t = 0; t < 200 && s.score.winner !== null; t++) step(s, []);
+    expect(s.score.winner).toBeNull();
+    expect(s.score.sets).toEqual([0, 0]);
+    expect(s.score.games).toEqual([0, 0]);
+    expect(s.score.points).toEqual([0, 0]);
+    expect(s.phase).not.toBe("over");
+  });
+
   it("practice never ends: a won match starts a fresh one", () => {
     const s = createState(3, { endless: true });
     for (let i = 0; i < 24; i++) playPoint(s, 0);
     expect(s.phase).toBe("serve");
     expect(s.winner).toBeNull();
+    // the won match is on the board through the pause, and it is not "over": the game carries on
+    expect(s.score.winner).toBe(0);
+    expect(tennisFrom(s).finished()).toBeNull();
+    // then the next serve starts a fresh match
+    for (let t = 0; t < 200 && s.score.winner !== null; t++) step(s, []);
     expect(s.score.sets).toEqual([0, 0]);
     expect(s.score.games).toEqual([0, 0]);
+    expect(s.winner).toBeNull();
     expect(tennisFrom(s).finished()).toBeNull();
   });
 

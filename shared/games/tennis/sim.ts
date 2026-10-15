@@ -348,8 +348,10 @@ function awardPoint(s: TennisState, winner: Seat, reason: PointReason, ev: Tenni
       s.winner = s.score.winner;
       return;
     }
-    // practice plays on: a new match, served by whoever would serve next
-    s.score = createScore(s.score.format, otherSide(s.score.gameServer));
+    // Practice plays on, but the won score stays on the board through the pause
+    // before the next serve (the serve countdown); the fresh match starts when
+    // that serve is about to launch (see the serve phase in step). Resetting it
+    // here sent the board straight from the final score to 0-0 (user's playtest).
   }
   resetServe(s);
 }
@@ -556,7 +558,15 @@ export function step(s: TennisState, inputs: readonly TennisInput[]): TennisEven
   if (s.phase === "serve") {
     // the ball waits in front of the server, within the middle of the court
     s.ball.x = clamp(s.players[s.server].x, -COURT.halfW * 0.6, COURT.halfW * 0.6);
-    if (s.phaseTick >= COURT.serveDelayTicks) launchServe(s);
+    if (s.phaseTick >= COURT.serveDelayTicks) {
+      // a practice match was won: the board has shown it through the pause, now a fresh one, served by whoever serves next
+      if (s.endless && s.score.winner !== null) {
+        s.score = createScore(s.score.format, otherSide(s.score.gameServer));
+        s.server = s.score.server;
+        s.ball.z = seatZ(s.server);
+      }
+      launchServe(s);
+    }
     return ev;
   }
 
