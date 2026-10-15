@@ -31,6 +31,8 @@ One flat list. Start at the top; a task only waits on the ones named.
 | 16 | [Point-scored banner and reaction effects](16-point-scored-banner.md) | - | Opus |
 
 Not numbered:
+- [handoff.md](handoff.md): where things stand and what to pick up first (read
+  this at the start of a new session).
 - [parked.md](parked.md): accounts and profiles, room codes, double-swing cooldown.
 - [yours-process-evidence.md](yours-process-evidence.md): your own work. Agents
   don't edit `PROCESS.md` or the reflections; they only append devlog entries.
