@@ -16,7 +16,7 @@ import type { RoomInfo, ServerMsg } from "../../../shared/protocol.ts";
 import { createCameraInput } from "../../input/camera/index.ts";
 import { shownAim } from "../../input/camera/pose.ts";
 import { createPlayInput } from "../../input/keyboard.ts";
-import type { Connection } from "../../net/socket.ts";
+import type { GameLink } from "../../net/link.ts";
 import { makePlayer } from "./character.ts";
 import { createScoreBar } from "./score-bar.ts";
 import { createTrajectoryAid } from "./aid.ts";
@@ -56,7 +56,17 @@ function hitSound(level: Level): void {
   }
 }
 
-export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo, onLeave: () => void): () => void {
+/** Training (task 5) runs this same view against a LocalLink; these are its only differences. */
+export interface ViewOptions {
+  /** No room: hide the room code, the invite and the score (training keeps none). */
+  local?: boolean;
+  /** Text for the leave button. */
+  leaveLabel?: string;
+  /** The scene once built, for training's landing mark and targets. */
+  onScene?(scene: Scene): void;
+}
+
+export function startTennis(root: HTMLElement, conn: GameLink, info: RoomInfo, onLeave: () => void, opts: ViewOptions = {}): () => void {
   const view = document.createElement("div");
   view.className = "game";
   view.innerHTML = `
@@ -83,6 +93,11 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
     </div>
   `;
   root.replaceChildren(view);
+  if (opts.local) {
+    view.classList.add("local");
+    for (const el of view.querySelectorAll<HTMLElement>(".score, .code, [data-action=copy]")) el.hidden = true;
+  }
+  if (opts.leaveLabel) (view.querySelector("[data-action=leave]") as HTMLElement).textContent = opts.leaveLabel;
 
   const canvas = view.querySelector("canvas") as HTMLCanvasElement;
   const scoreBar = createScoreBar(view.querySelector(".score") as HTMLElement);
@@ -114,6 +129,7 @@ export function startTennis(root: HTMLElement, conn: Connection, info: RoomInfo,
   scene.add(reticle);
   const fx = createShotFx(scene);
   const aid = createTrajectoryAid(view, scene, canvas);
+  opts.onScene?.(scene);
   let bounceMarks = 0;
 
   const camera = new PerspectiveCamera(55, 1, 0.1, 120);

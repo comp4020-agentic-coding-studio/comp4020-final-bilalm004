@@ -1,4 +1,6 @@
 export interface MenuActions {
+  /** Training (task 5): runs in the page against a ball machine, no server. */
+  onTrain(): void;
   onPractice(): void;
   onCreate(): void;
   onJoin(code: string): void;
@@ -201,6 +203,7 @@ const POINTER = `<svg class="pointer" viewBox="0 0 32 32" aria-hidden="true" foc
 /** Only the selected sport (Tennis) has options; tennis keeps the actions it always had. */
 const tennisOptions = `
   <button class="pill pill--primary" data-action="practice">Practice vs bot</button>
+  <button class="pill" data-action="train">Train</button>
   <button class="pill" data-action="create">Create a room</button>
   <form class="join">
     <label for="code" hidden>Room code</label>
@@ -333,6 +336,7 @@ export function renderMenu(
   });
 
   menu.querySelector("[data-action=practice]")?.addEventListener("click", actions.onPractice);
+  menu.querySelector("[data-action=train]")?.addEventListener("click", actions.onTrain);
   menu.querySelector("[data-action=create]")?.addEventListener("click", actions.onCreate);
   menu.querySelector("[data-action=guest]")?.addEventListener("click", actions.onPlayAsGuest);
   menu.querySelectorAll<HTMLButtonElement>("[data-demo]").forEach((b) => {

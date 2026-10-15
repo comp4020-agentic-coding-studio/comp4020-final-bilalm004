@@ -1,0 +1,112 @@
+/* Training's coach panel (task 5). Narrow screens: across the top, under the
+   HUD, with the camera dock pushed below it. Wide screens: top left, above
+   the shot label (which sits at 46% on the left) and clear of the dock on
+   the right. Never over the aid meter, the stroke label or the buttons
+   (e2e/training.e2e.ts). */
+
+.coach {
+  position: absolute;
+  /* under the HUD, measured (training.ts): it wraps to more rows with the camera on */
+  top: calc(var(--hud-bottom, 5rem) + 0.25rem);
+  left: 0.75rem;
+  right: 0.75rem;
+  max-height: 13rem;
+  overflow-y: auto;
+  padding: 0.6rem 0.8rem;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg) 90%, transparent);
+  box-shadow: 0 6px 24px #0007;
+  font-size: 0.9rem;
+}
+
+.coach p,
+.coach h2 {
+  margin: 0 0 0.3rem;
+}
+
+.coach-step {
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.coach-title {
+  font-size: 1.1rem;
+}
+
+.coach[data-done="true"] .coach-title::after {
+  content: " ✓";
+  color: #4ade80;
+}
+
+.coach-progress {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.coach-progress:empty,
+.coach-feedback:empty {
+  display: none;
+}
+
+.coach-feedback {
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  background: #ffffff14;
+  font-weight: 700;
+}
+
+.coach-feedback[data-kind="miss"] {
+  color: #ffb4a8;
+}
+
+.coach-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+}
+
+.coach-row button {
+  min-height: 44px;
+}
+
+/* the camera's setup panel (safety notice first) takes the stage while open */
+.game.calibrating .coach {
+  display: none;
+}
+
+/* no room: no score, room code or invite (their own rules set display) */
+.game.local .hud .score,
+.game.local .hud .code {
+  display: none;
+}
+
+/* "Get ready…" between feeds means nothing here; the coach says what to do */
+.game.training .hud .status {
+  display: none;
+}
+
+/* the camera dock goes under the coach on a phone */
+.game.training .cam-dock {
+  top: calc(var(--coach-bottom, 20rem) + 0.4rem);
+  /* smaller on a phone so the dock ends above the aid meter */
+  width: min(220px, 40vw);
+}
+
+@media (min-width: 900px) and (min-aspect-ratio: 4/3) {
+  .coach {
+    left: max(1rem, 3vw);
+    right: auto;
+    width: min(24rem, 30vw);
+    /* ends above the shot label, which starts at 46% */
+    max-height: calc(46vh - 7rem);
+    font-size: 0.95rem;
+  }
+
+  .game.training .cam-dock {
+    top: calc(var(--hud-bottom, 5rem) + 0.25rem);
+    width: min(300px, 46vw);
+  }
+}

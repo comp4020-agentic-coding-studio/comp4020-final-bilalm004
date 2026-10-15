@@ -822,3 +822,10 @@ the format of the entries below (see CLAUDE.md, Docs).
   - Agent choice, not yet confirmed: keyboard and touch players start in auto-move.
   - The user's browser still reportedly shows old code on 5173 (see the dev-server entry); unresolved.
 - **Why:** Each branch was green alone; only the merged tree shows cross-branch breaks, as the task 1 and 3 merge did.
+
+## 2026-10-15 05:48 AEDT | decision | Training mode (task 5) runs the view against a local link, not a server room
+
+- **Decided by:** agent (the shape); user (local, no server room, no score, reuse the view).
+- **Situation:** Training must reuse the tennis renderer (`view.ts`) but send nothing to the server. `startTennis` took a `Connection` and only ever called `on()` and `send()`.
+- **Decision:** A `GameLink` interface (`client/net/link.ts`: `on`, `send`) that `Connection` already satisfies, and a `LocalLink` (`client/games/tennis/local-link.ts`) that answers the same messages from a `TrainingSim` stepped at 60 Hz in the page: swings, moves, mode and pause go into the shared sim, and it emits `state`, `swing` rulings and `presence` as a room would. `view.ts` changes only its parameter type plus an options argument (hide the room code and invite, and hand the scene to training for the landing mark and target zones). The ball machine is seat 1: `shared/games/tennis/machine.ts` feeds balls from the far baseline with the sim's own `launch()` (now exported), deterministic from a seed and the feed number.
+- **Why:** One renderer, one sim; the network layer is the only thing swapped, so what training teaches is exactly what a room does. Pure pieces (feeds, swing reports, feedback text, lesson progress) can be unit tested without a browser.

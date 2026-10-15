@@ -378,8 +378,9 @@ function launchServe(s: TennisState): void {
  * speed is solved from T. If that arc would pass the net lower than
  * NET_CLEARANCE, T is lengthened (the ball slowed and lofted) just enough.
  * Exact for the tick integration in moveBall, not only the continuous arc.
+ * Exported for training's ball machine (machine.ts), which feeds with it.
  */
-function launch(b: Ball, seat: Seat, dirX: number, kind: SwingKind, level: Level, lift = 0): void {
+export function launch(b: Ball, seat: Seat, dirX: number, kind: SwingKind, level: Level, lift = 0): void {
   const stroke = STROKES[kind][level];
   const depth = clamp(stroke.depth + clamp(lift, -1, 1) * LIFT_DEPTH, MIN_DEPTH, MAX_DEPTH);
   // distance to the net and to the landing spot, along the court
