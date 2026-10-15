@@ -65,6 +65,8 @@ export interface ViewOptions {
   leaveLabel?: string;
   /** The scene once built, for training's landing mark and targets. */
   onScene?(scene: Scene): void;
+  /** The camera input once built, so training's movement drill can switch it to lean (and back). */
+  onCamera?(camera: { setMoveMode(mode: "auto" | "tilt"): void }): void;
   /** Start in this movement mode, ignoring the saved one (training: auto, whatever was saved). */
   startMoveMode?: "auto" | "tilt";
   /** While this returns true, un-pausing is ignored (training's setup holds the machine until Start). */
@@ -323,6 +325,7 @@ export function startTennis(root: HTMLElement, conn: GameLink, info: RoomInfo, o
       updateHud();
     },
   }, opts.startMoveMode);
+  opts.onCamera?.(cameraInput);
   // The server applies the movement mode to this seat; it starts each new
   // occupant in auto, so say ours now and again after every (re)join.
   const sendMode = () => {

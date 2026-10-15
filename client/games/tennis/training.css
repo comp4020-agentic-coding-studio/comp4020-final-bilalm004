@@ -41,23 +41,13 @@
 }
 
 .coach-why {
-  margin: 0 0 0.3rem;
+  margin: 0 0 0.4rem;
+  color: var(--muted);
+  font-size: 0.9em;
 }
 
 .coach-why[hidden] {
   display: none;
-}
-
-.coach-why summary {
-  cursor: pointer;
-  color: var(--accent);
-  min-height: 32px;
-  display: flex;
-  align-items: center;
-}
-
-.coach-why p {
-  color: var(--text);
 }
 
 .coach-progress {
@@ -153,6 +143,12 @@
 
 .game.training.setup .coach-row {
   justify-content: center;
+}
+
+/* the camera's own panel (safety notice, hand choice, check) is above the dim
+   layer and the coach card, or it is washed out and can't be clicked */
+.game.training .camera-panel {
+  z-index: 6;
 }
 
 /* the held court is dimmed behind the card, so the card is what you read */

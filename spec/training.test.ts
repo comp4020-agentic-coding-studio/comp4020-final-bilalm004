@@ -3,7 +3,7 @@
 // without a browser. The browser flow (both viewports, keys, fake webcam, no
 // network) is e2e/training.e2e.ts.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { LESSONS, MOVEMENT_OFFER, REQUIRED_LESSONS, afterLesson, lessonProgress, missFeedback, shotFeedback, trainingComplete } from "../client/games/tennis/lessons.ts";
+import { LESSONS, MOVEMENT_OFFER, REQUIRED_LESSONS, afterLesson, lessonProgress, missFeedback, shotFeedback, trainingComplete, wantedShot, wrongShotNote } from "../client/games/tennis/lessons.ts";
 import type { LessonId, ShotReport } from "../client/games/tennis/lessons.ts";
 import { LocalLink } from "../client/games/tennis/local-link.ts";
 import { TrainingSim } from "../client/games/tennis/training-sim.ts";
@@ -199,7 +199,7 @@ describe("lesson steps", () => {
     expect(afterLesson("targets")).toEqual({ finished: true });
     expect(trainingComplete(all)).toBe(true);
     expect(trainingComplete(new Set<LessonId>(["swing", "forehand", "backhand", "timing"]))).toBe(false);
-    expect(MOVEMENT_OFFER.question).toBe("Auto-move is on. Want to practise moving yourself?");
+    expect(MOVEMENT_OFFER.question).toBe("Practise moving yourself?");
     expect(MOVEMENT_OFFER.yes).toBe("Yes");
     expect(MOVEMENT_OFFER.no).toBe("No thanks");
   });
@@ -242,7 +242,9 @@ describe("lesson steps", () => {
     // aimed by hand doesn't count: the step is about timing
     ["timing", { shots: [shot({ timing: "early", landing: landed }), shot({ timing: null, landing: landed }), shot({ timing: "late", landing: landed })] }, false],
     ["strength", { shots: [shot({ level: 0, landing: landed }), shot({ level: 1, landing: landed })] }, false],
-    ["strength", { shots: [shot({ level: 0, landing: landed }), shot({ level: 2, landing: landed })] }, true],
+    // light and hard with no medium between is not enough: light, medium, then hard, in that order
+    ["strength", { shots: [shot({ level: 0, landing: landed }), shot({ level: 2, landing: landed })] }, false],
+    ["strength", { shots: [shot({ level: 0, landing: landed }), shot({ level: 1, landing: landed }), shot({ level: 2, landing: landed })] }, true],
     ["movement", { shots: [] }, false],
     ["movement", { shots: [shot({})] }, true],
     ["targets", { targets: 2 }, false],
@@ -315,13 +317,14 @@ describe("training runs locally: lesson steps complete from real input", () => {
       expect(done, lesson).toContain(lesson);
     }
 
+    // the timing and strength steps ask for one shot at a time, in order
     t.sim.setLesson("timing");
     const thirds = ["early", "ontime", "late"] as const;
-    for (let k = 0; k < 9 && !done.includes("timing"); k++) swingAt(t, thirds[k % 3]);
+    for (let k = 0; k < 12 && !done.includes("timing"); k++) swingAt(t, thirds[Math.min(2, Math.floor(k / 2))]);
     expect(done).toContain("timing");
 
     t.sim.setLesson("strength");
-    for (let k = 0; k < 6 && !done.includes("strength"); k++) swingAt(t, "ontime", k % 2 ? 2 : 0);
+    for (let k = 0; k < 12 && !done.includes("strength"); k++) swingAt(t, "ontime", (k < 4 ? 0 : k < 8 ? 1 : 2) as Level);
     expect(done).toContain("strength");
     // auto-move stayed on through every required step
     expect(t.sim.state.movement[0].mode).toBe("auto");
@@ -334,8 +337,6 @@ describe("training runs locally: lesson steps complete from real input", () => {
     expect(t.sim.state.movement[0].mode).toBe("tilt");
     for (let k = 0; k < 6 && !done.includes("movement"); k++) {
       for (let n = 0; n < 300 && !(t.sim.state.phase === "rally" && t.sim.state.lastHitter === 1); n++) t.link.advance(1);
-      // out of position when the ball leaves the machine
-      expect(Math.abs(t.sim.state.players[0].x)).toBeGreaterThan(3);
       const c = predictContact(t.sim.state, 0);
       if (c) t.link.send({ t: "move", x: c.ball.x - Math.sign(c.ball.x) * 0.6 });
       swingAt(t, "ontime");
@@ -447,6 +448,197 @@ describe("training starts paused and in auto-move (user's playtest)", () => {
     link.send({ t: "pause", paused: false });
     link.advance(5);
     expect(sim.state.movement[0].mode).toBe("auto");
+  });
+});
+
+describe("the movement drill never teleports the player (user's playtest)", () => {
+  it("through a whole drill the player never moves further in one tick than a run allows", () => {
+    const sim = new TrainingSim(8, "right");
+    const link = new LocalLink(sim);
+    link.send({ t: "mode", mode: "auto" });
+    sim.setLesson("movement");
+    const MAX_STEP = PLAYER.speed / 60 + 1e-9;
+    let last = sim.state.players[0].x;
+    let biggest = 0;
+    let feeds = 0;
+    link.onTraining((e) => {
+      if (e.type === "feed") feeds++;
+    });
+    for (let tick = 0; tick < 60 * 60; tick++) {
+      link.advance(1);
+      const x = sim.state.players[0].x;
+      biggest = Math.max(biggest, Math.abs(x - last));
+      last = x;
+    }
+    expect(feeds, "the drill fed several balls").toBeGreaterThan(3);
+    expect(biggest, "largest single-tick jump, metres").toBeLessThanOrEqual(MAX_STEP);
+  });
+});
+
+describe("a step opened right after a real hit still feeds when Ready is pressed (user's playtest, centred steps)", () => {
+  it("hit a ball, hold and open the next step, release: the machine feeds again and the ball flies", () => {
+    for (const next of ["backhand", "timing", "strength"] as const) {
+      const t = linked(21);
+      let feeds = 0;
+      t.link.onTraining((e) => {
+        if (e.type === "feed") feeds++;
+      });
+      // play step 1 for real: wait for a ball and hit it
+      t.link.send({ t: "pause", paused: false });
+      expect(swingAt(t, "ontime"), "the first hit connects").toBe("hit");
+      // the page: the step completes, the next opens centred and held
+      t.link.send({ t: "pause", paused: true });
+      t.sim.setLesson(next);
+      t.link.advance(120);
+      const heldFeeds = feeds;
+      // Ready: released
+      t.link.send({ t: "pause", paused: false });
+      t.link.advance(60 * 6);
+      expect(feeds - heldFeeds, `${next}: fed again after Ready`).toBeGreaterThan(0);
+      // and the ball actually flies toward the player (not stuck waiting in the machine)
+      let flew = false;
+      for (let n = 0; n < 60 * 6 && !flew; n++) {
+        t.link.advance(1);
+        flew = t.sim.state.phase === "rally" && t.sim.state.ball.vz > 0;
+      }
+      expect(flew, `${next}: a ball flies after Ready`).toBe(true);
+    }
+  });
+});
+
+describe("the timing and strength steps ask for one shot at a time and only that shot counts (user's playtest)", () => {
+  const shot = (r: Partial<ShotReport>): ShotReport => ({ timing: "ontime", kind: "forehand", hand: "right", level: 1, dirX: 0, landing: { x: 0, z: -6, in: true, net: false }, ...r });
+  const rec = (shots: ShotReport[]) => ({ swings: shots.length, shots, targets: 0 });
+
+  it("timing asks for early, then on time, then late", () => {
+    expect(wantedShot("timing", rec([]))).toEqual({ timing: "early" });
+    expect(wantedShot("timing", rec([shot({ timing: "early" })]))).toEqual({ timing: "ontime" });
+    expect(wantedShot("timing", rec([shot({ timing: "early" }), shot({ timing: "ontime" })]))).toEqual({ timing: "late" });
+    expect(wantedShot("timing", rec([shot({ timing: "early" }), shot({ timing: "ontime" }), shot({ timing: "late" })]))).toBeNull();
+  });
+
+  it("an on-time hit when early is asked for does not count", () => {
+    const wrong = rec([shot({ timing: "ontime" }), shot({ timing: "late" })]);
+    expect(lessonProgress("timing", wrong).done).toBe(false);
+    expect(wantedShot("timing", wrong)).toEqual({ timing: "early" });
+    // and the progress says what is wanted, not a table of "not yet"
+    expect(lessonProgress("timing", wrong).text).toMatch(/early/i);
+  });
+
+  it("an early hit that lands out does not count either; it has to land in", () => {
+    expect(wantedShot("timing", rec([shot({ timing: "early", landing: { x: 6, z: -6, in: false, net: false } })]))).toEqual({ timing: "early" });
+  });
+
+  it("they count in order: early, then on time, then late completes it", () => {
+    const all = rec([shot({ timing: "early" }), shot({ timing: "ontime" }), shot({ timing: "late" })]);
+    expect(lessonProgress("timing", all).done).toBe(true);
+    // late first, then the rest: late is not counted ahead of its turn
+    const outOfOrder = rec([shot({ timing: "late" }), shot({ timing: "ontime" }), shot({ timing: "early" })]);
+    expect(lessonProgress("timing", outOfOrder).done).toBe(false);
+  });
+
+  it("strength asks for a light shot, then a medium one, then a hard one, each landing in", () => {
+    expect(wantedShot("strength", rec([]))).toEqual({ level: 0 });
+    expect(wantedShot("strength", rec([shot({ level: 0 })]))).toEqual({ level: 1 });
+    expect(wantedShot("strength", rec([shot({ level: 0 }), shot({ level: 1 })]))).toEqual({ level: 2 });
+    expect(wantedShot("strength", rec([shot({ level: 0 }), shot({ level: 1 }), shot({ level: 2 })]))).toBeNull();
+    // a hard one before the medium one, or a medium one first, does not complete it
+    expect(lessonProgress("strength", rec([shot({ level: 1 }), shot({ level: 2 })])).done).toBe(false);
+    expect(lessonProgress("strength", rec([shot({ level: 0 }), shot({ level: 2 })])).done).toBe(false);
+    expect(lessonProgress("strength", rec([shot({ level: 0 }), shot({ level: 1 }), shot({ level: 2 })])).done).toBe(true);
+  });
+});
+
+describe("the movement drill doesn't fight the player's own control (user's playtest)", () => {
+  it("while the machine waits, holding a move key is not pulled back to the start", () => {
+    const sim = new TrainingSim(8, "right");
+    const link = new LocalLink(sim);
+    sim.setLesson("movement");
+    link.send({ t: "mode", mode: "auto" });
+    link.advance(60 * 3);
+    // the player takes over and runs toward the middle while the next ball waits
+    const x0 = sim.state.players[0].x;
+    const target = x0 > 0 ? -3 : 3;
+    for (let n = 0; n < 30; n++) {
+      link.send({ t: "move", x: target });
+      link.advance(1);
+    }
+    const x1 = sim.state.players[0].x;
+    // they moved toward their own target (a pull back to the start would keep them near x0)
+    expect(Math.sign(x1 - x0), "moved the way the player asked").toBe(Math.sign(target - x0));
+    expect(Math.abs(x1 - x0), "and by a real distance").toBeGreaterThan(1);
+  });
+});
+
+describe("the movement drill never moves the player; it feeds away from where they stand (user's playtest)", () => {
+  it("with no input at all the player stays exactly where they are for the whole drill", () => {
+    const sim = new TrainingSim(8, "right");
+    const link = new LocalLink(sim);
+    sim.setLesson("movement");
+    link.send({ t: "mode", mode: "auto" });
+    link.advance(5);
+    const x0 = sim.state.players[0].x;
+    link.advance(60 * 30);
+    expect(sim.state.players[0].x, "the drill pulled the player somewhere").toBe(x0);
+  });
+
+  it("each ball is fed to the side away from the player, wherever they are standing", () => {
+    for (const standAt of [-4, -2, 2, 4]) {
+      const sim = new TrainingSim(8, "right");
+      const link = new LocalLink(sim);
+      sim.setLesson("movement");
+      sim.state.players[0] = { x: standAt, targetX: standAt };
+      let cross: number | null = null;
+      link.onTraining((e) => {
+        if (e.type === "feed" && cross === null) cross = e.crossX;
+      });
+      link.advance(60 * 6);
+      expect(cross, `fed a ball with the player at ${standAt}`).not.toBeNull();
+      expect(Math.sign(cross!), `the ball goes away from ${standAt}`).toBe(-Math.sign(standAt));
+    }
+  });
+});
+
+describe("a hit that isn't the one asked for says so, instead of silently not counting (user's playtest)", () => {
+  const hit = (r: Partial<ShotReport>): ShotReport => ({ timing: "ontime", kind: "forehand", hand: "right", level: 1, dirX: 0, landing: { x: 0, z: -6, in: true, net: false }, ...r });
+
+  it("an on-time hit when early is asked for is told what was wanted", () => {
+    expect(wrongShotNote("timing", hit({ timing: "ontime" }), { timing: "early" })).toBe("That was on time. We want early.");
+    expect(wrongShotNote("timing", hit({ timing: "late" }), { timing: "ontime" })).toBe("That was late. We want on time.");
+  });
+
+  it("the right shot gets no note", () => {
+    expect(wrongShotNote("timing", hit({ timing: "early" }), { timing: "early" })).toBeNull();
+  });
+
+  it("the right timing that lands out says to land it in", () => {
+    expect(wrongShotNote("timing", hit({ timing: "early", landing: { x: 6, z: -6, in: false, net: false } }), { timing: "early" })).toBe("Right timing, but it went out. Land it in.");
+  });
+
+  it("strength says which swing was wanted", () => {
+    expect(wrongShotNote("strength", hit({ level: 1 }), { level: 0 })).toBe("That was medium. We want light.");
+    expect(wrongShotNote("strength", hit({ level: 0 }), { level: 2 })).toBe("That was light. We want hard.");
+  });
+
+  it("a step that asks for nothing in particular gives no note", () => {
+    expect(wrongShotNote("timing", hit({}), null)).toBeNull();
+  });
+});
+
+describe("the sim says what a step wanted when a shot was hit (for the note shown to the player)", () => {
+  it("an on-time hit in the timing step was asked to be early; an early hit then wants on time", () => {
+    const t = linked(31);
+    t.sim.setLesson("timing");
+    const wanted: unknown[] = [];
+    t.link.onTraining((e) => {
+      if (e.type === "landed") wanted.push(t.sim.wantedBeforeLast());
+    });
+    expect(swingAt(t, "ontime")).toBe("hit");
+    expect(wanted[0], "early was asked for first").toEqual({ timing: "early" });
+    expect(swingAt(t, "early")).toBe("hit");
+    // the early shot counted (if it landed in), so on time is asked for next
+    const last = wanted.at(-1);
+    expect(last).toEqual({ timing: "early" });
   });
 });
 

@@ -2,7 +2,7 @@ import { DRILLS, feedBall, machineFeed, movementStart } from "../../../shared/ga
 import type { Drill } from "../../../shared/games/tennis/machine.ts";
 import { COURT, createState, predictContact, seatZ, step } from "../../../shared/games/tennis/sim.ts";
 import type { Hand, Level, Miss, MoveMode, SwingKind, TennisEvent, TennisInput, TennisState } from "../../../shared/games/tennis/sim.ts";
-import { LESSONS, TARGETS, TARGET_RADIUS, lessonProgress } from "./lessons.ts";
+import { LESSONS, TARGETS, TARGET_RADIUS, lessonProgress, wantedShot } from "./lessons.ts";
 import type { LessonId, LessonRecord, ShotReport } from "./lessons.ts";
 import { litTiming, windowPosition } from "./trajectory-aid.ts";
 
@@ -77,6 +77,16 @@ export class TrainingSim {
     return this.lesson;
   }
 
+  /**
+   * What the current step asked for at the moment the last recorded shot was
+   * hit: the shot wanted from the record without that shot. Null for steps
+   * that ask for nothing in particular.
+   */
+  wantedBeforeLast(): ReturnType<typeof wantedShot> {
+    if (this.lesson !== "timing" && this.lesson !== "strength") return null;
+    return wantedShot(this.lesson, { ...this.record, shots: this.record.shots.slice(0, -1) });
+  }
+
   /** The lit target circle, during the optional targets step. */
   currentTarget(): { x: number; z: number } | null {
     return this.lesson === "targets" ? TARGETS[this.target] : null;
@@ -127,12 +137,8 @@ export class TrainingSim {
 
   private feed(out: TrainingEvent[]): void {
     const s = this.state;
-    if (this.drill === "movement") {
-      // out of position before each ball, or there is nothing to run for
-      // (docs/reaction-time.md: from the middle auto reaches every ball)
-      const x = movementStart(this.feeds);
-      s.players[0] = { x, targetX: x };
-    }
+    // (the movement drill's start position is reached by walking, in tick(); it
+    // is never set here, or the player would teleport side to side)
     const f = machineFeed(this.seed, this.drill, this.feeds++, this.hand, s.players[0].x);
     this.machineX = f.x;
     s.ball = feedBall(f);
@@ -159,6 +165,10 @@ export class TrainingSim {
 
     const want: MoveMode = this.lesson === "movement" ? "tilt" : this.chosenMode;
     if (s.movement[0].mode !== want) inputs.unshift({ t: "mode", seat: 0, mode: want });
+    // The movement drill never moves the player: it feeds each ball to the side
+    // away from where they are standing (machineFeed), so they have to run. A
+    // forced walk back to a start position sent them from sideline to sideline
+    // and fought their own keys (user's playtest).
     if (s.phase === "serve" && s.phaseTick >= FEED_GAP_TICKS) this.feed(out);
     s.players[1] = { x: this.machineX, targetX: this.machineX };
 

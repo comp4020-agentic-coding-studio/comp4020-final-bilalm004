@@ -42,11 +42,43 @@ function traffic(page: Page) {
   return { frames, requests };
 }
 
+/**
+ * Each step opens centred with the machine held (stage "present"); Ready
+ * slides it to the side and starts the ball machine for that step.
+ */
+async function ready(page: Page): Promise<void> {
+  const coach = page.locator(".coach");
+  await expect(coach).toHaveAttribute("data-stage", "present");
+  // centred while held: it slides back to the middle (0.35 s), so poll until it is there
+  const v = page.viewportSize()!;
+  await expect
+    .poll(async () => { const b = (await coach.boundingBox())!; return Math.abs(b.x + b.width / 2 - v.width / 2); }, { timeout: 3_000, message: "centred sideways" })
+    .toBeLessThan(8);
+  await coach.getByRole("button", { name: "Ready" }).click();
+  await expect(coach).toHaveAttribute("data-stage", "play");
+  // let it slide to its side before anything measures it
+  await page.waitForTimeout(500);
+}
+
 /** Waits for the ball to be in `third` of the hit window, then presses `key`: a swing aimed by timing. */
 async function swingIn(page: Page, third: "early" | "ontime" | "late", key = "Space"): Promise<void> {
   const meter = page.locator(".aid-meter");
-  await expect.poll(() => meter.getAttribute("data-lit"), { timeout: 20_000, intervals: [10] }).toBe(third);
+  // the meter is lit for one third of each ball's flight; on a loaded machine
+  // the third you want can take several balls to come round
+  await expect.poll(() => meter.getAttribute("data-lit"), { timeout: 45_000, intervals: [10] }).toBe(third);
   await page.keyboard.press(key);
+}
+
+/** What the card asks for right now ("Now: swing early, and land it in"), read as a player would. */
+async function asked(page: Page): Promise<{ third?: "early" | "ontime" | "late"; key?: string }> {
+  const text = (await page.locator(".coach-progress").innerText()).toLowerCase();
+  if (text.includes("swing early")) return { third: "early" };
+  if (text.includes("swing on time")) return { third: "ontime" };
+  if (text.includes("swing late")) return { third: "late" };
+  if (text.includes("light swing")) return { key: "Digit1" };
+  if (text.includes("medium swing")) return { key: "Digit2" };
+  if (text.includes("hard swing")) return { key: "Digit3" };
+  return {};
 }
 
 /** Swings until the coach marks the current step done (a missed ball just feeds another). */
@@ -55,11 +87,21 @@ async function untilDone(page: Page, swing: (k: number) => Promise<void>, tries 
   const lesson = await coach.getAttribute("data-lesson");
   // done, or already moved on to the next step (it does so by itself)
   const over = async () => (await coach.getAttribute("data-done")) === "true" || (await coach.getAttribute("data-lesson")) !== lesson;
+  const canvas = page.locator("canvas");
   for (let k = 0; k < tries; k++) {
     if (await over()) break;
+    const landing = await canvas.getAttribute("data-train-landing");
     await swing(k);
-    // let the shot land (or the miss pass) before the next feed
-    await page.waitForTimeout(700);
+    // A hit only counts once it lands, about 1.4 s after the swing for a deep
+    // ball; until then the card still asks for the same shot. Wait for the
+    // landing (or, after a miss, the next ball, or the step ending) before
+    // reading the card again. A fixed wait read it too early, asked for the
+    // same third again just as the step finished, and then the next step held
+    // the machine, so no ball came (found by the investigation agent: not a game bug).
+    await canvas.evaluate((c) => (c.dataset.trainFeed = ""));
+    await expect
+      .poll(async () => (await over()) || (await canvas.getAttribute("data-train-landing")) !== landing || ((await canvas.getAttribute("data-train-feed")) ?? "") !== "", { timeout: 10_000 })
+      .toBe(true);
   }
   expect(await over(), `${lesson} completes`).toBe(true);
   // then wait for the coach to move on, so the next step starts clean
@@ -88,10 +130,12 @@ test("training with keys: every step completes from real key presses, feedback i
   await expect.poll(async () => Number(await canvas.getAttribute("data-frames"))).toBeGreaterThan(5);
   await coachClear(page);
 
+  await coach.getByRole("button", { name: /keys only/i }).click();
   await coach.getByRole("button", { name: "Start" }).click();
 
   // 1: any swing
   await expect(coach).toHaveAttribute("data-lesson", "swing");
+  await ready(page);
   await page.keyboard.press("Space");
   await expect(coach).toHaveAttribute("data-done", "true");
   await expect(coach).toHaveAttribute("data-lesson", "forehand", { timeout: 5_000 });
@@ -99,6 +143,7 @@ test("training with keys: every step completes from real key presses, feedback i
   // 2, 3: forehand and backhand, fed to that side; keys pick the stroke that suits the ball
   for (const lesson of ["forehand", "backhand"]) {
     await expect(coach).toHaveAttribute("data-lesson", lesson);
+    await ready(page);
     await swingIn(page, "ontime");
     // the feedback is in words, then where it landed. Which third the key
     // lands in can slip under a starved frame rate; the words for each third
@@ -113,39 +158,56 @@ test("training with keys: every step completes from real key presses, feedback i
 
   // 4: when you swing sets where it lands: one early, one on time, one late, each landing in
   await expect(coach).toHaveAttribute("data-lesson", "timing");
-  // a short "Why?", closed until asked for
-  const why = coach.locator("details.coach-why");
+  // a short "why", shown plainly with the step (no drop-down)
+  const why = coach.locator(".coach-why");
   await expect(why).toBeVisible();
-  await expect(why).not.toHaveAttribute("open", "");
-  await why.locator("summary").click();
+  await expect(coach.locator("details, summary")).toHaveCount(0);
   await expect(why).toContainText(/run/i);
+  await ready(page);
   await coachClear(page);
-  await why.locator("summary").click();
-  const thirds = ["early", "ontime", "late"] as const;
-  await untilDone(page, (k) => swingIn(page, thirds[k % 3]), 15);
+  // it asks for early, then on time, then late: swing what it asks for
+  await untilDone(
+    page,
+    async () => {
+      const want = await asked(page);
+      await swingIn(page, want.third ?? "ontime");
+    },
+    20,
+  );
   // the last landing, in words and marked on the court
   await expect.poll(() => canvas.getAttribute("data-train-landing")).toMatch(/^-?\d+\.\d+,-\d+\.\d+,(in|out|net)$/);
 
-  // 5: strength: a light (1) and a hard (3), each landing in
+  // 5: strength: a light (1), a medium (2) and a hard (3), in that order, each landing in
   await expect(coach).toHaveAttribute("data-lesson", "strength");
   await expect(why).toBeVisible();
-  await untilDone(page, (k) => swingIn(page, "ontime", k % 2 ? "Digit3" : "Digit1"), 12);
+  await ready(page);
+  // light, then medium, then hard: swing what it asks for
+  await untilDone(
+    page,
+    async () => {
+      const want = await asked(page);
+      await swingIn(page, "ontime", want.key ?? "Digit2");
+    },
+    20,
+  );
 
   // required steps done: auto-move is on, moving yourself is offered, not required
-  await expect(coach.getByRole("heading", { name: "Auto-move is on. Want to practise moving yourself?" })).toBeVisible();
+  await expect(coach.getByRole("heading", { name: "Practise moving yourself?" })).toBeVisible();
   await expect(coach.getByRole("button", { name: "No thanks" })).toBeVisible();
-  await coachClear(page);
   await coach.getByRole("button", { name: "Yes", exact: true }).click();
 
-  // optional movement: auto-move off, you start near the sideline and the ball goes to the other side
+  // optional movement: auto-move off; each ball goes to the side away from where you stand, so it takes a run
   await expect(coach).toHaveAttribute("data-lesson", "movement");
+  await ready(page);
   await untilDone(
     page,
     async () => {
       await expect.poll(() => canvas.getAttribute("data-train-feed"), { timeout: 20_000 }).not.toBe("");
       const [cross, me] = (await canvas.getAttribute("data-train-feed"))!.split(",").map(Number);
       await canvas.evaluate((c) => (c.dataset.trainFeed = ""));
-      expect(Math.abs(me), "out of position when the ball is fed").toBeGreaterThan(3);
+      // the drill never moves you; it feeds to the side away from where you stand, so it takes a run
+      expect(Math.sign(cross) * Math.sign(me) <= 0 || Math.abs(me) < 0.5, "the ball goes away from where you stand").toBe(true);
+      expect(Math.abs(cross - me), "and takes a run").toBeGreaterThan(1.4);
       // seat 0 is viewed from behind, so screen right (D) is world +x
       const dir = cross > me ? 1 : -1;
       // hold until about 0.6 m short of where it crosses, so it is in reach and on one side
@@ -204,11 +266,10 @@ test("training with the camera: safety notice and hand choice first, the camera 
   await expect(coach).toBeVisible();
   await expect(coach).toHaveAttribute("data-lesson", "start");
   await coach.getByRole("button", { name: "Start" }).click();
-  // the coach slides from the centre to its side (0.35 s)
-  await page.waitForTimeout(600);
 
-  // first step: a swing, the camera check; the timing meter and the camera dock are up
+  // first step: a swing, the camera check. It opens centred with the machine held, then Ready sends it to the side
   await expect(coach).toHaveAttribute("data-lesson", "swing");
+  await ready(page);
   await expect(page.locator(".cam-dock video")).toBeVisible();
   await expect(page.getByRole("img", { name: /timing meter/i })).toBeVisible();
   await coachClear(page);
@@ -241,6 +302,7 @@ test("Train is a Tennis option on the home screen, and Skip training goes straig
   // no room, so no ready panel
   await expect(page.locator(".ready-panel")).toBeHidden();
   // "No thanks" to moving yourself ends training without the movement drill
+  await coach.getByRole("button", { name: /keys only/i }).click();
   await coach.getByRole("button", { name: "Start" }).click();
   for (let i = 0; i < 5; i++) await coach.getByRole("button", { name: "Skip step" }).click();
   await coach.getByRole("button", { name: "No thanks" }).click();
@@ -274,6 +336,7 @@ test("training waits: centred and paused, no ball and auto-move until Start, the
   expect(b.x).toBeGreaterThanOrEqual(0);
   expect(b.x + b.width).toBeLessThanOrEqual(v.width);
 
+  await coach.getByRole("button", { name: /keys only/i }).click();
   // held: no ball is fed or in flight while the player sets up
   await page.waitForTimeout(3000);
   expect(Number((await canvas.getAttribute("data-trail")) ?? 0)).toBe(0);
@@ -281,9 +344,14 @@ test("training waits: centred and paused, no ball and auto-move until Start, the
   // and it is concise
   expect(((await coach.innerText()).match(/\S+/g) ?? []).length).toBeLessThan(30);
 
-  // Start releases the machine and moves the coach to the side
+  // Start opens step 1 centred, still held: no ball yet
   await coach.getByRole("button", { name: "Start" }).click();
   await expect(coach).toHaveAttribute("data-lesson", "swing");
+  await expect(coach).toHaveAttribute("data-stage", "present");
+  await page.waitForTimeout(2500);
+  expect(Number((await canvas.getAttribute("data-trail")) ?? 0)).toBe(0);
+  // Ready releases the machine and moves the coach to the side
+  await ready(page);
   await expect.poll(async () => Number((await canvas.getAttribute("data-trail")) ?? 0), { timeout: 20_000 }).toBeGreaterThan(0);
   // it has left the centre: to the left side on a wide screen, across the top on a phone
   await expect.poll(async () => (await coach.boundingBox())!.y + (await coach.boundingBox())!.height / 2, { timeout: 5_000 }).toBeLessThan(v.height * 0.4);
@@ -291,5 +359,110 @@ test("training waits: centred and paused, no ball and auto-move until Start, the
   if (v.width >= 900) expect(after.x + after.width / 2).toBeLessThan(v.width / 2);
   // the saved lean did not carry in: the mode sent to the sim is auto
   expect(sent.filter((m) => m.includes('"mode"') && m.includes("tilt"))).toEqual([]);
+});
+
+test("Set up camera opens a panel you can actually use (nothing dims or covers it), and Start waits for the camera", async ({ page }) => {
+  await page.goto("/#/train");
+  const coach = page.locator(".coach");
+  await expect(coach).toHaveAttribute("data-lesson", "start");
+  // before the camera is set up (or Keys only is chosen), Start can't be pressed
+  await expect(coach.getByRole("button", { name: "Start" })).toBeDisabled();
+
+  await coach.getByRole("button", { name: /set up camera/i }).click();
+  const panel = page.getByRole("dialog", { name: /camera setup/i });
+  await expect(panel.getByRole("heading", { name: /before you start/i })).toBeVisible();
+  // the panel is the thing on top at its own centre, so a real click lands on it
+  const top = await page.evaluate(() => {
+    const el = document.querySelector(".camera-panel") as HTMLElement;
+    const r = el.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+    return !!hit && el.contains(hit);
+  });
+  expect(top, "something covers the camera panel").toBe(true);
+  // and its buttons are plainly clickable (no force): a covering dim layer would refuse these
+  await panel.getByRole("button", { name: "Got it" }).click();
+  await expect(panel.getByRole("button", { name: /start camera/i })).toBeVisible();
+  await panel.getByRole("button", { name: /start camera/i }).click();
+  await expect(panel.getByRole("heading", { name: /can we see you/i })).toBeVisible({ timeout: 40_000 });
+  await panel.getByRole("button", { name: "Skip check" }).click();
+  await expect(panel).toBeHidden();
+
+  // the camera is set up: now Start can be pressed
+  await expect(coach.getByRole("button", { name: "Start" })).toBeEnabled();
+});
+
+test("Keys only is the no-camera way through: it does what the camera step does, and never requires a camera", async ({ page }) => {
+  await page.goto("/#/train");
+  const coach = page.locator(".coach");
+  await expect(coach.getByRole("button", { name: "Start" })).toBeDisabled();
+  await coach.getByRole("button", { name: /keys only/i }).click();
+  await expect(coach.getByRole("button", { name: "Start" })).toBeEnabled();
+  await coach.getByRole("button", { name: "Start" }).click();
+  await expect(coach).toHaveAttribute("data-lesson", "swing");
+});
+
+test("every step opens centred with the machine held, and goes to the side only on Ready; each is short", async ({ page }) => {
+  await page.goto("/#/train");
+  const coach = page.locator(".coach");
+  const canvas = page.locator("canvas");
+  await coach.getByRole("button", { name: /keys only/i }).click();
+  await coach.getByRole("button", { name: "Start" }).click();
+  const v = page.viewportSize()!;
+  const centredAndHeld = async (lesson: string) => {
+    await expect(coach).toHaveAttribute("data-lesson", lesson);
+    await expect(coach).toHaveAttribute("data-stage", "present");
+    // it slides to the middle, so poll until it is there (sideways and up and down)
+    const offCentre = async () => {
+      const b = (await coach.boundingBox())!;
+      return Math.max(Math.abs(b.x + b.width / 2 - v.width / 2), Math.abs(b.y + b.height / 2 - v.height / 2) - v.height * 0.1);
+    };
+    await expect.poll(offCentre, { timeout: 3_000, message: `${lesson}: centred` }).toBeLessThan(8);
+    // quick to read: the title and the one instruction line, not a paragraph
+    const words = ((await coach.locator(".coach-title, .coach-how").allInnerTexts()).join(" ").match(/\S+/g) ?? []).length;
+    expect(words, `${lesson}: words to read`).toBeLessThanOrEqual(20);
+    // held: the machine feeds nothing while it is being read (the old shot's
+    // trail can still fade out, so the feed itself is what is checked)
+    await canvas.evaluate((c) => (c.dataset.trainFeed = ""));
+    await page.waitForTimeout(2500);
+    expect((await canvas.getAttribute("data-train-feed")) ?? "", `${lesson}: no ball fed while held`).toBe("");
+  };
+  // the first step, then skip along: forehand and backhand open the same way
+  for (const lesson of ["swing", "forehand", "backhand"]) {
+    await centredAndHeld(lesson);
+    // Ready: off to the side, and the ball machine starts
+    await coach.getByRole("button", { name: "Ready" }).click();
+    await expect(coach).toHaveAttribute("data-stage", "play");
+    await page.waitForTimeout(500);
+    const side = (await coach.boundingBox())!;
+    if (v.width >= 900) expect(side.x + side.width / 2, `${lesson}: moved to the left side`).toBeLessThan(v.width / 2);
+    else expect(side.y + side.height / 2, `${lesson}: moved up under the HUD`).toBeLessThan(v.height * 0.4);
+    await coach.getByRole("button", { name: "Skip step" }).click();
+  }
+});
+
+test("the timing step enforces what it asks for: an on-time hit when early is asked does not count, and says why", async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.goto("/#/train");
+  const coach = page.locator(".coach");
+  await coach.getByRole("button", { name: /keys only/i }).click();
+  await coach.getByRole("button", { name: "Start" }).click();
+  // skip to the timing step
+  for (const lesson of ["swing", "forehand", "backhand"]) {
+    await expect(coach).toHaveAttribute("data-lesson", lesson);
+    await coach.getByRole("button", { name: "Skip step" }).click();
+  }
+  await expect(coach).toHaveAttribute("data-lesson", "timing");
+  // while held, nothing about earlier shots or a tally of "not yet"
+  await expect(coach.locator(".coach-feedback")).toHaveText("");
+  await expect(coach).not.toContainText(/not yet|Early in:/);
+  await ready(page);
+  await expect(coach.locator(".coach-progress")).toContainText(/swing early/i);
+
+  // swing ON TIME although early is asked for
+  await swingIn(page, "ontime");
+  await expect(coach.locator(".coach-feedback")).toContainText(/That was on time\. We want early\./, { timeout: 15_000 });
+  // it did not move the step on: early is still what is asked
+  await expect(coach.locator(".coach-progress")).toContainText(/swing early/i);
+  await expect(coach).toHaveAttribute("data-done", "false");
 });
 

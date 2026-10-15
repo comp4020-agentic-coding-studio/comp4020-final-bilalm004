@@ -50,6 +50,11 @@ export interface CameraInput {
   on(): boolean;
   /** "auto" (default): the server moves you to the ball. "tilt": lean to move. */
   moveMode(): MoveMode;
+  /**
+   * Switch the movement mode from code (training's movement drill). Not
+   * remembered for next time, so a drill never leaves a saved lean behind.
+   */
+  setMoveMode(mode: MoveMode): void;
   dispose(): void;
 }
 
@@ -487,6 +492,13 @@ export function createCameraInput(
     aimMode: () => calib.aim,
     on: () => session !== null,
     moveMode: () => moveMode,
+    setMoveMode(mode) {
+      if (mode === moveMode) return;
+      moveMode = mode;
+      moves.reset();
+      renderMode();
+      cb.moveMode(moveMode);
+    },
     dispose() {
       button.removeEventListener("click", onButton);
       window.removeEventListener("keydown", onKey);

@@ -25,48 +25,48 @@ export interface Lesson {
 export const LESSONS: readonly Lesson[] = [
   {
     id: "swing",
-    title: "Camera check: swing",
-    how: "Swing as the ball reaches you. Camera: a quick swing of your racket arm. Keys: Space (or tap Medium).",
+    title: "Swing",
+    how: "Swing as the ball reaches you. Space, or swing your arm.",
     drill: "timing",
   },
   {
     id: "forehand",
     title: "Forehand",
-    how: "The machine feeds your forehand side. Camera: palm to the screen, then swing. Keys pick the stroke for you.",
+    how: "Balls come to your forehand side. Palm to the screen, then swing.",
     drill: "forehand",
   },
   {
     id: "backhand",
     title: "Backhand",
-    how: "Now your backhand side. Camera: turn the back of your hand to the screen, then swing. A forehand at this ball is a miss.",
+    how: "Now your backhand side. Back of your hand to the screen, then swing.",
     drill: "backhand",
   },
   {
     id: "timing",
-    title: "When you swing sets where it lands",
-    how: "Watch the meter and the three arcs: early pulls the ball cross-court, on time sends it straight, late sends it down the line (a backhand mirrors it). Land one of each in; the ring marks where each one landed.",
+    title: "Timing sets direction",
+    how: "Swing early, on time and late. Land one of each in.",
     drill: "timing",
-    why: "Swinging early, on time or late is how you aim left and right. Putting the ball away from your opponent makes them run for it. A player who has to run is late and out of position for the next ball.",
+    why: "Early goes cross-court, on time straight, late down the line. Hit away from your opponent and they have to run.",
   },
   {
     id: "strength",
-    title: "Strength sets speed and depth",
-    how: "A light swing lands short, a hard one deep. Land a light and a hard one in. Keys: 1 light, 3 hard.",
+    title: "Strength sets speed",
+    how: "Land a light, a medium, then a hard one in. Keys 1, 2, 3.",
     drill: "timing",
-    why: "A faster swing sends the ball faster and deeper. From your hit to their baseline takes about 2.0 s light, 1.6 s medium and 1.2 s hard, and that is all the time they have to get there. Hard aimed wide is the riskiest: it can go out.",
+    why: "Harder is faster and deeper: about 2.0 s light, 1.6 s medium and 1.2 s hard for your opponent to reach it. Hard and wide can go out.",
   },
   {
     id: "movement",
-    title: "Moving yourself",
-    how: "Auto-move is off and you start near the sideline; the ball goes to the other side. Hold A / D (or ◀ ▶) to run. Camera: pick Move: lean under the preview and shift your shoulders.",
+    title: "Move yourself",
+    how: "Auto-move is off. Run to the ball: A / D, or lean.",
     drill: "movement",
     optional: true,
-    why: "The point of the game is to leave your opponent out of position and out of time, so mix where and how hard you hit. From the middle you reach every ball that lands in, even with auto-move. From near the sideline, a hard ball to the far side is the one you can miss.",
+    why: "Make your opponent run out of position and out of time. From the middle you reach everything; from the sideline a hard ball to the far side can beat you.",
   },
   {
     id: "targets",
     title: "Targets (optional)",
-    how: "Land three balls in the lit circle. Mix timing and strength to reach each one.",
+    how: "Land three balls in the lit circle.",
     drill: "timing",
     optional: true,
   },
@@ -153,6 +153,48 @@ export interface Progress {
 const landedIn = (r: ShotReport) => r.landing !== null && r.landing.in;
 const count = (n: number, of: number, what: string): Progress => ({ done: n >= of, text: `${what}: ${Math.min(n, of)} of ${of}` });
 
+const TIMING_ORDER: readonly Timing[] = ["early", "ontime", "late"];
+const TIMING_ASK: Record<Timing, string> = { early: "swing early, and land it in", ontime: "swing on time, and land it in", late: "swing late, and land it in" };
+
+/**
+ * The one shot a step asks for next. The timing step wants early, then on
+ * time, then late; the strength step a light swing, then a hard one. Only a
+ * hit that matches what is asked, and lands in, counts; the sequence is in
+ * order, so an on-time hit when early is asked for moves nothing on. Null
+ * once the step has everything it asked for.
+ */
+export function wantedShot(id: "timing" | "strength", rec: LessonRecord): { timing: Timing } | { level: Level } | null {
+  if (id === "timing") {
+    let at = 0;
+    for (const r of rec.shots) if (at < TIMING_ORDER.length && r.timing === TIMING_ORDER[at] && landedIn(r)) at++;
+    return at < TIMING_ORDER.length ? { timing: TIMING_ORDER[at] } : null;
+  }
+  const order: readonly Level[] = [0, 1, 2];
+  let at = 0;
+  for (const r of rec.shots) if (at < order.length && r.level === order[at] && landedIn(r)) at++;
+  return at < order.length ? { level: order[at] } : null;
+}
+
+const TIMING_NAME: Record<Timing, string> = { early: "early", ontime: "on time", late: "late" };
+const LEVEL_NAME = ["light", "medium", "hard"] as const;
+
+/**
+ * Why a hit didn't move the step on, in a few words, when the step asked for
+ * something else. Null when it was the shot asked for (or nothing is asked).
+ */
+export function wrongShotNote(id: "timing" | "strength", report: ShotReport, want: { timing: Timing } | { level: Level } | null): string | null {
+  if (!want) return null;
+  if (id === "timing" && "timing" in want) {
+    if (report.timing === want.timing) return report.landing && !report.landing.in ? "Right timing, but it went out. Land it in." : null;
+    return report.timing === null ? null : `That was ${TIMING_NAME[report.timing]}. We want ${TIMING_NAME[want.timing]}.`;
+  }
+  if (id === "strength" && "level" in want) {
+    if (report.level === want.level) return report.landing && !report.landing.in ? "Right strength, but it went out. Land it in." : null;
+    return `That was ${LEVEL_NAME[report.level]}. We want ${LEVEL_NAME[want.level]}.`;
+  }
+  return null;
+}
+
 /** Whether step `id` is done, and how far along it is, from what the player actually did. */
 export function lessonProgress(id: LessonId, rec: LessonRecord): Progress {
   switch (id) {
@@ -163,15 +205,12 @@ export function lessonProgress(id: LessonId, rec: LessonRecord): Progress {
     case "backhand":
       return count(rec.shots.filter((r) => r.kind === "backhand").length, 2, "Backhands hit");
     case "timing": {
-      const got = (t: Timing) => rec.shots.some((r) => r.timing === t && landedIn(r));
-      const [early, ontime, late] = [got("early"), got("ontime"), got("late")];
-      const yn = (b: boolean) => (b ? "yes" : "not yet");
-      return { done: early && ontime && late, text: `Early in: ${yn(early)} · On time in: ${yn(ontime)} · Late in: ${yn(late)}` };
+      const want = wantedShot("timing", rec);
+      return want && "timing" in want ? { done: false, text: `Now: ${TIMING_ASK[want.timing]}` } : { done: true, text: "Early, on time and late: all in" };
     }
     case "strength": {
-      const light = rec.shots.some((r) => r.level === 0 && landedIn(r));
-      const hard = rec.shots.some((r) => r.level === 2 && landedIn(r));
-      return { done: light && hard, text: `Light in: ${light ? "yes" : "not yet"} · Hard in: ${hard ? "yes" : "not yet"}` };
+      const want = wantedShot("strength", rec);
+      return want && "level" in want ? { done: false, text: `Now: a ${LEVEL_NAME[want.level]} swing, landing in` } : { done: true, text: "Light, medium and hard: all in" };
     }
     case "movement":
       return rec.shots.length > 0 ? { done: true, text: "You got there" } : { done: false, text: "Reach a wide ball and hit it" };
@@ -190,7 +229,7 @@ export function trainingComplete(done: ReadonlySet<LessonId>): boolean {
 
 /** Asked once, after the required steps (user's call: movement is optional). */
 export const MOVEMENT_OFFER = {
-  question: "Auto-move is on. Want to practise moving yourself?",
+  question: "Practise moving yourself?",
   yes: "Yes",
   no: "No thanks",
 } as const;

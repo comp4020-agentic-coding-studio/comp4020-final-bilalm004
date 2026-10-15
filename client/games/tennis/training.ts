@@ -1,7 +1,7 @@
 import { Mesh, MeshBasicMaterial, RingGeometry } from "three";
 import type { Scene } from "three";
 import "./training.css";
-import { LESSONS, MOVEMENT_OFFER, REQUIRED_LESSONS, TARGET_RADIUS, afterLesson, missFeedback, shotFeedback, trainingComplete } from "./lessons.ts";
+import { LESSONS, MOVEMENT_OFFER, REQUIRED_LESSONS, TARGET_RADIUS, afterLesson, missFeedback, shotFeedback, trainingComplete, wrongShotNote } from "./lessons.ts";
 import type { LessonId } from "./lessons.ts";
 import { LocalLink } from "./local-link.ts";
 import { TrainingSim } from "./training-sim.ts";
@@ -24,13 +24,17 @@ export function startTraining(root: HTMLElement, onExit: () => void): () => void
   sim.reset();
   const link = new LocalLink(sim);
   let scene: Scene | null = null;
-  let setup = true;
+  // the camera input, so the movement drill can switch it to lean and back
+  let camera: { setMoveMode(mode: "auto" | "tilt"): void } | null = null;
+  // held: a step (or the setup) is showing centred and the machine waits for Ready
+  let held = true;
   const stopView = startTennis(root, link, { room: "TRAIN", game: "tennis", seat: 0, practice: true }, onExit, {
     local: true,
     leaveLabel: "Skip training",
     onScene: (s) => (scene = s),
     startMoveMode: "auto",
-    holdPause: () => setup,
+    onCamera: (c) => (camera = c),
+    holdPause: () => held,
   });
   const view = root.querySelector(".game") as HTMLElement;
   view.classList.add("training");
@@ -59,7 +63,7 @@ export function startTraining(root: HTMLElement, onExit: () => void): () => void
     <p class="coach-step"></p>
     <h2 class="coach-title"></h2>
     <p class="coach-how"></p>
-    <details class="coach-why" hidden><summary>Why?</summary><p></p></details>
+    <p class="coach-why" hidden></p>
     <p class="coach-progress" role="status"></p>
     <p class="coach-feedback" aria-live="polite"></p>
     <div class="coach-row"></div>`;
@@ -76,6 +80,11 @@ export function startTraining(root: HTMLElement, onExit: () => void): () => void
   hudObserver.observe(hud);
   hudObserver.observe(coach);
   placeBelowHud();
+  // The coach slides from the centre to its side when Start is pressed. Its
+  // size doesn't change while it moves, so the observer never fires and the
+  // camera dock would be placed from a measurement taken mid-slide: measure
+  // again when the slide ends.
+  coach.addEventListener("transitionend", placeBelowHud);
   const el =(c: string) => coach.querySelector(`.${c}`) as HTMLElement;
   const row = el("coach-row");
 
@@ -109,26 +118,33 @@ export function startTraining(root: HTMLElement, onExit: () => void): () => void
   };
 
   const feedback = (text: string, kind: "hit" | "miss" | "") => {
+    // nothing about shots while a step is held: there is no ball to talk about
+    if (held) return;
     const f = el("coach-feedback");
     f.textContent = text;
     f.dataset.kind = kind;
   };
 
-  const why = el("coach-why") as HTMLDetailsElement;
+  // the "why" is shown as a short plain line with the step, never a drop-down
+  const why = el("coach-why");
   const setWhy = (text: string | undefined) => {
     why.hidden = !text;
-    why.open = false;
-    (why.querySelector("p") as HTMLElement).textContent = text ?? "";
+    why.textContent = text ?? "";
   };
 
-  // between steps: no lesson running, so the machine just keeps feeding gently
+  // between steps (the movement offer, the end screen): no lesson running; centred, machine held
   const idle = (lesson: string) => {
+    if (current === "movement") camera?.setMoveMode("auto");
     current = null;
     coach.dataset.lesson = lesson;
     coach.dataset.done = "false";
+    coach.dataset.stage = "present";
     sim.setLesson("targets");
     targetMark.visible = false;
     setWhy(undefined);
+    held = true;
+    view.classList.add("setup");
+    link.send({ t: "pause", paused: true });
   };
 
   const finish = () => {
@@ -136,7 +152,7 @@ export function startTraining(root: HTMLElement, onExit: () => void): () => void
     setText(
       trainingComplete(done) ? "Training complete" : "Training over",
       "You're ready to play",
-      "Auto-move stays on in games (switch it under the camera preview). Practise against the bot or play a friend from the lobby.",
+      "Practise against the bot, or play a friend from the lobby.",
     );
     const extras: [string, string, () => void][] = [];
     if (!done.has("movement")) extras.push(["Practise moving", "movement", () => begin("movement")]);
@@ -147,7 +163,7 @@ export function startTraining(root: HTMLElement, onExit: () => void): () => void
   // user's call: auto-move is on throughout; moving yourself is offered, not required
   const offerMovement = () => {
     idle("offer");
-    setText("Optional", MOVEMENT_OFFER.question, "Training is complete either way. The drill starts you near the sideline and sends the ball to the other side.");
+    setText("Optional", MOVEMENT_OFFER.question, "Training is done either way.");
     buttons([
       [MOVEMENT_OFFER.yes, "yes", () => begin("movement"), true],
       [MOVEMENT_OFFER.no, "no", finish],
@@ -161,8 +177,28 @@ export function startTraining(root: HTMLElement, onExit: () => void): () => void
     else finish();
   };
 
+  // Each step opens centred with the machine held, a few words and one Ready
+  // button (user's ruling: first in front, then to the side once ready).
+  const hold = () => {
+    held = true;
+    // the last step's shot and progress mean nothing to a new, still step
+    el("coach-feedback").textContent = "";
+    el("coach-feedback").dataset.kind = "";
+    view.classList.add("setup");
+    link.send({ t: "pause", paused: true });
+  };
+  const release = () => {
+    held = false;
+    view.classList.remove("setup");
+    link.send({ t: "pause", paused: false });
+    // measure again once it has slid to its place
+    setTimeout(placeBelowHud, 450);
+  };
+
   const begin = (id: LessonId) => {
     clearTimeout(nextTimer);
+    // leaving the movement drill (skip or done): auto again for everything else
+    if (current === "movement" && id !== "movement") camera?.setMoveMode("auto");
     current = id;
     const lesson = LESSONS.find((l) => l.id === id)!;
     const n = REQUIRED_LESSONS.findIndex((l) => l.id === id);
@@ -170,11 +206,26 @@ export function startTraining(root: HTMLElement, onExit: () => void): () => void
     setWhy(lesson.why);
     coach.dataset.lesson = id;
     coach.dataset.done = "false";
+    coach.dataset.stage = "present";
+    // set the step up now (its drill, an empty record) but hold the machine until Ready
     const events = sim.setLesson(id);
-    // only this step's feeds count (for the e2e)
     canvas.dataset.trainFeed = "";
     link.emitTraining(events);
     targetMark.visible = false;
+    hold();
+    buttons([
+      ["Ready", "ready", () => go(id), true],
+      ["Skip step", "next", () => nextAfter(id)],
+      ["Skip training", "skip", onExit],
+    ]);
+  };
+
+  // Ready: the card slides to the side and the machine starts feeding this step
+  const go = (id: LessonId) => {
+    coach.dataset.stage = "play";
+    // the movement drill is the one place you move yourself: lean works then
+    camera?.setMoveMode(id === "movement" ? "tilt" : "auto");
+    release();
     buttons([
       ["Skip step", "next", () => nextAfter(id)],
       ["Skip training", "skip", onExit],
@@ -198,7 +249,9 @@ export function startTraining(root: HTMLElement, onExit: () => void): () => void
       landMark.visible = false;
     } else if (e.type === "landed") {
       const l = e.report.landing!;
-      feedback(shotFeedback(e.report), "hit");
+      // the words for the shot, then (if it wasn't the one asked for) why it didn't count
+      const note = current === "timing" || current === "strength" ? wrongShotNote(current, e.report, sim.wantedBeforeLast()) : null;
+      feedback(note ? `${shotFeedback(e.report)}. ${note}` : shotFeedback(e.report), note ? "miss" : "hit");
       landMat.color.set(l.in ? 0xffd23f : 0xff5a5a);
       landMark.position.set(l.x, 0.04, l.z);
       landMark.visible = !l.net;
@@ -223,28 +276,46 @@ export function startTraining(root: HTMLElement, onExit: () => void): () => void
   // Setup (centred, game held): short. Camera first (its own panel: safety
   // notice, hand choice, start, visibility check), or keys and mouse. Start
   // releases the machine and moves the coach to the side.
+  // Start is held until the camera is set up, or the player chooses keys only
+  // (the camera is never required: every camera action has a key equivalent)
+  let setupDone = false;
   const ready = () => {
-    setup = false;
-    view.classList.remove("setup");
-    link.send({ t: "pause", paused: false });
+    if (!setupDone) return;
+    // on to step 1, which opens centred with the machine still held
     begin("swing");
   };
   coach.dataset.lesson = "start";
-  setText("Training", "Learn to play", "Set up your camera, or play with keys. Then press Start.");
-  buttons([
-    [
-      "Set up camera",
-      "camera",
-      () => cameraButton.click(),
-    ],
-    ["Start", "start", ready, true],
-    ["Skip training", "skip", onExit],
-  ]);
+  setText("Training", "Learn to play", "Set up your camera, or choose keys only. Then press Start.");
+  const showSetup = () => {
+    buttons([
+      ["Set up camera", "camera", () => cameraButton.click(), !setupDone],
+      ["Keys only", "keys", () => {
+        setupDone = true;
+        showSetup();
+      }],
+      ["Start", "start", ready, setupDone],
+      ["Skip training", "skip", onExit],
+    ]);
+    // not yet: pressing Start does nothing until the camera is set up or keys are chosen
+    const start = row.querySelector('[data-coach="start"]') as HTMLButtonElement;
+    start.disabled = !setupDone;
+  };
+  showSetup();
+  // the camera finishing its setup (running, panel closed) is what unlocks Start
+  const watchCamera = window.setInterval(() => {
+    // the camera is running (its preview is showing) and its setup panel has closed
+    const video = view.querySelector(".cam-dock video") as HTMLVideoElement | null;
+    if (held && !setupDone && video && !video.hidden && !view.classList.contains("calibrating")) {
+      setupDone = true;
+      showSetup();
+    }
+  }, 200);
 
   link.start();
 
   return () => {
     clearTimeout(nextTimer);
+    clearInterval(watchCamera);
     hudObserver.disconnect();
     offTraining();
     offState();
