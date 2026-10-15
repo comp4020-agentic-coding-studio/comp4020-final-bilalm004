@@ -425,3 +425,28 @@ describe("training sends nothing over the network", () => {
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 });
+
+describe("training starts paused and in auto-move (user's playtest)", () => {
+  it("a sim made to wait feeds no ball until it is released", () => {
+    const sim = new TrainingSim(8, "right", { startPaused: true });
+    const link = new LocalLink(sim);
+    link.advance(240);
+    // nothing served, nothing fed: the machine waits for the player to be ready
+    expect(sim.state.tick).toBe(0);
+    expect(sim.state.shots).toBe(0);
+    link.send({ t: "pause", paused: false });
+    link.advance(240);
+    expect(sim.state.tick).toBeGreaterThan(0);
+  });
+
+  it("starts in auto-move whatever mode was chosen before (a saved lean must not carry in)", () => {
+    const sim = new TrainingSim(8, "right", { startPaused: true });
+    sim.setMode("tilt");
+    sim.reset();
+    const link = new LocalLink(sim);
+    link.send({ t: "pause", paused: false });
+    link.advance(5);
+    expect(sim.state.movement[0].mode).toBe("auto");
+  });
+});
+

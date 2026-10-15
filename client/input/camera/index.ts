@@ -111,7 +111,14 @@ function rememberSafety(): void {
   }
 }
 
-export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, chip: HTMLElement, cb: CameraCallbacks): CameraInput {
+export function createCameraInput(
+  view: HTMLElement,
+  button: HTMLButtonElement,
+  chip: HTMLElement,
+  cb: CameraCallbacks,
+  /** Start in this movement mode instead of the viewer's saved one (training starts in auto). */
+  startMoveMode?: MoveMode,
+): CameraInput {
   const video = document.createElement("video");
   video.className = "selfview";
   video.hidden = true;
@@ -137,7 +144,7 @@ export function createCameraInput(view: HTMLElement, button: HTMLButtonElement, 
   view.append(dock, panel);
   const gripBadge = hud.querySelector(".grip-badge") as HTMLElement;
   const modeButton = hud.querySelector(".move-mode") as HTMLButtonElement;
-  let moveMode = loadMoveMode();
+  let moveMode = startMoveMode ?? loadMoveMode();
   // the lean gauge only means something while leaning moves you: dimmed in auto
   const renderMode = () => {
     hud.dataset.move = moveMode;

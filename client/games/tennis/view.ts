@@ -65,6 +65,10 @@ export interface ViewOptions {
   leaveLabel?: string;
   /** The scene once built, for training's landing mark and targets. */
   onScene?(scene: Scene): void;
+  /** Start in this movement mode, ignoring the saved one (training: auto, whatever was saved). */
+  startMoveMode?: "auto" | "tilt";
+  /** While this returns true, un-pausing is ignored (training's setup holds the machine until Start). */
+  holdPause?(): boolean;
 }
 
 export function startTennis(root: HTMLElement, conn: GameLink, info: RoomInfo, onLeave: () => void, opts: ViewOptions = {}): () => void {
@@ -311,11 +315,14 @@ export function startTennis(root: HTMLElement, conn: GameLink, info: RoomInfo, o
     },
     pause: (p) => {
       if (!info.practice) return;
+      // training's setup keeps the machine held until the player presses Start,
+      // so closing the camera panel doesn't release it (opts.holdPause)
+      if (!p && opts.holdPause?.()) return;
       paused = p;
       conn.send({ t: "pause", paused: p });
       updateHud();
     },
-  });
+  }, opts.startMoveMode);
   // The server applies the movement mode to this seat; it starts each new
   // occupant in auto, so say ours now and again after every (re)join.
   const sendMode = () => {

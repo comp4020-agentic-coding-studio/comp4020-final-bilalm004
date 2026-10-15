@@ -17,16 +17,25 @@ import { startTennis } from "./view.ts";
 const NEXT_MS = 1400;
 
 export function startTraining(root: HTMLElement, onExit: () => void): () => void {
-  const sim = new TrainingSim((Math.random() * 2 ** 32) >>> 0);
+  // The machine waits (startPaused) until Start, so no ball flies while the
+  // player sets up their camera, and training always starts in auto-move,
+  // whatever lean was saved from an earlier session (user's playtest).
+  const sim = new TrainingSim((Math.random() * 2 ** 32) >>> 0, "right", { startPaused: true });
+  sim.reset();
   const link = new LocalLink(sim);
   let scene: Scene | null = null;
+  let setup = true;
   const stopView = startTennis(root, link, { room: "TRAIN", game: "tennis", seat: 0, practice: true }, onExit, {
     local: true,
     leaveLabel: "Skip training",
     onScene: (s) => (scene = s),
+    startMoveMode: "auto",
+    holdPause: () => setup,
   });
   const view = root.querySelector(".game") as HTMLElement;
   view.classList.add("training");
+  // setup: the coach is centred over the paused court; Start moves it to the side
+  view.classList.add("setup");
   const canvas = view.querySelector("canvas") as HTMLCanvasElement;
   const cameraButton = view.querySelector("[data-action=camera]") as HTMLButtonElement;
 
@@ -211,25 +220,24 @@ export function startTraining(root: HTMLElement, onExit: () => void): () => void
     if (m.t === "state") canvas.dataset.trainX = sim.state.players[0].x.toFixed(2);
   });
 
-  // Start: camera (safety notice, hand choice, start, visibility check: the
-  // view's own camera panel), or keys and mouse, or skip to the lobby.
+  // Setup (centred, game held): short. Camera first (its own panel: safety
+  // notice, hand choice, start, visibility check), or keys and mouse. Start
+  // releases the machine and moves the coach to the side.
+  const ready = () => {
+    setup = false;
+    view.classList.remove("setup");
+    link.send({ t: "pause", paused: false });
+    begin("swing");
+  };
   coach.dataset.lesson = "start";
-  setText(
-    "Training",
-    "Learn to play",
-    "Practise against a ball machine: swing, forehand and backhand, timing, strength and moving. Nothing is scored and nothing leaves this device.",
-  );
+  setText("Training", "Learn to play", "Set up your camera, or play with keys. Then press Start.");
   buttons([
     [
-      "Use my camera",
+      "Set up camera",
       "camera",
-      () => {
-        begin("swing");
-        cameraButton.click();
-      },
-      true,
+      () => cameraButton.click(),
     ],
-    ["Keys and mouse", "keys", () => begin("swing")],
+    ["Start", "start", ready, true],
     ["Skip training", "skip", onExit],
   ]);
 

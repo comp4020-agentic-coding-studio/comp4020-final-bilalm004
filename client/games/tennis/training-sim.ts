@@ -50,12 +50,27 @@ export class TrainingSim {
   private flying: { report: ShotReport; since: number } | null = null;
   private target = 0;
 
-  constructor(seed: number, hand: Hand = "right") {
+  /**
+   * `startPaused`: the machine waits until the player is ready (the training
+   * screen's setup), so balls don't fly while they set up their camera.
+   */
+  constructor(seed: number, hand: Hand = "right", opts: { startPaused?: boolean } = {}) {
     this.seed = seed >>> 0;
     this.hand = hand;
+    this.paused = opts.startPaused === true;
     this.state = createState(this.seed, { moveMode: "auto", endless: true });
     // the machine never moves; it stands where it feeds from
     this.state.movement[1] = { mode: "tilt", manual: false };
+  }
+
+  /**
+   * Back to the start: auto-move chosen again, whatever was chosen before. A
+   * lean saved from an earlier session must not carry into training (user's
+   * ruling: auto by default).
+   */
+  reset(): void {
+    this.chosenMode = "auto";
+    this.state.movement[0] = { mode: "auto", manual: false };
   }
 
   get lessonId(): LessonId {

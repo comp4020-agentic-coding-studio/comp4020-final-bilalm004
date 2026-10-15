@@ -88,7 +88,7 @@ test("training with keys: every step completes from real key presses, feedback i
   await expect.poll(async () => Number(await canvas.getAttribute("data-frames"))).toBeGreaterThan(5);
   await coachClear(page);
 
-  await coach.getByRole("button", { name: /keys and mouse/i }).click();
+  await coach.getByRole("button", { name: "Start" }).click();
 
   // 1: any swing
   await expect(coach).toHaveAttribute("data-lesson", "swing");
@@ -183,7 +183,7 @@ test("training with the camera: safety notice and hand choice first, the camera 
   const framesBefore = net.frames.length;
   await page.getByRole("button", { name: "Train" }).click();
   const coach = page.locator(".coach");
-  await coach.getByRole("button", { name: /use my camera/i }).click();
+  await coach.getByRole("button", { name: /set up camera/i }).click();
 
   const panel = page.getByRole("dialog", { name: /camera setup/i });
   await expect(panel.getByRole("heading", { name: /before you start/i })).toBeVisible();
@@ -198,6 +198,14 @@ test("training with the camera: safety notice and hand choice first, the camera 
   await expect(panel.getByRole("heading", { name: /can we see you/i })).toBeVisible({ timeout: 40_000 });
   await panel.getByRole("button", { name: "Skip check" }).click();
   await expect(panel).toBeHidden();
+
+  // the camera is set up, but training is still held: the coach is back, centred,
+  // and nothing starts until Start
+  await expect(coach).toBeVisible();
+  await expect(coach).toHaveAttribute("data-lesson", "start");
+  await coach.getByRole("button", { name: "Start" }).click();
+  // the coach slides from the centre to its side (0.35 s)
+  await page.waitForTimeout(600);
 
   // first step: a swing, the camera check; the timing meter and the camera dock are up
   await expect(coach).toHaveAttribute("data-lesson", "swing");
@@ -233,7 +241,7 @@ test("Train is a Tennis option on the home screen, and Skip training goes straig
   // no room, so no ready panel
   await expect(page.locator(".ready-panel")).toBeHidden();
   // "No thanks" to moving yourself ends training without the movement drill
-  await coach.getByRole("button", { name: /keys and mouse/i }).click();
+  await coach.getByRole("button", { name: "Start" }).click();
   for (let i = 0; i < 5; i++) await coach.getByRole("button", { name: "Skip step" }).click();
   await coach.getByRole("button", { name: "No thanks" }).click();
   await expect(coach.getByRole("heading", { name: /ready to play/i })).toBeVisible();
@@ -246,3 +254,42 @@ test("Train is a Tennis option on the home screen, and Skip training goes straig
   await expect(page.getByRole("button", { name: /practice vs bot/i })).toBeVisible();
   await expect(page.locator("canvas")).toHaveCount(0);
 });
+
+test("training waits: centred and paused, no ball and auto-move until Start, then the coach moves aside", async ({ page }) => {
+  // a lean saved from an earlier session must not carry in
+  await page.addInitScript(() => localStorage.setItem("move-mode", "tilt"));
+  const sent: string[] = [];
+  page.on("websocket", (ws) => ws.on("framesent", (f) => sent.push(String(f.payload))));
+  await page.goto("/#/train");
+  const coach = page.locator(".coach");
+  const canvas = page.locator("canvas");
+  await expect(coach).toBeVisible();
+  await expect(coach).toHaveAttribute("data-lesson", "start");
+
+  // centred: the card's middle is the screen's middle
+  const v = page.viewportSize()!;
+  const b = (await coach.boundingBox())!;
+  expect(Math.abs(b.x + b.width / 2 - v.width / 2)).toBeLessThan(8);
+  expect(Math.abs(b.y + b.height / 2 - v.height / 2)).toBeLessThan(v.height * 0.12);
+  expect(b.x).toBeGreaterThanOrEqual(0);
+  expect(b.x + b.width).toBeLessThanOrEqual(v.width);
+
+  // held: no ball is fed or in flight while the player sets up
+  await page.waitForTimeout(3000);
+  expect(Number((await canvas.getAttribute("data-trail")) ?? 0)).toBe(0);
+  expect((await canvas.getAttribute("data-train-feed")) ?? "").toBe("");
+  // and it is concise
+  expect(((await coach.innerText()).match(/\S+/g) ?? []).length).toBeLessThan(30);
+
+  // Start releases the machine and moves the coach to the side
+  await coach.getByRole("button", { name: "Start" }).click();
+  await expect(coach).toHaveAttribute("data-lesson", "swing");
+  await expect.poll(async () => Number((await canvas.getAttribute("data-trail")) ?? 0), { timeout: 20_000 }).toBeGreaterThan(0);
+  // it has left the centre: to the left side on a wide screen, across the top on a phone
+  await expect.poll(async () => (await coach.boundingBox())!.y + (await coach.boundingBox())!.height / 2, { timeout: 5_000 }).toBeLessThan(v.height * 0.4);
+  const after = (await coach.boundingBox())!;
+  if (v.width >= 900) expect(after.x + after.width / 2).toBeLessThan(v.width / 2);
+  // the saved lean did not carry in: the mode sent to the sim is auto
+  expect(sent.filter((m) => m.includes('"mode"') && m.includes("tilt"))).toEqual([]);
+});
+

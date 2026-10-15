@@ -130,3 +130,43 @@
     width: min(300px, 46vw);
   }
 }
+
+/* Setup: the coach is centred over the held court and a little larger, so it
+   is easy to read; Start moves it to the side (the rules above). */
+.game.training.setup .coach {
+  top: 50%;
+  left: 50%;
+  right: auto;
+  bottom: auto;
+  transform: translate(-50%, -50%);
+  width: min(26rem, calc(100% - 2rem));
+  max-height: none;
+  padding: 1.1rem 1.3rem;
+  font-size: 1.05rem;
+  text-align: center;
+  z-index: 5;
+}
+
+.game.training.setup .coach-title {
+  font-size: 1.5rem;
+}
+
+.game.training.setup .coach-row {
+  justify-content: center;
+}
+
+/* the held court is dimmed behind the card, so the card is what you read */
+.game.training.setup::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: #0a121a99;
+  pointer-events: none;
+  z-index: 4;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .coach {
+    transition: top 0.35s ease, left 0.35s ease, transform 0.35s ease, width 0.35s ease;
+  }
+}
