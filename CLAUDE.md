@@ -22,7 +22,8 @@ lazily and only when a player enters a game. Video never leaves the browser.
   server and client. Each game lives in `shared/games/<name>/` (sim, bot,
   adapter) and registers in `shared/games/registry.ts`. Tennis scoring
   (points, games, sets, tiebreak, faults) is `shared/games/tennis/scoring.ts`;
-  the sim keeps its `ScoreState` in the snapshot.
+  the sim keeps its `ScoreState` in the snapshot. `machine.ts` is training's
+  seeded ball machine (feeds with the sim's own `launch()`).
 - `server/` `index.ts` (http + ws + `/readme/`), `rooms.ts` (live rooms with
   the real clock and db), `room.ts` (one room: 60 Hz tick loop, seats,
   spectators, game), `lobby.ts` (pure room rules: phases, ready, format,
@@ -32,6 +33,11 @@ lazily and only when a player enters a game. Video never leaves the browser.
 - `client/` Vite app: `games/<name>/view.ts` (scene, HUD, input wiring),
   `games/tennis/score-bar.ts` (top score bar and the umpire's call),
   `games/tennis/ready-panel.ts` + `.css` (the room's ready panel, task 4),
+  training (task 5): `training.ts` + `.css` (coach panel, landing mark),
+  `lessons.ts` (pure: steps, feedback words, "Why?" notes),
+  `training-sim.ts` (sim + ball machine in the page) and `local-link.ts`
+  (a `GameLink` like `Connection`, so `view.ts` renders training unchanged;
+  no network),
   `games/tennis/stadium.ts` (arena from primitives, instanced crowd/trees),
   `games/tennis/character.ts` (Mii-style player and racket),
   `games/tennis/stroke.ts` (forehand/backhand keyframes, shot label text),
@@ -40,7 +46,7 @@ lazily and only when a player enters a game. Video never leaves the browser.
   with `aid.ts`/`aid-fx.ts`/`aid.css` drawing it (task 3), `input/`
   (`keyboard.ts` for keys, pointer and buttons; `camera/` with `pose.ts` pure
   landmark maths, `camera.ts` webcam + lazy MediaPipe, `index.ts` setup
-  panel), `net/socket.ts`, `ui/menu.ts` (home screen: title, framed sport preview,
+  panel), `net/socket.ts` (`Connection`), `net/link.ts` (`GameLink`), `ui/menu.ts` (home screen: title, framed sport preview,
   sport buttons from the `SPORTS` list; inline SVG/CSS only, no Three.js). Camera swings have two modes,
   "classic" (default) and "follow" (character copies the arm, hit at the
   hitting line), and two aim modes, "timing" (default) and "point"; see
@@ -108,6 +114,11 @@ lazily and only when a player enters a game. Video never leaves the browser.
 - Video never leaves the browser. The game page's CSP `connect-src` allows
   only this server and the pose model's download hosts (`spec/privacy.test.ts`);
   it also blocks MediaPipe's own usage pings. Don't widen it casually.
+- Training (task 5) runs in the page: no room, score or rating, and nothing
+  sent to the server (`spec/training.test.ts`, `e2e/training.e2e.ts`).
+  Required steps: swing, forehand, backhand, timing (early, on time and late
+  each landing in), strength; auto-move stays on. Moving yourself is offered
+  after them and optional. Figures in its notes come from `docs/reaction-time.md`.
 - Camera is used for gameplay only. Every camera action has a keyboard/mouse
   equivalent, and the lobby and room work with no camera at all.
 - Auto-move (`spec/auto-move.test.ts`) walks slower than manual movement
