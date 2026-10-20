@@ -160,6 +160,15 @@ export function startArchery(root: HTMLElement, conn: GameLink, info: RoomInfo, 
   const bowCamera = new PerspectiveCamera(50, 1, 0.01, 10);
   const bow = makeBow();
   bowScene.add(bow.group);
+  // the bow sits on the side of the hand that holds it: a left-hand bow on
+  // the left of the screen, a right-hand one on the right
+  // the bow hand, once the camera input exists (resize runs before it does)
+  let bowHandOf: (() => "left" | "right") | null = null;
+  const bowSide = (): -1 | 1 => (bowHandOf?.() === "right" ? 1 : -1);
+  const placeBow = () => {
+    const portrait = camera.aspect < 1;
+    bow.group.position.set(bowSide() * (portrait ? 0.2 : 0.42), portrait ? -0.55 : -0.3, -2);
+  };
   const renderer = new WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance" });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   const resize = () => {
@@ -174,7 +183,7 @@ export function startArchery(root: HTMLElement, conn: GameLink, info: RoomInfo, 
     bowCamera.updateProjectionMatrix();
     // lower right, clear of the target; a phone gets it a little further down
     // so the board (centre screen) stays clear
-    bow.group.position.set(camera.aspect < 1 ? 0.2 : 0.42, camera.aspect < 1 ? -0.55 : -0.3, -2);
+    placeBow();
   };
   const observer = new ResizeObserver(resize);
   observer.observe(view);
@@ -256,6 +265,11 @@ export function startArchery(root: HTMLElement, conn: GameLink, info: RoomInfo, 
 
   // Keys: arrows aim, hold Space to draw (the longer, the stronger), let go to shoot.
   const keys = new Set<string>();
+  // per arrow key: when it went down and how much aim frames have applied;
+  // on release the rest of the time held is applied, so a quick tap still
+  // moves the sight on a slow frame rate
+  const arrowHeld = new Map<string, { since: number; applied: number }>();
+  const ARROW_DIR: Record<string, ["yaw" | "pitch", 1 | -1]> = { ArrowLeft: ["yaw", -1], ArrowRight: ["yaw", 1], ArrowUp: ["pitch", 1], ArrowDown: ["pitch", -1] };
   const onKey = (down: boolean) => (e: KeyboardEvent) => {
     // a focused button (the one that opened the game) mustn't swallow Space; a picker keeps its arrows
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
@@ -269,9 +283,20 @@ export function startArchery(root: HTMLElement, conn: GameLink, info: RoomInfo, 
         heldSince = performance.now();
       }
       keys.add(e.code);
+      if (e.code in ARROW_DIR) arrowHeld.set(e.code, { since: performance.now(), applied: 0 });
     } else {
       keys.delete(e.code);
       if (e.code === "Space") release();
+      const held = arrowHeld.get(e.code);
+      arrowHeld.delete(e.code);
+      if (held && myTurn() && !bowCam.on()) {
+        const [axis, sign] = ARROW_DIR[e.code];
+        const missed = ((performance.now() - held.since) / 1000) * KEY_AIM_RATE - held.applied;
+        if (missed > 0) {
+          aim = clampAim({ ...aim, [axis]: aim[axis] + sign * missed });
+          sendAim(true);
+        }
+      }
     }
   };
   const keydown = onKey(true);
@@ -326,6 +351,8 @@ export function startArchery(root: HTMLElement, conn: GameLink, info: RoomInfo, 
       if (info.practice) conn.send({ t: "pause", paused: p });
     },
   });
+
+  bowHandOf = () => bowCam.bowHand();
 
   const readyPanel = createReadyPanel(
     view,
@@ -499,6 +526,7 @@ export function startArchery(root: HTMLElement, conn: GameLink, info: RoomInfo, 
         if (dx || dy || holding) {
           const held = heldSince === null ? 0 : ((now - heldSince) / 1000) * KEY_DRAW_RATE;
           aim = clampAim({ yaw: aim.yaw + dx * KEY_AIM_RATE * dt, pitch: aim.pitch + dy * KEY_AIM_RATE * dt, draw: holding ? Math.max(aim.draw, held) : aim.draw });
+          for (const h of arrowHeld.values()) h.applied += KEY_AIM_RATE * dt;
           sendAim();
         }
       }
@@ -540,12 +568,14 @@ export function startArchery(root: HTMLElement, conn: GameLink, info: RoomInfo, 
       // the bow: drawn as far as the shooter's draw, an arrow on it while aiming,
       // and turned a little toward where the sight is
       const bowDraw = s.phase === "aim" ? shownAim.draw : 0;
-      bow.set(bowDraw, s.phase === "aim");
+      placeBow();
+      bow.set(bowDraw, s.phase === "aim", bowSide());
       // the arrow points at the centre of the screen (where the range goes),
       // plus a little of the aim; canted a touch like a real archer
       const p = bow.group.position;
-      bow.group.rotation.set(Math.atan2(-p.y, -p.z) + shownAim.pitch * 0.4, Math.atan2(p.x, -p.z) - shownAim.yaw * 0.4, -0.1, "YXZ");
+      bow.group.rotation.set(Math.atan2(-p.y, -p.z) + shownAim.pitch * 0.4, Math.atan2(p.x, -p.z) - shownAim.yaw * 0.4, 0.1 * bowSide(), "YXZ");
       canvas.dataset.bow = bowDraw.toFixed(2);
+      canvas.dataset.bowSide = bowSide() === 1 ? "right" : "left";
 
       flying.visible = s.phase === "flight" && s.arrow !== null;
       if (s.arrow && flying.visible) {

@@ -1015,3 +1015,9 @@ the format of the entries below (see CLAUDE.md, Docs).
 - **Aim:** half as sensitive (aimReach 0.9 to 1.8) and smoothed more.
 - **Bow:** a first-person recurve with a string that draws back and a nocked arrow, drawn in its own overlay scene with a wider lens so it keeps its size; lower right, clear of the target at both viewports.
 - **Verification:** pnpm check 417/417 exit 0; archery e2e 12/12. The full e2e earlier showed 5 failures while other sessions ran their own e2e on this machine; re-run alone, ready and stroke pass, and the one left (training with the camera, "centred sideways") fails the same on a clean build of HEAD in a worktree on :8093, so it is not from this work.
+
+## 2026-10-21 04:32 AEDT | decision | Archery: the bow sits on the aiming hand's side
+
+- **Decided by:** user (left-hand bow on the left, right-hand on the right); Claude (how).
+- **Outcome:** the first-person bow is placed and canted by the camera panel's aiming-hand choice (saved, so it applies without the camera too; left by default), and the arrow rests on the far side of the riser. The new e2e found two bugs: on a phone the practice pickers sat over the camera setup's buttons (the dialog is now above them and the pickers hide while it is open), and a quick arrow-key tap could miss every frame on a slow page (the time held is now applied on release, like the draw).
+- **Verification:** archery e2e 14/14 at both viewports.

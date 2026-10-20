@@ -121,6 +121,20 @@ test("press and hold on the range draws and letting go shoots, with no drag need
   await expect(canvas(page)).toHaveAttribute("data-shots", "1", { timeout: 5_000 });
 });
 
+test("the bow is on the side of the aiming hand: left by default, right if chosen", async ({ page }) => {
+  await openArchery(page);
+  await page.getByRole("button", { name: "Practice", exact: true }).click();
+  await expect(canvas(page)).toHaveAttribute("data-bow-side", "left");
+  // choose the right hand in the camera panel (without starting the camera)
+  await page.getByRole("button", { name: "Camera" }).click();
+  await page.getByRole("button", { name: /Right \(pull with left\)/ }).click();
+  await expect(canvas(page)).toHaveAttribute("data-bow-side", "right");
+  // the setup dialog's buttons are reachable (on a phone the pickers sat over them)
+  await page.getByRole("button", { name: "Not now" }).click();
+  await expect(page.locator(".camera-panel")).toBeHidden();
+  await expect(page.locator(".ar-practice")).toBeVisible();
+});
+
 test("Space draws and shoots straight after opening practice", async ({ page }) => {
   await openArchery(page);
   await page.getByRole("button", { name: "Practice", exact: true }).click();

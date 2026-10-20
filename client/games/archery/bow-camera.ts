@@ -23,6 +23,8 @@ export interface BowCamera {
   on(): boolean;
   /** For the ready panel: off, on but not seeing you, or tracking. */
   state(): "off" | "on" | "ok";
+  /** The hand that holds the bow and aims (the saved choice, camera on or not). */
+  bowHand(): Hand;
   dispose(): void;
 }
 
@@ -190,6 +192,7 @@ export function createBowCamera(view: HTMLElement, button: HTMLButtonElement, ch
   return {
     on: () => session !== null,
     state: () => (!session ? "off" : tracking ? "ok" : "on"),
+    bowHand: () => hand,
     dispose() {
       button.removeEventListener("click", onButton);
       stop();

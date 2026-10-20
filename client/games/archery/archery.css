@@ -289,3 +289,13 @@
 .archery .ar-hand[data-open="true"] .ar-hand-bar i {
   background: #51cf66;
 }
+
+/* the camera setup is a dialog: above the practice pickers and side column
+   (a phone stacks them where its buttons are), which step aside meanwhile */
+.archery .camera-panel {
+  z-index: 5;
+}
+
+.archery:has(.camera-panel:not([hidden])) .ar-practice {
+  visibility: hidden;
+}

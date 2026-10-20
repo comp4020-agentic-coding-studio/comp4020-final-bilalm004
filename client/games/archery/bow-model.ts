@@ -23,8 +23,12 @@ import {
 
 export interface BowModel {
   group: Group;
-  /** Draw 0..1 pulls the string and arrow back; `loaded`: an arrow is on the string. */
-  set(draw: number, loaded: boolean): void;
+  /**
+   * Draw 0..1 pulls the string and arrow back; `loaded`: an arrow is on the
+   * string; `side`: the bow hand, -1 left or 1 right (the arrow rests on the
+   * side away from the bow hand's thumb, so it swaps).
+   */
+  set(draw: number, loaded: boolean, side?: -1 | 1): void;
 }
 
 const HALF = 0.55; // tip height above (and below) the grip
@@ -68,7 +72,7 @@ export function makeBow(): BowModel {
   arrow.add(shaft, head, fletch);
   group.add(arrow);
 
-  const set = (draw: number, loaded: boolean) => {
+  const set = (draw: number, loaded: boolean, side: -1 | 1 = -1) => {
     const d = Math.max(0, Math.min(1, draw));
     const nock = new Vector3(0, 0, BRACE + PULL * d);
     // a drawn bow's tips come in a little
@@ -78,7 +82,8 @@ export function makeBow(): BowModel {
     stringGeo.setFromPoints([top, nock, bottom]);
     arrow.visible = loaded;
     // resting on the grip's side, nock on the string
-    arrow.position.set(-0.03, 0.01, nock.z);
+    // a left-hand bow rests the arrow on its right of the riser, and vice versa
+    arrow.position.set(-0.03 * side, 0.01, nock.z);
   };
   set(0, true);
   return { group, set };
