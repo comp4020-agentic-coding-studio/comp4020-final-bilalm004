@@ -64,6 +64,9 @@ export class Room {
   private lastSwing: [number, number] = [-1000, -1000];
   // latest move target per seat, applied once on the next tick
   private pendingMove: [number | null, number | null] = [null, null];
+  // archery: latest sight per seat, applied once on the next tick (a release
+  // goes straight into `pending`, so it is never overwritten)
+  private pendingAim: [unknown, unknown] = [null, null];
   // a seat's wanted movement mode, kept until the game next steps (so one
   // sent while waiting for an opponent or paused isn't lost)
   private pendingMode: [string | null, string | null] = [null, null];
@@ -91,7 +94,7 @@ export class Room {
     this.gameId = gameId;
     this.practice = practice;
     this.deps = deps;
-    this.lobby = new Lobby(practice, format, deps.timing);
+    this.lobby = new Lobby(practice, practice ? games[gameId].formats[0] : format, deps.timing);
     this.startedAt = deps.clock();
     this.emptySince = deps.clock();
     this.instance = this.newGame();
@@ -100,14 +103,16 @@ export class Room {
 
   /**
    * A fresh game for the room's format. Practice and unlimited never end (a
-   * won set starts a new one); unlimited scores like one set but nobody wins.
+   * won match starts a new one); each game plays unlimited its own way
+   * (tennis scores it like one set, archery draws random levels), but nobody
+   * wins it.
    */
   private newGame(): GameInstance {
     const unlimited = this.lobby.format === "unlimited";
     const seed = (Math.random() * 2 ** 32) >>> 0;
     this.recorded = false;
     this.tally = { points: [0, 0], bestRally: 0 };
-    return games[this.gameId].create(seed, { endless: this.practice || unlimited, format: unlimited ? "oneSet" : this.lobby.format });
+    return games[this.gameId].create(seed, { endless: this.practice || unlimited, format: this.lobby.format });
   }
 
   private clients(): Client[] {
@@ -203,6 +208,7 @@ export class Room {
 
   format(c: Client, format: RoomFormat): string | null {
     if (c.seat === null || this.seats[c.seat] !== c) return "only the host can change the format";
+    if (!games[this.gameId].formats.includes(format)) return "this game has no such format";
     const r = this.lobby.setFormat(c.seat, format, this.deps.clock());
     if (r === "not host") return "only the host can change the format";
     if (r === "started") return "the match has started";
@@ -228,6 +234,18 @@ export class Room {
       return;
     }
     this.pending.push(swing);
+  }
+
+  /** Archery's sight and release; the game ignores a seat whose turn it isn't. */
+  aim(c: Client, msg: Extract<ClientMsg, { t: "aim" | "release" }>): void {
+    if (c.seat === null) return;
+    const input = { t: msg.t, yaw: msg.yaw, pitch: msg.pitch, draw: msg.draw };
+    if (msg.t === "release") {
+      if (this.ticks - this.lastSwing[c.seat] < SWING_COOLDOWN_TICKS) return;
+      this.lastSwing[c.seat] = this.ticks;
+      this.pendingAim[c.seat] = null;
+      this.pending.push({ seat: c.seat, input });
+    } else this.pendingAim[c.seat] = input;
   }
 
   /** Only the player in a practice room can pause: nobody else is waiting on them. */
@@ -301,6 +319,12 @@ export class Room {
       this.tally.points[winner]++;
       this.tally.bestRally = Math.max(this.tally.bestRally, Number(e.shots));
       this.deps.log("rally", { room: this.id, winner, shots: e.shots, reason: e.reason });
+    } else if (e.type === "shot") {
+      // archery: an arrow's points count toward unlimited; its best is the best arrow
+      const seat = e.seat as Seat;
+      this.tally.points[seat] += Number(e.points);
+      this.tally.bestRally = Math.max(this.tally.bestRally, Number(e.points));
+      this.deps.log("shot", { room: this.id, seat, points: e.points, stage: e.stage, lost: e.lost });
     } else if (e.type === "fault") {
       this.deps.log("fault", { room: this.id, server: e.server, reason: e.reason });
     }
@@ -361,7 +385,12 @@ export class Room {
       for (const seat of [0, 1] as const) {
         const x = this.pendingMove[seat];
         if (x !== null) inputs.push({ seat, input: { t: "move", x } });
+        // the sight goes before any release in `pending` would matter: the
+        // game takes inputs in order and a release ends the aim
+        const aim = this.pendingAim[seat];
+        if (aim !== null) inputs.unshift({ seat, input: aim });
       }
+      this.pendingAim = [null, null];
       if (this.practice) {
         for (const input of this.instance.botInputs(BOT_SEAT)) inputs.push({ seat: BOT_SEAT, input });
       }

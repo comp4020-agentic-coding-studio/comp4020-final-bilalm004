@@ -8,6 +8,9 @@ const MEDIAPIPE_VERSION = "1.0.1";
 const WASM_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}/wasm`;
 const MODEL_URL =
   "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
+// archery reads the fingers of the drawing hand (opening it shoots); the same
+// host as the pose model, so the page's connect-src doesn't change
+const HAND_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
 const LOAD_TIMEOUT_MS = 30_000;
 // a phone runs detection and the 3D renderer together; leave it room
 const DETECT_INTERVAL_MS = matchMedia("(pointer: coarse)").matches ? 66 : 33;
@@ -23,6 +26,8 @@ export interface CameraStats {
 
 export interface CameraSession {
   stop(): void;
+  /** Asked for hands: whether the hand model actually loaded. */
+  hands?: boolean;
 }
 
 function explain(err: unknown): CameraError {
@@ -67,14 +72,19 @@ export async function openCamera(video: HTMLVideoElement): Promise<MediaStream> 
   return stream;
 }
 
-/** Loads the pose model and runs it on the video until stopped. */
+/**
+ * Loads the pose model (and, with `hands`, the hand model) and runs them on
+ * the video until stopped. Hands are only for archery: tennis never loads it.
+ */
 export async function startPose(
   video: HTMLVideoElement,
   stream: MediaStream,
   onFrame: (f: CameraFrame) => void,
   onStats: (s: CameraStats) => void,
+  opts: { hands?: boolean } = {},
 ): Promise<CameraSession> {
   let landmarker: import("@mediapipe/tasks-vision").PoseLandmarker;
+  let handLandmarker: import("@mediapipe/tasks-vision").HandLandmarker | null = null;
   try {
     landmarker = await withTimeout(
       (async () => {
@@ -85,9 +95,22 @@ export async function startPose(
           runningMode: "VIDEO" as const,
           numPoses: 1,
         });
-        return PoseLandmarker.createFromOptions(files, options("GPU")).catch(() =>
+        const pose = await PoseLandmarker.createFromOptions(files, options("GPU")).catch(() =>
           PoseLandmarker.createFromOptions(files, options("CPU")),
         );
+        if (opts.hands) {
+          const { HandLandmarker } = await import("@mediapipe/tasks-vision");
+          const handOptions = (delegate: "GPU" | "CPU") => ({
+            baseOptions: { modelAssetPath: HAND_MODEL_URL, delegate },
+            runningMode: "VIDEO" as const,
+            numHands: 2,
+          });
+          // without it the bow still works: the snap shoots instead
+          handLandmarker = await HandLandmarker.createFromOptions(files, handOptions("GPU"))
+            .catch(() => HandLandmarker.createFromOptions(files, handOptions("CPU")))
+            .catch(() => null);
+        }
+        return pose;
       })(),
       LOAD_TIMEOUT_MS,
       "The pose model took too long to load.",
@@ -115,9 +138,16 @@ export async function startPose(
     lastVideoTime = video.currentTime;
     const t0 = performance.now();
     const result = landmarker.detectForVideo(video, now);
+    // the hands' 21 points each and which hand MediaPipe says it is
+    const hands = handLandmarker
+      ? (() => {
+          const r = handLandmarker.detectForVideo(video, now);
+          return r.landmarks.map((points, i) => ({ points, label: (r.handedness[i]?.[0]?.categoryName ?? "") as string }));
+        })()
+      : undefined;
     spent += performance.now() - t0;
     count++;
-    onFrame({ t: now, landmarks: result.landmarks[0] ?? null, aspect: video.videoWidth / video.videoHeight });
+    onFrame({ t: now, landmarks: result.landmarks[0] ?? null, aspect: video.videoWidth / video.videoHeight, hands });
     if (now - windowStart >= 1000) {
       onStats({ fps: (count * 1000) / (now - windowStart), detectMs: spent / count });
       windowStart = now;
@@ -128,12 +158,14 @@ export async function startPose(
   raf = requestAnimationFrame(loop);
 
   return {
+    hands: handLandmarker !== null,
     stop() {
       stopped = true;
       cancelAnimationFrame(raf);
       stream.getTracks().forEach((t) => t.stop());
       video.srcObject = null;
       landmarker.close();
+      handLandmarker?.close();
     },
   };
 }

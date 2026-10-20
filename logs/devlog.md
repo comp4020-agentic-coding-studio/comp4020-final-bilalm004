@@ -977,3 +977,41 @@ the format of the entries below (see CLAUDE.md, Docs).
 - **Outcome:** tasks/22-archery.md rewritten with the decisions; CLAUDE.md's games rule now allows tennis and archery, and the workflow runs only a game's own specs for a change confined to that game. No code yet.
 - **Why:** turn-based archery needs no lag compensation, so the server can own the shot without hurting feel; wind left out of the preview is the skill.
 - **Open:** stage table, ring sizes, bullseye bonus and bot aim noise, to be settled in the build with tests.
+
+## 2026-10-21 03:08 AEDT | milestone | Archery playable (task 22)
+
+- **Decided by:** user (implement it); Claude (how: game-owned room formats, two new protocol messages `aim`/`release`, the GamePigeon-style view, the bow-gesture maths, practice as a separate in-page sim).
+- **Outcome:** archery runs through the same Room, Lobby and reconnect as tennis. `GameDef.formats` lets each game offer its own formats (archery: "stages", "unlimited"); the lobby refuses one its game doesn't have; a practice room takes its game's default. The unlimited tally also counts archery arrows (best arrow in place of best rally). Client: `client/games/archery/` (range, sight from the no-wind `predictHit`, wind dial with strength and angle, target card, score panel, call after each arrow; mouse, arrow keys + Space, a hold-to-draw button). Camera: bow hand aims, wrist span is draw, a fast snap releases and a slow return cancels (`bow.ts`, pure and tested). Practice cycles levels three arrows at a time, or a picked distance, wind and angle. Menu: archery is playable and keeps its own options.
+- **Why:** reusing the room code is what the registry was for; a game-owned format list kept tennis's "one set / best of three" out of archery without a second lobby.
+- **Verification:** pnpm check 408/408 exit 0 (20 files, 40 archery specs), archery e2e 8/8 at both viewports. Ran on my own server on :8091; the dev servers on :8080/:5173 were left alone.
+- **Open:** the bow gesture is untested on a real webcam (spans and release speed are guesses); ratings per sport wait for task 7; README is 618 words (was 588 before), over the 600 limit by user text I didn't want to cut.
+
+## 2026-10-21 03:27 AEDT | bug | Archery: couldn't shoot; view moved to the centre (user playtest)
+
+- **Decided by:** user (reported both; wants to shoot from the centre); Claude (causes and fixes).
+- **What happened:** three causes, each now covered by an e2e that failed without the fix: (1) a mouse press on the range only drew if you dragged down, so a plain press-and-hold never shot; it now draws while held, like the button. (2) Space did nothing after opening practice, because the focused "Practice" button made the key handler skip every key. (3) The draw only grew inside the frame loop, so on a slow frame rate a quick hold could release with no draw at all; the draw now comes from how long it was held, at the moment of release. Also: the camera stood 0.35 m right of the arrow's line, so arrows seemed to fly in from the side; it is now straight behind the launch point. The tennis "Practice vs bot" label I had renamed is back (the full e2e caught it); archery's is "Play vs bot".
+- **Also likely for the user:** the dev server on :8080 started at 01:40, before archery existed, and `node --watch` misses edits on /mnt/c, so an archery room there can't work until it is restarted.
+
+## 2026-10-21 03:35 AEDT | decision | Archery: opening the drawing hand shoots
+
+- **Decided by:** user (shoot by letting go of the pulling hand); Claude (how: MediaPipe's hand model for the fingertips, judged against the player's own closed grip; the snap kept as a fallback).
+- **Outcome:** archery's camera also loads the hand landmarker (same host as the pose model, so connect-src is unchanged; tennis never loads it). `handOpenness` is fingertip distance from the wrist in palm lengths (about 1 a fist, 2 open); the drawing hand is the detected hand nearest the pose's drawing wrist, not MediaPipe's left/right label. While drawn, opening by 0.45 past the most closed it was this draw, to at least 1.55, shoots with that moment's aim and the fullest recent draw. With no hand reading, the old snap still shoots. The setup panel now says "Aiming hand" with "Left (pull with right)" / "Right (pull with left)" after the user asked what "bow hand" meant.
+- **Why:** the pose model's hand points are knuckles, which barely move when a hand opens, so they couldn't tell open from closed.
+- **Open:** thresholds untested on a real webcam; the hand model costs a second inference per frame (on a phone this may lower the frame rate).
+
+## 2026-10-21 03:42 AEDT | bug | Archery: an open hand wasn't seen (user playtest)
+
+- **Decided by:** user (reported it); Claude (cause and fix).
+- **What happened:** openness was the fingertips' 2D distance from the wrist. A drawing hand points at the camera, so its fingers open along the line of sight and barely move in the image. Now it is how far each finger folds back (angle between wrist->knuckle and knuckle->tip), in 3D using the hand model's depth, 0 a fist to 1 open; thresholds 0.3 past the closed grip and at least 0.6. The spec's facing-the-camera case fails without depth.
+- **Also:** a readout under the camera preview shows whether the hand model loaded and the pulling hand's openness live, so a playtest can say what it sees; the hand must be within a shoulder width of the pose's wrist (was half).
+- **Open:** still unconfirmed on a real webcam.
+
+## 2026-10-21 04:16 AEDT | bug | Archery playtest round: distance, draw, lost hand, first-person bow
+
+- **Decided by:** user (reported the board not getting farther, the open hand being missed when pulled back, the draw being unreliable, asked for a bow on screen and for slower aiming); Claude (causes and fixes).
+- **Distance:** the lens narrowed with distance so the board kept its size and only the background changed. Now a fixed lens (22 degrees, kept as wide on a portrait screen), so the board is big at 10 m and small at 50 m; the corner card still shows it up close.
+- **Draw:** was the wrists' straight-line gap, so raising or lowering the aiming hand changed the power and side-on read weak. Now only the gap along the shoulder line (0.3 to 1.3 shoulder widths); spec covers aiming up and down leaving the draw alone.
+- **Lost hand:** pulled back by the face the hand model drops the hand for a frame or two. The last reading now holds for 300 ms and the match to the pose's wrist allows 1.5 shoulder widths; spec covers a short loss then opening.
+- **Aim:** half as sensitive (aimReach 0.9 to 1.8) and smoothed more.
+- **Bow:** a first-person recurve with a string that draws back and a nocked arrow, drawn in its own overlay scene with a wider lens so it keeps its size; lower right, clear of the target at both viewports.
+- **Verification:** pnpm check 417/417 exit 0; archery e2e 12/12. The full e2e earlier showed 5 failures while other sessions ran their own e2e on this machine; re-run alone, ready and stroke pass, and the one left (training with the camera, "centred sideways") fails the same on a clean build of HEAD in a worktree on :8093, so it is not from this work.

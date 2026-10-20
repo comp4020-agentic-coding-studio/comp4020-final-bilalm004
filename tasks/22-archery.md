@@ -1,6 +1,6 @@
 # 22 Archery
 
-Status: in progress: sim, bot and adapter registered with tests; server wiring, client view and practice next.
+Status: built (2026-10-21): sim, rooms, view, camera gesture and practice, with specs and e2e. Waiting on a real-webcam playtest and on task 7 (ratings).
 Model: Opus
 Session: D
 
@@ -45,16 +45,20 @@ now names tennis and archery and keeps the registry shape.
   room, score or rating, nothing sent to the server.
 
 ## Still open
-- Exact stage table (distance and wind per stage), ring sizes, bullseye bonus.
-- Bot aim noise per stage.
+- Tuning after a playtest: stage table, wind strength (`WIND_ACCEL`), bot
+  aim noise, the 30 s shot clock, the bow gesture's spans and release speed.
 - Whether archery gets guided training later (not in this task).
 
 ## Done when
 - [x] `shared/games/archery/` with sim, bot and adapter, registered in
       `shared/games/registry.ts`; `spec/archery-*.test.ts` sim tests.
-- [ ] Client view in `client/games/archery/`, both viewports, camera and keys;
-      `e2e/archery-*.e2e.ts`.
-- [ ] Rooms work for it through the same server code; a rated match updates the
-      archery rating only.
-- [ ] Practice button works with nothing sent to the server.
-- [ ] Menu tile becomes playable; CLAUDE.md layout, README and `spec/` agree.
+- [x] Client view in `client/games/archery/`, both viewports, camera and keys;
+      `e2e/archery.e2e.ts`.
+- [x] Rooms work for it through the same server code (game-owned formats,
+      `aim`/`release` messages); a finished match is recorded with
+      `game: "archery"` and rated by the usual rule.
+- [ ] A rated match updates the archery rating only: needs task 7, which
+      keys ratings by sport id.
+- [x] Practice button works with nothing sent to the server.
+- [x] Menu tile becomes playable; CLAUDE.md layout, README and `spec/` agree.
+- [ ] Playtest the bow gesture on a real webcam (thresholds in `bow.ts` are guesses).

@@ -56,7 +56,12 @@ lazily and only when a player enters a game. Video never leaves the browser.
   the camera setup notes in `tasks/done/`. Movement has two modes per seat,
   "auto" (default: the server walks you to the ball, `autoTargetX` in
   `sim.ts`) and "tilt" (lean to move); keys and buttons move you in either
-  (task 2).
+  (task 2). Archery (task 22) is `games/archery/`: `view.ts` (range, sight,
+  wind dial, target card, score; mouse, keys, hold button), `range.ts`,
+  `bow.ts` (pure: bow-hold landmarks to aim, draw, release),
+  `bow-camera.ts` (its camera panel; loads the hand model too),
+  `bow-model.ts` (the first-person bow), `practice.ts` + `practice-sim.ts`
+  (in-page practice), `archery.css`; it reuses tennis's ready panel.
 - `spec/*.test.ts` vitest against the running app, plus the sim unit tests.
 - `e2e/*.e2e.ts` Playwright at both viewports, fake webcam.
 
@@ -124,6 +129,20 @@ lazily and only when a player enters a game. Video never leaves the browser.
   Required steps: swing, forehand, backhand, timing (early, on time and late
   each landing in), strength; auto-move stays on. Moving yourself is offered
   after them and optional. Figures in its notes come from `docs/reaction-time.md`.
+- Archery (task 22; `spec/archery-*.test.ts`, `e2e/archery.e2e.ts`): eight
+  stages (10 m to 50 m, wind rising from none), one arrow each per stage,
+  turns alternate and the first shooter swaps; rings 10 to 1, bullseye 11;
+  a tie goes to sudden death at 50 m (nearer the centre wins, exact tie
+  shoots again, not added to the score); a 30 s shot clock. The server flies
+  the arrow and scores it; the client's sight is `predictHit` with no wind.
+  Formats are a game's own (`GameDef.formats`): archery offers "stages" and
+  "unlimited" (random level each stage, counts points and best arrow,
+  unrated). Practice runs in the page, cycling levels or on a picked distance
+  and wind; nothing sent to the server. Camera: the aiming hand aims, the
+  draw is the hands' gap along the shoulders, opening the drawing hand
+  shoots (MediaPipe's hand model, fingers' fold in 3D); with no hand read a
+  fast snap shoots; a slow closed return cancels. A fixed lens, so the board
+  shrinks with distance.
 - Camera is used for gameplay only. Every camera action has a keyboard/mouse
   equivalent, and the lobby and room work with no camera at all.
 - Auto-move (`spec/auto-move.test.ts`) walks slower than manual movement

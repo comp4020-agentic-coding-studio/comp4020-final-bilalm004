@@ -32,9 +32,10 @@ export function onPong(c: Client, id: number): void {
 
 const rooms = new Map<string, Room>();
 
-/** A known room format, or one set (the default) for anything else. */
-export function asRoomFormat(format: unknown): RoomFormat {
-  return (ROOM_FORMATS as readonly unknown[]).includes(format) ? (format as RoomFormat) : "oneSet";
+/** A format `gameId` offers, or its default (the first) for anything else. */
+export function asRoomFormat(format: unknown, gameId = "tennis"): RoomFormat {
+  const offered = games[gameId]?.formats ?? ROOM_FORMATS;
+  return (offered as readonly unknown[]).includes(format) ? (format as RoomFormat) : offered[0];
 }
 
 export function createRoom(gameId: string, practice: boolean, format?: string): Room | null {
@@ -43,7 +44,7 @@ export function createRoom(gameId: string, practice: boolean, format?: string): 
   do {
     id = Array.from({ length: 4 }, () => CODE_LETTERS[Math.floor(Math.random() * CODE_LETTERS.length)]).join("");
   } while (rooms.has(id));
-  const room = new Room(id, gameId, practice, asRoomFormat(format), {
+  const room = new Room(id, gameId, practice, asRoomFormat(format, gameId), {
     record: recordMatch,
     clock: () => performance.now(),
     log,

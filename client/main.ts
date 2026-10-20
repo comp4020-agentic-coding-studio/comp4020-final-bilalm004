@@ -1,5 +1,7 @@
 import "./style.css";
 import type { RoomInfo } from "../shared/protocol.ts";
+import { startArcheryPractice } from "./games/archery/practice.ts";
+import { startArchery } from "./games/archery/view.ts";
 import { startTraining } from "./games/tennis/training.ts";
 import { startTennis } from "./games/tennis/view.ts";
 import { Connection } from "./net/socket.ts";
@@ -12,6 +14,8 @@ let disposeGame: (() => void) | null = null;
 let currentRoom: string | null = null;
 let training = false;
 let error: string | null = null;
+// the sport picked on the menu, so coming back keeps it
+let sport = "tennis";
 
 function showMenu(): void {
   disposeGame?.();
@@ -19,14 +23,23 @@ function showMenu(): void {
   currentRoom = null;
   training = false;
   conn.roomCode = null;
-  renderMenu(root, conn.name, conn.matches, conn.demo, error, {
-    onTrain: train,
-    onPractice: () => conn.send({ t: "create", game: "tennis", practice: true }),
-    onCreate: () => conn.send({ t: "create", game: "tennis", practice: false }),
-    onJoin: (code) => conn.send({ t: "join", room: code }),
-    onSignInDemo: (n) => conn.signInDemo(n),
-    onPlayAsGuest: () => conn.playAsGuest(),
-  });
+  renderMenu(
+    root,
+    conn.name,
+    conn.matches,
+    conn.demo,
+    error,
+    {
+      onTrain: (s) => (s === "archery" ? practiseArchery() : train()),
+      onPractice: (s) => conn.send({ t: "create", game: s, practice: true }),
+      onCreate: (s) => conn.send({ t: "create", game: s, practice: false }),
+      onJoin: (code) => conn.send({ t: "join", room: code }),
+      onSignInDemo: (n) => conn.signInDemo(n),
+      onPlayAsGuest: () => conn.playAsGuest(),
+      onSelect: (s) => (sport = s),
+    },
+    sport,
+  );
 }
 
 function leave(): void {
@@ -49,13 +62,27 @@ function train(): void {
   });
 }
 
+// Archery practice (task 22): in the page too, nothing sent to the server.
+function practiseArchery(): void {
+  disposeGame?.();
+  training = true;
+  sport = "archery";
+  error = null;
+  history.replaceState(null, "", "#/archery/practice");
+  disposeGame = startArcheryPractice(root, () => {
+    history.replaceState(null, "", location.pathname);
+    showMenu();
+  });
+}
+
 function enterRoom(info: RoomInfo): void {
   disposeGame?.();
   currentRoom = info.room;
   training = false;
   error = null;
   history.replaceState(null, "", `#/room/${info.room}`);
-  disposeGame = startTennis(root, conn, info, leave);
+  sport = info.game;
+  disposeGame = info.game === "archery" ? startArchery(root, conn, info, leave) : startTennis(root, conn, info, leave);
 }
 
 conn.on((msg) => {
@@ -76,4 +103,5 @@ conn.on((msg) => {
 const invite = location.hash.match(/^#\/room\/([A-Za-z]{4})$/);
 if (invite) conn.send({ t: "join", room: invite[1].toUpperCase() });
 if (location.hash === "#/train") train();
+else if (location.hash === "#/archery/practice") practiseArchery();
 else showMenu();

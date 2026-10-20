@@ -11,6 +11,8 @@ import type { Hand, Level, SwingKind } from "../../../shared/games/tennis/sim.ts
 export interface Point {
   x: number;
   y: number;
+  /** Depth, where the model gives one (the hand model does; roughly x's scale). */
+  z?: number;
   visibility?: number;
 }
 
@@ -597,6 +599,8 @@ export interface CameraFrame {
   landmarks: readonly Point[] | null;
   /** video width / height */
   aspect: number;
+  /** Archery only: each detected hand's 21 points, and MediaPipe's "Left"/"Right" label. */
+  hands?: readonly { points: readonly Point[]; label: string }[];
 }
 
 export interface CameraOutput {

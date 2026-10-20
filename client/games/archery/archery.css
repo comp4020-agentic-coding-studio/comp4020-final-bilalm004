@@ -1,0 +1,291 @@
+/* Archery (task 22): score panel, wind dial, target card, draw bar and the
+   call after each arrow. Laid over the canvas like tennis's HUD. */
+
+.archery .ar-score {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+  padding: 0.35rem 0.6rem;
+  border-radius: 10px;
+  background: #0f1720cc;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.archery .ar-stage {
+  font-size: 0.8rem;
+  opacity: 0.85;
+}
+
+.archery .ar-row {
+  display: grid;
+  grid-template-columns: minmax(3.5rem, 7rem) 1fr auto;
+  align-items: center;
+  gap: 0.5rem;
+  border-left: 4px solid var(--seat);
+  padding-left: 0.4rem;
+}
+
+.archery .ar-row[data-turn="true"] .ar-name::after {
+  content: " ◀";
+  color: var(--seat);
+}
+
+.archery .ar-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.archery .ar-arrows {
+  display: flex;
+  gap: 0.2rem;
+  overflow: hidden;
+}
+
+.archery .ar-arrows b {
+  min-width: 1.3rem;
+  text-align: center;
+  font-size: 0.8rem;
+  border-radius: 4px;
+  background: #ffffff22;
+}
+
+.archery .ar-total {
+  font-size: 1.15rem;
+}
+
+.archery .ar-side {
+  position: absolute;
+  right: 0.75rem;
+  top: 6.5rem;
+  display: grid;
+  gap: 0.5rem;
+  justify-items: end;
+  pointer-events: none;
+}
+
+.archery .ar-wind {
+  display: grid;
+  justify-items: center;
+  gap: 0.1rem;
+  width: 6rem;
+  padding: 0.35rem;
+  border-radius: 10px;
+  background: #0f1720cc;
+  color: #fff;
+  font-size: 0.8rem;
+}
+
+.archery .ar-wind svg {
+  width: 4.5rem;
+  height: 4.5rem;
+}
+
+.archery .ar-wind-dial {
+  fill: #ffffff14;
+  stroke: #ffffff66;
+  stroke-width: 2;
+}
+
+.archery .ar-wind-arrow {
+  stroke: #ffd43b;
+  stroke-width: 7;
+  stroke-linecap: round;
+  fill: #ffd43b;
+}
+
+.archery .ar-card {
+  width: 8rem;
+  height: 8rem;
+  padding: 0.3rem;
+  border-radius: 10px;
+  background: #0f1720cc;
+}
+
+.archery .ar-card svg {
+  width: 100%;
+  height: 100%;
+}
+
+.archery .ar-card-sight {
+  fill: none;
+  stroke-width: 0.03;
+}
+
+.archery .ar-draw {
+  position: absolute;
+  left: 50%;
+  bottom: calc(max(1rem, env(safe-area-inset-bottom)) + 4.25rem);
+  width: min(18rem, 70vw);
+  height: 0.6rem;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: #0f172099;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.archery .ar-draw span {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: #adb5bd;
+}
+
+.archery .ar-draw[data-ready="true"] span {
+  background: #ffd43b;
+}
+
+.archery .ar-call {
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  transform: translate(-50%, -50%);
+  padding: 0.3rem 1.2rem;
+  border-radius: 12px;
+  background: #0f1720dd;
+  color: #fff;
+  font-size: clamp(1.8rem, 6vw, 3rem);
+  font-weight: 800;
+  pointer-events: none;
+  animation: ar-pop 0.25s ease-out;
+}
+
+.archery .ar-call[data-points="11"] {
+  color: #ffd43b;
+}
+
+.archery .ar-call[hidden] {
+  display: none;
+}
+
+@keyframes ar-pop {
+  from {
+    transform: translate(-50%, -50%) scale(0.6);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .archery .ar-call {
+    animation: none;
+  }
+}
+
+.archery .controls .ar-shoot {
+  flex: 0 1 14rem;
+}
+
+.archery .cam-dock {
+  top: auto;
+  bottom: calc(max(1rem, env(safe-area-inset-bottom)) + 5.5rem);
+  left: 0.75rem;
+  right: auto;
+  width: min(220px, 34vw);
+}
+
+/* a phone: the side column shrinks and sits under the HUD */
+@media (max-width: 600px) {
+  /* below the HUD, which wraps to three rows in a room */
+  .archery .ar-side {
+    top: 15rem;
+    right: 0.5rem;
+  }
+
+  .archery .ar-wind {
+    width: 4.6rem;
+    font-size: 0.7rem;
+  }
+
+  .archery .ar-wind svg {
+    width: 3.2rem;
+    height: 3.2rem;
+  }
+
+  .archery .ar-card {
+    width: 5.2rem;
+    height: 5.2rem;
+  }
+
+  .archery .ar-row {
+    grid-template-columns: minmax(3rem, 5rem) 1fr auto;
+  }
+}
+
+/* practice: distance and wind pickers, bottom left above the controls */
+.archery .ar-practice {
+  position: absolute;
+  left: 0.75rem;
+  top: 6.5rem;
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.5rem;
+  border-radius: 10px;
+  background: #0f1720cc;
+  color: #fff;
+  font-size: 0.85rem;
+}
+
+.archery .ar-practice label {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.archery .ar-practice select {
+  min-height: 36px;
+}
+
+@media (max-width: 600px) {
+  .archery .ar-practice {
+    top: auto;
+    bottom: calc(max(1rem, env(safe-area-inset-bottom)) + 5.5rem);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    left: 0.5rem;
+    right: 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  .archery .ar-practice select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .archery.local .ar-side {
+    top: 9.5rem;
+  }
+}
+
+/* under the camera preview: does the camera see the pulling hand open? */
+.archery .ar-hand {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 8px;
+  background: #0f1720cc;
+  color: #fff;
+  font-size: 0.8rem;
+}
+
+.archery .ar-hand[hidden] {
+  display: none;
+}
+
+.archery .ar-hand-bar {
+  display: block;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: #ffffff22;
+  overflow: hidden;
+}
+
+.archery .ar-hand-bar i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: #adb5bd;
+}
+
+.archery .ar-hand[data-open="true"] .ar-hand-bar i {
+  background: #51cf66;
+}

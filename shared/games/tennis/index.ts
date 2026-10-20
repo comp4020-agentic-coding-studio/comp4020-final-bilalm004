@@ -57,6 +57,7 @@ export function tennisFrom(start: TennisState): GameInstance {
 export const tennis: GameDef = {
   id: "tennis",
   name: "Tennis",
+  formats: ["oneSet", "bestOfThree", "unlimited"],
   create(seed, options) {
     return makeInstance(createState(seed, { endless: options?.endless === true, format: asFormat(options?.format), moveMode: "auto" }));
   },

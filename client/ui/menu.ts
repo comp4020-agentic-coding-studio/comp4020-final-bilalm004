@@ -1,11 +1,14 @@
 export interface MenuActions {
-  /** Training (task 5): runs in the page against a ball machine, no server. */
-  onTrain(): void;
-  onPractice(): void;
-  onCreate(): void;
+  /** Training (task 5, tennis) or practice (task 22, archery): runs in the page, no server. */
+  onTrain(sport: string): void;
+  /** A room against the bot, for the selected sport. */
+  onPractice(sport: string): void;
+  onCreate(sport: string): void;
   onJoin(code: string): void;
   onSignInDemo(n: 1 | 2): void;
   onPlayAsGuest(): void;
+  /** The player picked a playable sport. */
+  onSelect?(sport: string): void;
 }
 
 /** One sport on the home screen. Adding a sport is one entry in SPORTS. */
@@ -181,15 +184,15 @@ function mysteryThumb(): string {
 }
 
 /**
- * The sports on the home screen, in menu order. Tennis is the only game
- * (CLAUDE.md: no second game until the core is solid). The others are
- * "coming soon" placeholders: aria-disabled, they only change the preview,
- * can't be selected and never reach the server. Delete an entry to drop it.
+ * The sports on the home screen, in menu order. Tennis and archery are
+ * playable (CLAUDE.md). The others are "coming soon" placeholders:
+ * aria-disabled, they only change the preview, can't be selected and never
+ * reach the server. Delete an entry to drop it.
  */
 export const SPORTS: Sport[] = [
   { id: "tennis", name: "Tennis", playable: true, icon: ICONS.tennis, blurb: "Rally against the bot or a friend. Swing with your camera or the keyboard.", thumbnail: tennisThumb },
   { id: "bowling", name: "Bowling", playable: false, icon: ICONS.bowling, blurb: "Coming soon.", thumbnail: bowlingThumb },
-  { id: "archery", name: "Archery", playable: false, icon: ICONS.archery, blurb: "Coming soon.", thumbnail: archeryThumb },
+  { id: "archery", name: "Archery", playable: true, icon: ICONS.archery, blurb: "Read the wind and hit the gold, stage by stage. Draw with your camera or the mouse.", thumbnail: archeryThumb },
   { id: "mystery-1", name: "??", playable: false, icon: ICONS.mystery, blurb: "A secret sport. Who knows?", thumbnail: mysteryThumb },
   { id: "mystery-2", name: "??", playable: false, icon: ICONS.mystery, blurb: "A secret sport. Who knows?", thumbnail: mysteryThumb },
 ];
@@ -200,10 +203,10 @@ const POINTER = `<svg class="pointer" viewBox="0 0 32 32" aria-hidden="true" foc
   <path d="M6 3 L6 25 L11.5 20 L15.5 29 L20 27 L16 18.5 L24 18.5 Z" fill="#fff" stroke="#1769b8" stroke-width="2.4" stroke-linejoin="round"/>
 </svg>`;
 
-/** Only the selected sport (Tennis) has options; tennis keeps the actions it always had. */
-const tennisOptions = `
-  <button class="pill pill--primary" data-action="practice">Practice vs bot</button>
-  <button class="pill" data-action="train">Train</button>
+/** The selected sport's options: a room vs the bot, in-page training or practice, a room, or join one. */
+const sportOptions = (sport: string) => `
+  <button class="pill pill--primary" data-action="practice">${sport === "archery" ? "Play vs bot" : "Practice vs bot"}</button>
+  <button class="pill" data-action="train">${sport === "archery" ? "Practice" : "Train"}</button>
   <button class="pill" data-action="create">Create a room</button>
   <form class="join">
     <label for="code" hidden>Room code</label>
@@ -219,9 +222,11 @@ export function renderMenu(
   demo: 1 | 2 | null,
   error: string | null,
   actions: MenuActions,
+  /** The sport selected last time the menu was shown, if it is playable. */
+  sportId?: string,
 ): void {
   root.replaceChildren();
-  const selected = SPORTS.find((s) => s.playable) ?? SPORTS[0];
+  let selected = SPORTS.find((s) => s.playable && s.id === sportId) ?? SPORTS.find((s) => s.playable) ?? SPORTS[0];
   const menu = document.createElement("main");
   menu.className = "menu";
   menu.innerHTML = `
@@ -247,7 +252,7 @@ export function renderMenu(
       <p class="error" role="alert" hidden></p>
       <section class="options" aria-labelledby="options-title">
         <h2 id="options-title">${selected.name}</h2>
-        <div class="options-row">${tennisOptions}</div>
+        <div class="options-row">${sportOptions(selected.id)}</div>
       </section>
       <footer class="menu-footer">
         <p class="who">${name ? `Playing as <strong></strong> · <span class="matches"></span>` : "Connecting…"}</p>
@@ -313,6 +318,11 @@ export function renderMenu(
       // placeholders are never selectable and never reach the server
       if (!sport.playable) return;
       for (const other of buttons) if (other.hasAttribute("aria-pressed")) other.setAttribute("aria-pressed", String(other === b));
+      selected = sport;
+      actions.onSelect?.(sport.id);
+      menu.querySelector<HTMLElement>("#options-title")!.textContent = sport.name;
+      (menu.querySelector("[data-action=train]") as HTMLElement).textContent = sport.id === "archery" ? "Practice" : "Train";
+      (menu.querySelector("[data-action=practice]") as HTMLElement).textContent = sport.id === "archery" ? "Play vs bot" : "Practice vs bot";
       // opening a sport takes you to its options (practice / create / join)
       const options = menu.querySelector<HTMLElement>(".options")!;
       options.classList.remove("is-opened");
@@ -335,9 +345,9 @@ export function renderMenu(
     });
   });
 
-  menu.querySelector("[data-action=practice]")?.addEventListener("click", actions.onPractice);
-  menu.querySelector("[data-action=train]")?.addEventListener("click", actions.onTrain);
-  menu.querySelector("[data-action=create]")?.addEventListener("click", actions.onCreate);
+  menu.querySelector("[data-action=practice]")?.addEventListener("click", () => actions.onPractice(selected.id));
+  menu.querySelector("[data-action=train]")?.addEventListener("click", () => actions.onTrain(selected.id));
+  menu.querySelector("[data-action=create]")?.addEventListener("click", () => actions.onCreate(selected.id));
   menu.querySelector("[data-action=guest]")?.addEventListener("click", actions.onPlayAsGuest);
   menu.querySelectorAll<HTMLButtonElement>("[data-demo]").forEach((b) => {
     b.addEventListener("click", () => actions.onSignInDemo(Number(b.dataset.demo) as 1 | 2));

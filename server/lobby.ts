@@ -42,7 +42,7 @@ export class Lobby {
 
   constructor(practice: boolean, format: RoomFormat = "oneSet", timing: Partial<Timing> = {}) {
     this.practice = practice;
-    this.format = practice ? "oneSet" : format;
+    this.format = format;
     this.timing = { countdownMs: COUNTDOWN_MS, graceMs: GRACE_MS, ...timing };
     // the bot is always ready
     if (practice) this.seats[BOT_SEAT] = { token: "", name: "Bot", ready: true, connected: true, bot: true };

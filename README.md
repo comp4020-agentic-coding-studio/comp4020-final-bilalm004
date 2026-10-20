@@ -2,9 +2,9 @@
 
 Weblympics - A webcam-controlled sports game, played against a bot or another person over the web!
 
-Currently: one event - TENNIS
+Currently: two events - TENNIS and ARCHERY
 
-The shape is built to hold more: a shared game registry, a server that owns the simulation, and a client that just renders whatever the server says. Tennis gets to prove that shape works before a second game joins it.
+The shape is built to hold more: a shared game registry, a server that owns the simulation, and a client that just renders whatever the server says. Archery is the second game through it.
 
 ## Inspiration
 
@@ -28,6 +28,8 @@ Invite link or room code only; no public room list. Two seats, everyone else wat
 
 ## Controls
 In tennis: by default the game walks you to the ball, slower than you can run, so a hard wide shot can still beat you. "Move: lean" under the camera preview lets you shift your shoulders instead. Pick one racket hand when you set up the camera; how you turn it decides the stroke: palm to the screen is a forehand, the back of your hand a backhand. "Train" teaches all this against a ball machine, entirely in your browser.
+
+In archery: hold an imaginary bow. Your front hand aims, pulling the other back sets strength, snapping it forward shoots. A dot shows the landing without wind; reading the wind is up to you.
 
 For the current state, movement was implemented with shoulders, rather than physically stepping to the side, to account for the user satying within the frame of the webcam for actions to be picked up, aswell as considering the amount of space a user may have in the real world to play.
 

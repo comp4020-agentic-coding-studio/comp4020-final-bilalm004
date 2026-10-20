@@ -15,7 +15,7 @@ export function asInput(seat: Seat, input: unknown): ArcheryInput | null {
 }
 
 /** "unlimited" plays endless random levels; anything else is the eight-stage match. */
-export const asFormat = (format: unknown): Format => (format === "unlimited" ? "unlimited" : "match");
+export const asFormat = (format: unknown): Format => (format === "unlimited" ? "unlimited" : "stages");
 
 /** An archery game starting from `start`; for tests. */
 export function archeryFrom(start: ArcheryState): GameInstance {
@@ -25,6 +25,7 @@ export function archeryFrom(start: ArcheryState): GameInstance {
 export const archery: GameDef = {
   id: "archery",
   name: "Archery",
+  formats: ["stages", "unlimited"],
   create(seed, options) {
     const format = asFormat(options?.format);
     return makeInstance(createState(seed, { format, endless: options?.endless === true || format === "unlimited" }));

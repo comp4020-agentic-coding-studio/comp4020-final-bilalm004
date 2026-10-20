@@ -1,3 +1,4 @@
+import type { RoomFormat } from "../protocol.ts";
 import { archery } from "./archery/index.ts";
 import { tennis } from "./tennis/index.ts";
 
@@ -34,6 +35,8 @@ export interface GameInstance {
 export interface GameDef {
   id: string;
   name: string;
+  /** The room formats the host may pick, the default first. */
+  formats: readonly RoomFormat[];
   /**
    * `endless`: no winner, play until everyone leaves (practice).
    * `format`: the game's own match format id; unknown values get its default.

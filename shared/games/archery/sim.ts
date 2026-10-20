@@ -48,7 +48,7 @@ export const OVER_TICKS = 240;
 /** Flights longer than this (they can't be, in range) are lost. */
 const MAX_FLIGHT_TICKS = 600;
 
-export type Format = "match" | "unlimited";
+export type Format = "stages" | "unlimited";
 
 /**
  * Wind: `speed` m/s, blowing toward `angle` radians, measured from the
@@ -273,7 +273,7 @@ function freshMatch(s: ArcheryState, ev: ArcheryEvent[]): void {
 export function createState(seed: number, options: StateOptions = {}): ArcheryState {
   const s: ArcheryState = {
     tick: 0,
-    format: options.format ?? "match",
+    format: options.format ?? "stages",
     endless: options.endless ?? false,
     phase: "aim",
     phaseTick: 0,

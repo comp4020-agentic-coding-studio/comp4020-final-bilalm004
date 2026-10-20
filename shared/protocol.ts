@@ -1,10 +1,11 @@
 import type { Hand, Level, MoveMode, SwingKind } from "./games/tennis/sim.ts";
 
 // A room's match format (task 4): the host picks it in the ready panel before
-// play. "unlimited" has no winner, counts points and the best rally, is never
-// rated, and ends when someone leaves.
-export type RoomFormat = "oneSet" | "bestOfThree" | "unlimited";
-export const ROOM_FORMATS: readonly RoomFormat[] = ["oneSet", "bestOfThree", "unlimited"];
+// play, from the ones its game offers (`GameDef.formats`). "unlimited" has no
+// winner, counts points and the best rally (archery: the best arrow), is
+// never rated, and ends when someone leaves. "stages" is archery's match.
+export type RoomFormat = "oneSet" | "bestOfThree" | "stages" | "unlimited";
+export const ROOM_FORMATS: readonly RoomFormat[] = ["oneSet", "bestOfThree", "stages", "unlimited"];
 
 // waiting (a seat is empty) -> ready-check -> countdown (3 s) -> playing;
 // paused while a dropped player's seat is held (30 s)
@@ -30,7 +31,7 @@ export interface LobbyView {
   countdown: number | null;
   /** A dropped player's seat being held: whose, and whole seconds left. */
   hold: { seat: 0 | 1; name: string; seconds: number } | null;
-  /** Unlimited only: points won by each seat this match, and the longest rally in shots. */
+  /** Unlimited only: points won by each seat this match, and the longest rally in shots (archery: the best arrow's points). */
   tally: { points: [number, number]; bestRally: number } | null;
 }
 
@@ -55,6 +56,10 @@ export type ClientMsg =
   // server judges the swing there if it can (ADR 001), within its own limits
   | { t: "swing"; dirX: number; kind: SwingKind; level: Level; hand?: Hand; lift?: number; timingAim?: boolean; tick?: number }
   | { t: "move"; x: number }
+  // archery: the sight (yaw, pitch, radians) and draw (0..1) while drawing,
+  // and the release that shoots; only the shooter's count, the sim clamps
+  | { t: "aim"; yaw: number; pitch: number; draw: number }
+  | { t: "release"; yaw: number; pitch: number; draw: number }
   // movement mode for the sender's own seat: "auto" (the server walks you to
   // the ball, the default) or "tilt" (only your own moves); anything else is
   // a bad message
@@ -124,6 +129,12 @@ export function parseClientMsg(raw: string): ClientMsg | null {
     }
     case "move":
       return typeof m.x === "number" && Number.isFinite(m.x) ? { t: "move", x: m.x } : null;
+    case "aim":
+    case "release": {
+      const { yaw, pitch, draw } = m;
+      if (![yaw, pitch, draw].every((v) => typeof v === "number" && Number.isFinite(v))) return null;
+      return { t: m.t, yaw: yaw as number, pitch: pitch as number, draw: draw as number };
+    }
     case "mode":
       return m.mode === "auto" || m.mode === "tilt" ? { t: "mode", mode: m.mode } : null;
     case "pause":

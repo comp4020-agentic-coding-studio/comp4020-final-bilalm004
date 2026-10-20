@@ -9,14 +9,19 @@ import "./ready-panel.css";
 export const FORMAT_LABELS: Record<RoomFormat, string> = {
   oneSet: "One set",
   bestOfThree: "Best of three",
+  stages: "Eight stages",
   unlimited: "Unlimited",
 };
 
 const FORMAT_NOTES: Record<RoomFormat, string> = {
   oneSet: "First to six games, tiebreak at 6-6. Rated.",
   bestOfThree: "First to two sets. Rated.",
+  stages: "One arrow each per stage, 10 m to 50 m, the wind getting stronger. Highest total wins. Rated.",
   unlimited: "Play as long as you like; points and best rally are counted. No winner, not rated.",
 };
+
+// archery's unlimited counts arrows, not rallies
+const UNLIMITED_ARCHERY = "Random distance and wind every stage, as long as you like; points and best arrow are counted. No winner, not rated.";
 
 export interface ReadyPanel {
   update(view: LobbyView): void;
@@ -32,8 +37,15 @@ export interface ReadyCallbacks {
   openCamera(): void;
 }
 
-/** `seat`: this viewer's seat, null for a spectator. */
-export function createReadyPanel(parent: HTMLElement, seat: 0 | 1 | null, room: string, cb: ReadyCallbacks): ReadyPanel {
+/** `seat`: this viewer's seat, null for a spectator. `formats`: the ones the room's game offers (`GameDef.formats`). */
+export function createReadyPanel(
+  parent: HTMLElement,
+  seat: 0 | 1 | null,
+  room: string,
+  cb: ReadyCallbacks,
+  formats: readonly RoomFormat[] = ["oneSet", "bestOfThree", "unlimited"],
+): ReadyPanel {
+  const notes = { ...FORMAT_NOTES, ...(formats.includes("stages") ? { unlimited: UNLIMITED_ARCHERY } : {}) };
   const el = document.createElement("section");
   el.className = "ready-panel";
   el.setAttribute("aria-label", "Match setup");
@@ -44,7 +56,7 @@ export function createReadyPanel(parent: HTMLElement, seat: 0 | 1 | null, room: 
     <fieldset class="rp-format">
       <legend>Format</legend>
       <div class="rp-options" role="radiogroup" aria-label="Match format">
-        ${(Object.keys(FORMAT_LABELS) as RoomFormat[]).map((f) => `<button type="button" role="radio" data-format="${f}">${FORMAT_LABELS[f]}</button>`).join("")}
+        ${formats.map((f) => `<button type="button" role="radio" data-format="${f}">${FORMAT_LABELS[f]}</button>`).join("")}
       </div>
       <p class="rp-note"></p>
     </fieldset>
@@ -140,7 +152,7 @@ export function createReadyPanel(parent: HTMLElement, seat: 0 | 1 | null, room: 
         b.setAttribute("aria-checked", String(on));
         b.disabled = !host;
       }
-      note.textContent = `${FORMAT_NOTES[v.format]}${host ? "" : " The host picks the format."}`;
+      note.textContent = `${notes[v.format]}${host ? "" : " The host picks the format."}`;
       if (seat !== null) {
         const mine = v.seats[seat]?.ready ?? false;
         readyBtn.textContent = mine ? "Not ready" : "I'm ready";
