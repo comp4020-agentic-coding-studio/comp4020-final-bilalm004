@@ -1,3 +1,4 @@
+import { archery } from "./archery/index.ts";
 import { tennis } from "./tennis/index.ts";
 
 export interface SeatInput {
@@ -40,4 +41,4 @@ export interface GameDef {
   create(seed: number, options?: { endless?: boolean; format?: string }): GameInstance;
 }
 
-export const games: Record<string, GameDef> = { tennis };
+export const games: Record<string, GameDef> = { tennis, archery };

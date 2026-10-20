@@ -1,6 +1,6 @@
 # 22 Archery
 
-Status: planned with the user (2026-10-21), not built.
+Status: in progress: sim, bot and adapter registered with tests; server wiring, client view and practice next.
 Model: Opus
 Session: D
 
@@ -18,7 +18,9 @@ now names tennis and archery and keeps the registry shape.
   board shows both players' arrows.
 - **Scoring:** rings 10 to 1 plus a bullseye bonus; highest total after 8
   stages wins. A tie goes to sudden death: one arrow each at the furthest
-  distance, closest to centre wins, an exact tie is a draw.
+  distance, closest to centre wins; an exact tie shoots again (Claude, in the
+  build: a pair that can't tie forever is simpler than a draw result). Sudden
+  death decides the winner but is not added to the score.
 - **Unlimited format:** no winner, counts points and best arrow, ends when
   someone leaves, stored unrated. Distance is randomised between the levels
   each turn, and the wind re-rolled with it.
@@ -48,7 +50,7 @@ now names tennis and archery and keeps the registry shape.
 - Whether archery gets guided training later (not in this task).
 
 ## Done when
-- [ ] `shared/games/archery/` with sim, bot and adapter, registered in
+- [x] `shared/games/archery/` with sim, bot and adapter, registered in
       `shared/games/registry.ts`; `spec/archery-*.test.ts` sim tests.
 - [ ] Client view in `client/games/archery/`, both viewports, camera and keys;
       `e2e/archery-*.e2e.ts`.

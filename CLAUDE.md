@@ -23,7 +23,10 @@ lazily and only when a player enters a game. Video never leaves the browser.
   adapter) and registers in `shared/games/registry.ts`. Tennis scoring
   (points, games, sets, tiebreak, faults) is `shared/games/tennis/scoring.ts`;
   the sim keeps its `ScoreState` in the snapshot. `machine.ts` is training's
-  seeded ball machine (feeds with the sim's own `launch()`).
+  seeded ball machine (feeds with the sim's own `launch()`). Archery
+  (task 22) is `shared/games/archery/`: `sim.ts` (stages, seeded wind,
+  flight, rings; `predictHit` with no wind is the client's preview),
+  `bot.ts` (`solveAim` plus noise), `index.ts` (adapter).
 - `server/` `index.ts` (http + ws + `/readme/`), `rooms.ts` (live rooms with
   the real clock and db), `room.ts` (one room: 60 Hz tick loop, seats,
   spectators, game), `lobby.ts` (pure room rules: phases, ready, format,
