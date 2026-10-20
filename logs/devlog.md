@@ -963,3 +963,10 @@ the format of the entries below (see CLAUDE.md, Docs).
 - **Decided by:** user (asked for the open points to be noted for another session); Claude (what went in it).
 - **Outcome:** tasks/handoff.md lists what is unpushed (74 commits), what needs the user's eyes on a real webcam, the parked discussion, the bot-strength question from the last playtest (the score was checked and is not a bug), the queued tasks, untested gaps, the working rules learned this stretch (restart both dev processes, find PIDs by port, spare ports, the long e2e), and which leftover worktrees can be removed. Linked from tasks/00-overview.md.
 - **Why:** so a fresh session can start without this conversation.
+
+## 2026-10-21 02:04 AEDT | decision | Next deliverables planned: accounts, per-sport leaderboards, crowd and sound, archery session
+
+- **Decided by:** user (the feature list, passkeys only, guests off the leaderboard, Elo, accounts deletable, display names, rated as a host-set invite option, one leaderboard per sport, sport pages dropped, tasks 10 and 11 set aside, archery in its own session); Claude (passkeys via a library, `obscenity` for names, synthesised audio, the session split, Elo K = 32).
+- **Outcome:** new task files 17 to 22 and tasks/sessions.md; tasks 7, 15 and 16 rewritten or tagged; overview table updated. Nothing built, no code changed.
+- **Why:** Fly.io has no player sign-in, so accounts are built in; passkeys keep passwords and secrets out of a public repo.
+- **Open:** how archery plays (settled in its own session); the display-name profanity check has honest gaps, so an admin can rename by hand.

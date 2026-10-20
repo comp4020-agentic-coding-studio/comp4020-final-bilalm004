@@ -1,7 +1,8 @@
 # 16 Point-scored banner and reaction effects
 
-Status: queued
+Status: queued (user confirmed 2026-10-21: the call shows big at the top first, e.g. "15 love"; the crowd and sound reactions are task 19)
 Model: Opus
+Session: B (after 15)
 Waits on: nothing in the sim; touches the score bar (task 1) and the stage
 (character.ts), so do it as one change
 

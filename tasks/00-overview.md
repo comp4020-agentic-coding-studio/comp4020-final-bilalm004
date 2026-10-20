@@ -27,8 +27,18 @@ One flat list. Start at the top; a task only waits on the ones named.
 | 12 | [Rally fixes](12-rally-fixes.md): out balls, dead ball, wider hit window (done) | 2 | Opus |
 | 13 | [Wii-style home screen](13-home-screen.md): title, sport thumbnail, themed sport buttons (done) | - | Opus |
 | 14 | [Weblympics colours and logo](14-brand-and-logo.md): Olympic colours, a fun logo | - | Opus |
-| 15 | [Game pages, recorded thumbnails, webcam by default](15-game-pages-and-thumbnails.md) | 4, 5 | Opus |
+| 15 | [Webcam by default](15-game-pages-and-thumbnails.md) (sport pages and thumbnails dropped for now) | - | Sonnet |
 | 16 | [Point-scored banner and reaction effects](16-point-scored-banner.md) | - | Opus |
+| 17 | [Accounts](17-accounts.md): passkeys, profile, display name, delete | - | Opus |
+| 18 | [Character customisation](18-character-customisation.md) | 17 | Sonnet |
+| 19 | [Crowd reactions and sound](19-crowd-and-sound.md) | 16, 20 | Opus then Sonnet |
+| 20 | [Court and stadium graphics](20-court-graphics.md) | - | Opus |
+| 21 | [Training: endless hit-the-spot](21-training-hit-the-spot.md) | - | Sonnet |
+| 22 | [Archery](22-archery.md): planned in its own session | - | Opus |
+
+Tasks 10 (README) and 11 (ship) are set aside by the user for now. Task 7 now
+waits on 17 and is per-sport with a host-set rated option. How the new tasks
+split across parallel sessions: [sessions.md](sessions.md).
 
 Not numbered:
 - [handoff.md](handoff.md): where things stand and what to pick up first (read
