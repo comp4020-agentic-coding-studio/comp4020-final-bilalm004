@@ -20,6 +20,10 @@ red) and a fun logo, so it reads as a games and not a plain title.
   light blue on white need care).
 - Fun, in the Wii spirit: rounded, bouncy, slightly animated (off with
   prefers-reduced-motion).
+- The logo is **animated** (user, 2026-10-21): letters bounce in once on load,
+  then the rings gently float or spin on a slow loop; pure CSS/SVG, one still
+  frame under reduced motion. The pointer and thumbnail loops are task 23, run
+  right after this one in the same session.
 
 ## Done when
 - [ ] Logo and palette on the home screen at 1920x1080 and 390x844, no clipping.

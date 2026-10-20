@@ -14,7 +14,7 @@ check (task 11), and `PROCESS.md` and the reflections, which are the user's.
 |---|---|---|---|
 | A: accounts | 17 Accounts, then 18 Customisation, then 7 Leaderboard and Elo, then 8 Logging | Opus for 17 and 7, Sonnet for 18 and 8 | `server/`, `schema.ts`, protocol, profile and leaderboard UI |
 | B: feel | 15 Webcam default, then 16 Top banner, then 19 Crowd and sound | Sonnet for 15, Opus for 16 and 19 | `view.ts`, HUD, camera setup, score bar, new audio module |
-| C: arena | 20 Court graphics, then 21 Hit-the-spot training | Opus for 20, Sonnet for 21 | `stadium.ts`, `training*.ts` |
+| C: arena | 20 Court graphics, then 21 Hit-the-spot training, then 14 Colours and logo, then 23 Home screen polish | Opus for 20, 14 and 23, Sonnet for 21 | `stadium.ts`, `training*.ts`, then `menu.ts` and `style.css` |
 | D: archery | its own terminal, planned there with the user | Opus | `shared/games/archery/`, registry, `client/games/archery/` |
 
 ## Overlaps to watch
@@ -41,3 +41,7 @@ check (task 11), and `PROCESS.md` and the reflections, which are the user's.
   accounts can pick a display name with a server-side profanity check.
 - Dedicated sport pages and recorded thumbnails are dropped for now.
 - Sounds are synthesised with Web Audio, behind one module.
+- Home screen: animated logo (14), arrow cursor and lighter looping SVG/CSS
+  thumbnails (23). Spectating mode (24) is written down only, not built now.
+- Home-screen files (`menu.ts`, `style.css`) are touched by 14, 17 (Dev tools)
+  and 23: session A adds Dev tools after C merges 14 and 23, or rebases onto it.
