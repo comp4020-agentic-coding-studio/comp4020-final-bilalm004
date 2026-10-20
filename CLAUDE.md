@@ -109,8 +109,10 @@ lazily and only when a player enters a game. Video never leaves the browser.
   and every swing misses. The bot lets go a ball it predicts will land out
   (`spec/rally-fixes.test.ts`, task 12).
 - Game logic stays deterministic (seed + input stream) so it can be tested.
-- Tennis is the only game until the core is solid (rooms, reconnect, logging).
-  Don't add a second game unless I ask; keep the registry so one can slot in.
+- Tennis and archery (task 22) are the playable games. Add another only when
+  I ask. Each lives in `shared/games/<name>/` and registers in the registry, so
+  rooms, lobby and reconnect stay game-agnostic. A game's specs are named
+  `spec/<name>-*.test.ts` and `e2e/<name>-*.e2e.ts`.
 - Video never leaves the browser. The game page's CSP `connect-src` allows
   only this server and the pose model's download hosts (`spec/privacy.test.ts`);
   it also blocks MediaPipe's own usage pings. Don't widen it casually.
@@ -138,6 +140,10 @@ scroll, controls reachable, canvas not clipped. Check both for any UI change.
 ## Workflow
 
 - Small changes (copy, styling tweaks, comments, renames): don't run tests.
+- Changes confined to one game (`shared/games/<name>/`, `client/games/<name>/`,
+  its specs): run only that game's specs (`pnpm vitest run spec/<name>`) and
+  e2e (`pnpm e2e --workers=1 e2e/<name>`). Anything touching shared code
+  falls under the next rule.
 - Changes to `shared/`, `server/`, the protocol, the db or `spec/`: run
   `pnpm check` without being asked.
 - UI or layout changes: run `pnpm e2e` (both viewports) without being asked.

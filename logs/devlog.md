@@ -970,3 +970,10 @@ the format of the entries below (see CLAUDE.md, Docs).
 - **Outcome:** new task files 17 to 22 and tasks/sessions.md; tasks 7, 15 and 16 rewritten or tagged; overview table updated. Nothing built, no code changed.
 - **Why:** Fly.io has no player sign-in, so accounts are built in; passkeys keep passwords and secrets out of a public repo.
 - **Open:** how archery plays (settled in its own session); the display-name profanity check has honest gaps, so an admin can rename by hand.
+
+## 2026-10-21 02:30 AEDT | decision | Archery planned (task 22)
+
+- **Decided by:** user (GamePigeon layout, 8 stages inside a match with one arrow each, alternating turns, unlimited at randomised distances, bow-hold camera input with draw-for-strength and a snap-back release, preview without wind, a practice button that cycles levels with a picker and shows the wind angle, per-game test runs); Claude (shared board, sudden-death tie-break, slow return cancels a draw, server owns flight and score with the preview from the same shared maths, spec naming `spec/archery-*`).
+- **Outcome:** tasks/22-archery.md rewritten with the decisions; CLAUDE.md's games rule now allows tennis and archery, and the workflow runs only a game's own specs for a change confined to that game. No code yet.
+- **Why:** turn-based archery needs no lag compensation, so the server can own the shot without hurting feel; wind left out of the preview is the skill.
+- **Open:** stage table, ring sizes, bullseye bonus and bot aim noise, to be settled in the build with tests.

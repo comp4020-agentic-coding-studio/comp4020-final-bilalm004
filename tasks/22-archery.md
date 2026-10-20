@@ -1,41 +1,58 @@
 # 22 Archery
 
-Status: not started. To be planned with the user in its own terminal session
-(session D); nothing below is decided except what is marked.
+Status: planned with the user (2026-10-21), not built.
 Model: Opus
 Session: D
 
 ## Context
-CLAUDE.md says tennis is the only game until the core is solid, and not to add
-a second one unless asked. The user has now asked: archery gets its own session.
-When it starts, update that CLAUDE.md rule so it says archery is allowed, and
-keep the registry shape so more can slot in.
-
-Archery already exists on the home screen as a disabled "Coming soon" tile
-(`client/ui/menu.ts`, `playable: false`, `archeryThumb()`).
+Archery follows the GamePigeon iMessage archery layout. It is already on the
+home screen as a disabled "Coming soon" tile (`client/ui/menu.ts`,
+`playable: false`, `archeryThumb()`); make it playable. CLAUDE.md's games rule
+now names tennis and archery and keeps the registry shape.
 
 ## Decided (user, 2026-10-21)
-- Archery is its own session, planned with the user in that terminal.
-- It will have its own leaderboard and its own Elo rating (task 7 keys ratings
-  by sport id).
+- Own leaderboard and own Elo (task 7 keys ratings by sport id).
+- **Match:** 8 stages inside one match, climbing from near with no wind to far
+  with strong wind (distance and wind per stage). One arrow per player per
+  stage, players alternate, the starting player swaps each stage. One shared
+  board shows both players' arrows.
+- **Scoring:** rings 10 to 1 plus a bullseye bonus; highest total after 8
+  stages wins. A tie goes to sudden death: one arrow each at the furthest
+  distance, closest to centre wins, an exact tie is a draw.
+- **Unlimited format:** no winner, counts points and best arrow, ends when
+  someone leaves, stored unrated. Distance is randomised between the levels
+  each turn, and the wind re-rolled with it.
+- **Input (camera):** hold like a bow. Front hand aims the sight; back hand
+  pulls away from it, and draw distance is strength. Release is the back hand
+  snapping back toward the front hand once drawn past a minimum; a slow return
+  cancels with no arrow. A longer draw flies faster and flatter, so it spends
+  less time in the wind. Keyboard and mouse are a test convenience only:
+  mouse moves the sight, hold click to draw, release to fire, arrows + Space.
+- **Preview:** shows where the arrow would land from aim, draw and distance,
+  without wind. Reading the wind is the skill. The wind indicator shows
+  strength and direction (angle).
+- **Server owns** flight (gravity + seeded wind) and score; clients send aim,
+  draw and release. The preview runs in the page from the same pure `shared/`
+  maths with wind set to zero. Deterministic (seed + input stream). No rewind.
+- **Rooms:** same modes as tennis (vs bot, two players, spectators), the
+  host's format option and the rated option on the invite. Practice vs bot
+  is a real match but never rated.
+- **Practice button:** solo, runs in the page like tennis training
+  (`training.ts`, `local-link.ts`): endless arrows on a board, cycles through
+  the levels with an option to pick distance and wind, wind angle shown. No
+  room, score or rating, nothing sent to the server.
 
-## To settle with the user in that session
-- Rules and scoring: rounds, arrows per round, target rings and points, one
-  target or head to head, ranged by distance.
-- Input: how the camera aims and releases (draw back, hold, release), and the
-  keyboard and mouse equivalent. Every camera action needs one.
-- Players: one vs bot, two players in a room, spectators; how the room's ready,
-  format and rated option apply.
-- What the server owns: the arrow's flight and the score. Clients send only
-  aim and release events. Deterministic (seed + input stream) so it can be
-  tested.
-- Which of tennis's room, lobby, reconnect and scoring pieces are reused through
-  the registry and which are tennis-only.
+## Still open
+- Exact stage table (distance and wind per stage), ring sizes, bullseye bonus.
+- Bot aim noise per stage.
+- Whether archery gets guided training later (not in this task).
 
-## Done when (to be refined)
+## Done when
 - [ ] `shared/games/archery/` with sim, bot and adapter, registered in
-      `shared/games/registry.ts`; sim unit tests.
-- [ ] Client view in `client/games/archery/`, both viewports, camera and keys.
+      `shared/games/registry.ts`; `spec/archery-*.test.ts` sim tests.
+- [ ] Client view in `client/games/archery/`, both viewports, camera and keys;
+      `e2e/archery-*.e2e.ts`.
 - [ ] Rooms work for it through the same server code; a rated match updates the
       archery rating only.
-- [ ] Menu tile becomes playable; CLAUDE.md, README and `spec/` agree.
+- [ ] Practice button works with nothing sent to the server.
+- [ ] Menu tile becomes playable; CLAUDE.md layout, README and `spec/` agree.
